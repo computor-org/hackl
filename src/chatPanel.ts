@@ -47,6 +47,10 @@ export class ChatPanel {
   reveal(): void {
     this.panel.reveal(vscode.ViewColumn.Beside);
   }
+
+  focusInput(): void {
+    void post(this.panel.webview, { type: "focusInput" });
+  }
 }
 
 async function post(webview: vscode.Webview, message: ChatOutgoingMessage): Promise<boolean> {

@@ -17,7 +17,8 @@ export type ChatOutgoingMessage =
   | { type: "metrics"; inputTokens: number; maxContextTokens: number }
   | { type: "cleared" }
   | { type: "history"; entries: ConversationMessage[] }
-  | { type: "state"; enableThinking: boolean };
+  | { type: "state"; enableThinking: boolean }
+  | { type: "focusInput" };
 
 export type ChatPost = (message: ChatOutgoingMessage) => Thenable<unknown> | Promise<unknown>;
 

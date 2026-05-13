@@ -33,9 +33,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("hackl.chat", async () => {
       await vscode.commands.executeCommand("workbench.view.extension.hackl");
       chatViewProvider.show();
+      chatViewProvider.focusInput();
     }),
     vscode.commands.registerCommand("hackl.chatEditor", () => {
       openChatPanel(context);
+      chatPanel?.focusInput();
     }),
   );
 }

@@ -7,6 +7,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = "hackl.chatView";
   private readonly session: ChatSession;
   private view: vscode.WebviewView | undefined;
+  private pendingFocus = false;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -30,6 +31,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this.context.extensionUri],
     };
     webviewView.webview.html = renderChatHtml(webviewView.webview, this.context.extensionUri);
+    if (this.pendingFocus) {
+      this.pendingFocus = false;
+      void post(webviewView.webview, { type: "focusInput" });
+    }
     webviewView.webview.onDidReceiveMessage(async (message: ChatIncomingMessage) => {
       if (message.type === "setThinking") {
         await vscode.workspace.getConfiguration("hackl").update("enableThinking", Boolean(message.value), vscode.ConfigurationTarget.Global);
@@ -50,6 +55,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   show(): void {
     this.view?.show(false);
+  }
+
+  focusInput(): void {
+    if (this.view) {
+      void post(this.view.webview, { type: "focusInput" });
+    } else {
+      this.pendingFocus = true;
+    }
   }
 }
 

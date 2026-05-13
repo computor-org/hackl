@@ -1035,6 +1035,13 @@ const clientScript = `
     if (message.type === "status") showStatus(message.text);
     if (message.type === "metrics") updateMeter(message.inputTokens, message.maxContextTokens);
     if (message.type === "state") applyState(message);
+    if (message.type === "focusInput") {
+      requestAnimationFrame(() => {
+        prompt.focus();
+        const end = prompt.value.length;
+        prompt.setSelectionRange(end, end);
+      });
+    }
     if (message.type === "approvalRequested") appendApproval(message);
     if (message.type === "assistantDelta") appendAssistantDelta(message.channel, message.text);
     if (message.type === "answer") {
