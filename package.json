@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -37,7 +37,7 @@
       }
     ],
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "hackl",
           "title": "Hackl",
@@ -49,6 +49,7 @@
       "hackl": [
         {
           "id": "hackl.chatView",
+          "type": "webview",
           "name": "Chat",
           "icon": "media/hackl.svg",
           "contextualTitle": "Hackl Chat"

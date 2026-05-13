@@ -9,8 +9,10 @@ async function run() {
   assert.ok(properties["hackl.endpoint"], "hackl.endpoint setting is contributed");
   assert.equal(properties["hackl.endpoint"].default, "");
   assert.equal(properties["hackl.model"], undefined);
+  assert.ok(extension.packageJSON.contributes.viewsContainers.secondarySidebar, "Hackl contributes a secondary sidebar container");
   assert.ok(extension.packageJSON.contributes.views.hackl, "Hackl view container has views");
   assert.equal(extension.packageJSON.contributes.views.hackl[0].id, "hackl.chatView");
+  assert.equal(extension.packageJSON.contributes.views.hackl[0].type, "webview");
 
   await extension.activate();
   const commands = await vscode.commands.getCommands(true);

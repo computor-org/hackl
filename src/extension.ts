@@ -27,12 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
       chatViewProvider.show();
     }),
     vscode.commands.registerCommand("hackl.chatEditor", () => {
-      if (!chatPanel) {
-        chatPanel = new ChatPanel(context, answerPrompt, () => {
-          chatPanel = undefined;
-        });
-      }
-      chatPanel.reveal();
+      openChatPanel(context);
     }),
   );
 }
@@ -66,4 +61,13 @@ function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): bool
     inspection.workspaceLanguageValue,
     inspection.workspaceFolderLanguageValue,
   ].some((value) => value !== undefined && (typeof value !== "string" || value.trim() !== ""));
+}
+
+function openChatPanel(context: vscode.ExtensionContext): void {
+  if (!chatPanel) {
+    chatPanel = new ChatPanel(context, answerPrompt, () => {
+      chatPanel = undefined;
+    });
+  }
+  chatPanel.reveal();
 }
