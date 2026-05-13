@@ -70,8 +70,30 @@ test("ChatSession reports errors without keeping failed user prompts", async () 
   await session.handle({ type: "ready" }, post);
 
   assert.deepEqual(posted, [
-    { type: "status", text: "Thinking..." },
+    { type: "status", text: "Preprocessing..." },
     { type: "error", text: "backend failed" },
     { type: "history", entries: [] },
+  ]);
+});
+
+test("ChatSession forwards progress, metrics, and reasoning", async () => {
+  const posted = [];
+  const session = new ChatSession(async (_prompt, _history, progress) => {
+    progress({ type: "phase", text: "Preprocessing 9 ms", inputTokens: 100, maxContextTokens: 1000 });
+    progress({ type: "delta", channel: "reasoning", text: "checking" });
+    return { content: "answer", reasoning: "checking" };
+  });
+
+  await session.handle({ type: "prompt", prompt: "question" }, (message) => {
+    posted.push(message);
+    return Promise.resolve(true);
+  });
+
+  assert.deepEqual(posted, [
+    { type: "status", text: "Preprocessing..." },
+    { type: "status", text: "Preprocessing 9 ms" },
+    { type: "metrics", inputTokens: 100, maxContextTokens: 1000 },
+    { type: "assistantDelta", channel: "reasoning", text: "checking" },
+    { type: "answer", text: "answer", reasoning: "checking" },
   ]);
 });

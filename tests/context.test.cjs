@@ -3,38 +3,31 @@ const Module = require("node:module");
 const test = require("node:test");
 const { buildPromptContext, collectEditorContext } = require("../dist/context.js");
 
-test("buildPromptContext includes active file, cursor, selection, and open file text", () => {
+test("buildPromptContext includes active file metadata without file text", () => {
   const context = buildPromptContext([
     {
       fileName: "/tmp/example.ts",
+      path: "example.ts",
       languageId: "typescript",
-      text: "const value = 1;\nconsole.log(value);\n",
       isActive: true,
       cursorLine: 2,
       cursorCharacter: 8,
-      selection: "value",
+      selection: {
+        startLine: 2,
+        startCharacter: 3,
+        endLine: 2,
+        endCharacter: 8,
+      },
     },
-  ], { maxOpenFileChars: 1000 });
+  ], { maxToolFileChars: 1000 });
 
-  assert.match(context, /File: \/tmp\/example\.ts/);
+  assert.match(context, /File: example\.ts/);
+  assert.match(context, /Absolute path: \/tmp\/example\.ts/);
   assert.match(context, /State: active/);
   assert.match(context, /Cursor: line 2, column 8/);
-  assert.match(context, /Selected code:/);
-  assert.match(context, /const value = 1;/);
-});
-
-test("buildPromptContext truncates long file content", () => {
-  const context = buildPromptContext([
-    {
-      fileName: "/tmp/large.py",
-      languageId: "python",
-      text: `${"a".repeat(200)}${"b".repeat(200)}`,
-      isActive: false,
-    },
-  ], { maxOpenFileChars: 120 });
-
-  assert.match(context, /characters omitted/);
-  assert.ok(context.length < 500);
+  assert.match(context, /Selection: line 2, columns 3-8/);
+  assert.match(context, /Content: omitted/);
+  assert.doesNotMatch(context, /const value = 1/);
 });
 
 test("collectEditorContext includes active, visible, and open file documents once", () => {
@@ -81,20 +74,30 @@ test("collectEditorContext includes active, visible, and open file documents onc
     },
     workspace: {
       textDocuments: [activeDocument, visibleDocument, openDocument, untitledDocument, remoteDocument],
+      asRelativePath: (uri) => uri.fsPath?.replace("/tmp/", "") ?? uri.toString().replace("file:///tmp/", ""),
     },
   }, () => {
-    const documents = collectEditorContext(40);
+    const documents = collectEditorContext();
 
     assert.deepEqual(documents.map((document) => document.fileName), [
       "/tmp/active.ts",
       "/tmp/visible.py",
       "/tmp/open.go",
     ]);
+    assert.deepEqual(documents.map((document) => document.path), [
+      "active.ts",
+      "visible.py",
+      "open.go",
+    ]);
     assert.equal(documents[0].isActive, true);
     assert.equal(documents[0].cursorLine, 3);
     assert.equal(documents[0].cursorCharacter, 5);
-    assert.equal(documents[0].selection, "selected");
-    assert.match(documents[0].text, /characters omitted/);
+    assert.deepEqual(documents[0].selection, {
+      startLine: 1,
+      startCharacter: 2,
+      endLine: 1,
+      endCharacter: 10,
+    });
     assert.equal(documents[1].isActive, false);
     assert.equal(documents[2].languageId, "go");
   });
@@ -123,6 +126,7 @@ function documentStub({ fileName, languageId, text, uri, selectionText = "", isU
     isUntitled,
     uri: {
       scheme,
+      fsPath: fileName,
       toString: () => uri,
     },
     getText: (selection) => selection ? selectionText : text,
@@ -135,6 +139,8 @@ function editorStub(document, isSelectionEmpty) {
     selection: {
       isEmpty: isSelectionEmpty,
       active: { line: 2, character: 4 },
+      start: { line: 0, character: 1 },
+      end: { line: 0, character: 9 },
     },
   };
 }

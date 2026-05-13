@@ -5,7 +5,8 @@ The durable foundation is independent of the current chat surface:
 
 - `ChatBackend` owns the OpenAI-compatible `/chat/completions` contract.
 - `resolveChatTarget` owns endpoint discovery and loaded-model resolution.
-- `buildHacklMessages` owns prompt assembly from editor context and transcript.
+- `buildHacklMessages` owns prompt assembly from editor metadata and transcript.
+- `completeWithTools` owns the Qwen-friendly tool loop.
 - `ChatPanel` is the current UI shell only.
 
 Hackl's broader product role is the missing local Copilot layer: a policy-safe
@@ -26,6 +27,41 @@ requires an alias, Hackl uses the first alias advertised by the gateway error.
 
 No hosted-provider adapters, API presets, file mutation, terminal execution, or
 custom history layer belong in this phase.
+
+## Context And Tools
+
+Hackl now keeps the default prompt small. A normal chat turn includes:
+
+- active/open file paths;
+- active cursor line and column;
+- selection range only, not selected text;
+- recent chat transcript;
+- a compact `HACKL_TOOL` contract.
+
+It does not include open-file bodies by default. If the model needs code, it
+must request:
+
+```text
+HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}
+```
+
+Hackl executes only bounded workspace file reads in this phase. Tool results
+are returned as `HACKL_TOOL_RESULT` user messages for the current turn and are
+not stored in the durable transcript. This keeps follow-up prompts small and
+makes cache reuse more plausible because the stable prompt prefix changes less.
+
+This is the first step toward agent mode. The same loop can later add
+workspace search, diagnostics, edit planning, patch application, test runs, and
+Git diff review while keeping all mutations visible in normal files.
+
+Portable KV-cache or slot-affinity control is not part of the OpenAI-compatible
+contract. The near-term cache strategy is therefore:
+
+- stable system prompt;
+- small metadata context by default;
+- no automatic file-body replay across turns;
+- backend-specific options only behind provider adapters, for example
+  llama.cpp prompt-cache or slot controls where available.
 
 ## Computor And Luna
 
@@ -98,6 +134,9 @@ The renderer should stay small and local:
 - compact TUI-like transcript rather than a web app look;
 - Markdown rendering for assistant responses;
 - local LaTeX math rendering for physics and mathematics explanations;
+- prompt preprocessing/model phase status;
+- gray reasoning display from `<think>` or reasoning deltas;
+- estimated input-token/context-window meter;
 - clear busy/error states, Enter-to-send, and transcript clearing;
 - future room for context chips, `@luna`, and `@tutor`.
 

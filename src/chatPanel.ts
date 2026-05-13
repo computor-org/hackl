@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { renderChatHtml } from "./chatHtml";
-import { ChatIncomingMessage, ChatOutgoingMessage, ChatSession } from "./chatSession";
+import { ChatAnswer, ChatIncomingMessage, ChatOutgoingMessage, ChatSession, PromptProgress } from "./chatSession";
 import type { ConversationMessage } from "./prompt";
 
 export class ChatPanel {
@@ -9,7 +9,11 @@ export class ChatPanel {
 
   constructor(
     context: vscode.ExtensionContext,
-    onPrompt: (prompt: string, history: ConversationMessage[]) => Promise<string>,
+    onPrompt: (
+      prompt: string,
+      history: ConversationMessage[],
+      progress: (event: PromptProgress) => void,
+    ) => Promise<ChatAnswer | string>,
     onDispose: () => void,
   ) {
     this.session = new ChatSession(onPrompt);

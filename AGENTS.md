@@ -40,7 +40,7 @@ Workflow:
 
 Phases:
 1. Chat: open a chat from command palette, context menu, or hotkey. Include
-   currently open files in context.
+   open file metadata by default and use tools for file bodies.
 2. Selection/cursor awareness: include highlighted code, active file, and cursor
    position; support right-click and hotkey initiation.
 3. Edit mode: apply agentic edits to files and rely on `git diff` for review.
@@ -50,8 +50,9 @@ Phases:
 
 This repo currently implements phase 1 plus the useful part of phase 2:
 - A VS Code chat panel.
-- Context from currently visible/open text editors.
-- Active selection and cursor position in the prompt context.
+- Metadata from currently visible/open text editors.
+- Active selection range and cursor position in the prompt context.
+- On-demand bounded `read_file` tool calls for file content.
 - Right-click and hotkey entry points.
 - OpenAI-compatible `/chat/completions` request against a configured endpoint.
 

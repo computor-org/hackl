@@ -1,10 +1,14 @@
 import * as vscode from "vscode";
-import { sendChat, ChatMessage } from "./chatClient";
+import { ChatMessage, createOpenAICompatibleBackend } from "./chatClient";
 import { ChatPanel } from "./chatPanel";
+import { ChatAnswer, PromptProgress } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
 import { resolveChatTarget } from "./localServers";
 import { buildHacklMessages, ConversationMessage } from "./prompt";
+import { completeWithTools } from "./toolLoop";
+import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
+import { createWorkspaceToolRunner } from "./workspaceTools";
 
 let chatPanel: ChatPanel | undefined;
 
@@ -36,16 +40,41 @@ export function deactivate(): void {
   chatPanel = undefined;
 }
 
-async function answerPrompt(prompt: string, history: ConversationMessage[] = []): Promise<string> {
+async function answerPrompt(
+  prompt: string,
+  history: ConversationMessage[] = [],
+  progress?: (event: PromptProgress) => void,
+): Promise<ChatAnswer> {
+  const startedAt = Date.now();
+  progress?.({ type: "phase", text: "Preprocessing prompt..." });
   const config = vscode.workspace.getConfiguration("hackl");
   const target = await resolveChatTarget({
     endpoint: config.get<string>("endpoint", ""),
     endpointConfigured: hasUserConfigured(config.inspect<string>("endpoint")),
   });
-  const maxOpenFileChars = config.get<number>("maxOpenFileChars", 12000);
-  const contextText = buildPromptContext(collectEditorContext(maxOpenFileChars), { maxOpenFileChars });
+  const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
+  const maxContextTokens = config.get<number>("maxContextTokens", 32768);
+  const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
   const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history);
-  return sendChat(messages, target);
+  const inputTokens = estimateChatTokens(messages);
+  progress?.({
+    type: "phase",
+    text: `Preprocessing ${Date.now() - startedAt} ms · ${formatTokenBudget(inputTokens, maxContextTokens)}`,
+    inputTokens,
+    maxContextTokens,
+  });
+  progress?.({ type: "phase", text: "Model request..." });
+
+  const modelStartedAt = Date.now();
+  const answer = await completeWithTools({
+    backend: createOpenAICompatibleBackend(target),
+    messages,
+    runTool: createWorkspaceToolRunner({ maxFileChars: maxToolFileChars }),
+    maxToolCalls: 3,
+    progress,
+  });
+  progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
+  return answer;
 }
 
 function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): boolean {

@@ -42,6 +42,35 @@ test("OpenAI-compatible backend returns response model metadata", async () => {
   });
 });
 
+test("OpenAI-compatible backend streams answer and reasoning deltas", async () => {
+  const deltas = [];
+  let request;
+  const backend = createOpenAICompatibleBackend({
+    endpoint: "http://localhost:8080/v1",
+    model: "request-model",
+    fetchImpl: async (_url, init) => {
+      request = init;
+      return new Response([
+        'data: {"model":"response-model","choices":[{"delta":{"reasoning_content":"plan"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n',
+        "data: [DONE]\n\n",
+      ].join(""), { headers: { "content-type": "text/event-stream" } });
+    },
+  });
+
+  assert.deepEqual(await backend.complete(messages, { onDelta: (delta) => deltas.push(delta) }), {
+    content: "ok",
+    reasoning: "plan",
+    model: "response-model",
+  });
+  assert.equal(JSON.parse(request.body).stream, true);
+  assert.deepEqual(deltas, [
+    { type: "reasoning", text: "plan" },
+    { type: "answer", text: "ok" },
+  ]);
+});
+
+
 test("sendChat reports OpenAI-compatible error messages", async () => {
   await assert.rejects(
     () => sendChat(messages, {

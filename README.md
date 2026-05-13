@@ -13,8 +13,11 @@ Current:
 - Right-side chat view.
 - Optional editor chat panel.
 - Markdown and local LaTeX math rendering.
-- Open-file context.
-- Active selection and cursor position.
+- Minimal editor context: open file paths, active selection range, and cursor
+  position.
+- On-demand `read_file` tool calls for file content.
+- Prompt preprocessing/model phase status, gray reasoning display, and a
+  token/context budget indicator.
 - Command palette, editor context menu, and hotkey entry points.
 - Auto-discovery of common local OpenAI-compatible endpoints.
 
@@ -46,6 +49,17 @@ npm run package:vsix
 Hackl auto-discovers llama.cpp on `http://localhost:8080/v1` and LM Studio on
 `http://localhost:1234/v1`. Configure `hackl.endpoint` in VS Code settings to
 override discovery. Hackl uses the loaded model reported by `/v1/models`.
+
+By default, Hackl does not send open-file contents. The prompt contains only
+file paths, cursor position, and selection ranges. The model can request a
+small file range with:
+
+```text
+HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}
+```
+
+`hackl.maxToolFileChars` caps one file-read result. `hackl.maxContextTokens`
+drives the visible prompt budget meter.
 
 See `docs/architecture.md` for the backend/UI boundary and future Computor/Luna
 integration notes.

@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -87,11 +87,17 @@
           "default": "",
           "description": "OpenAI-compatible API base URL. Leave empty to auto-discover llama.cpp on port 8080 or LM Studio on port 1234."
         },
-        "hackl.maxOpenFileChars": {
+        "hackl.maxToolFileChars": {
           "type": "number",
           "default": 12000,
           "minimum": 1000,
-          "description": "Maximum characters included per open file."
+          "description": "Maximum characters returned by one read_file tool call."
+        },
+        "hackl.maxContextTokens": {
+          "type": "number",
+          "default": 32768,
+          "minimum": 1024,
+          "description": "Configured model context window used for the prompt token budget indicator."
         }
       }
     }

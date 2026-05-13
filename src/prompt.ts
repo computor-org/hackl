@@ -1,12 +1,12 @@
 import type { ChatMessage } from "./chatClient";
+import { TOOL_INSTRUCTIONS } from "./tools";
 
 export type ConversationMessage = Pick<ChatMessage, "role" | "content">;
 
 const SYSTEM_PROMPT = [
-  "You are Hackl, a local-first coding assistant.",
-  "Answer using the supplied editor context.",
-  "Do not claim to edit files. Suggest changes in prose or code blocks only.",
-  "Assume Git is the review and history layer.",
+  "You are Hackl, a local coding assistant.",
+  "Be concise. Do not claim to edit files.",
+  TOOL_INSTRUCTIONS,
 ].join("\n");
 
 const MAX_HISTORY_MESSAGES = 8;

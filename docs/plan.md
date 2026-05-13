@@ -9,7 +9,7 @@ want to enable GitHub Copilot.
 Hackl owns the generic editor assistant workflow:
 
 - local/BYO OpenAI-compatible endpoint discovery;
-- coding chat with editor context;
+- coding chat with minimal editor metadata and on-demand tool context;
 - inline autocomplete;
 - selection and file edit commands;
 - agentic task execution with normal Git diffs and tests as the review layer;
@@ -68,6 +68,7 @@ The chat UI should be Hackl-owned rather than Copilot-owned:
 - Markdown rendering for explanations and code blocks;
 - local LaTeX math rendering for physics and mathematics teaching;
 - context chips for the current editor, selection, assignment, and model state;
+- phase timing, reasoning visibility, and token/context budget feedback;
 - `@luna` and `@tutor` routing in the same conversation model;
 - normal editor files and Git diffs for future edit/agent review.
 
@@ -122,13 +123,18 @@ making users swap models.
 
 1. Chat foundation over local OpenAI-compatible endpoints.
 2. Right-side Hackl chat view with Markdown and local LaTeX math rendering.
-3. Assignment-aware Luna prompt mode and Computor context bridge.
-4. Inline autocomplete using VS Code `InlineCompletionItemProvider`, Qwen FIM
+3. Minimal default prompt: path/cursor/selection metadata only, with
+   Qwen-friendly `read_file` tools for on-demand context.
+4. Cache-aware provider adapters for local backends, starting with stable
+   prompt prefixes and later backend-specific prompt-cache or slot controls
+   where the server exposes them.
+5. Assignment-aware Luna prompt mode and Computor context bridge.
+6. Inline autocomplete using VS Code `InlineCompletionItemProvider`, Qwen FIM
    format only: try Qwen3.5/Qwen3.6, keep Gemma off, never swap to Qwen-Coder.
-5. Selection/file edit commands that produce normal workspace edits.
-6. Agent mode with plan, tests, diff, and optional commit.
-7. `@tutor` escalation into Computor human support threads.
-8. Optional native VS Code chat participant or language model provider.
+7. Selection/file edit commands that produce normal workspace edits.
+8. Agent mode with plan, tests, diff, and optional commit.
+9. `@tutor` escalation into Computor human support threads.
+10. Optional native VS Code chat participant or language model provider.
 
 ## Research Notes
 

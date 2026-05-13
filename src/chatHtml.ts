@@ -29,6 +29,7 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
         <h1>Hackl</h1>
         <span class="subtitle">local AI chat</span>
       </div>
+      <span id="context-meter" class="meter" title="Estimated prompt tokens / configured context window"></span>
       <button id="clear" class="icon-button" type="button" title="Clear transcript" aria-label="Clear transcript"><span class="codicon codicon-clear-all" aria-hidden="true"></span></button>
     </header>
     <main id="thread" aria-live="polite"></main>
@@ -90,6 +91,10 @@ body {
   border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
 }
 
+.topbar > div {
+  min-width: 0;
+}
+
 h1 {
   margin: 0;
   font-size: 12px;
@@ -100,6 +105,14 @@ h1 {
 .subtitle {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
+}
+
+.meter {
+  margin-left: auto;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 #thread {
@@ -129,6 +142,15 @@ h1 {
 
 .body {
   line-height: 1.45;
+}
+
+.reasoning {
+  margin-bottom: 8px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
 }
 
 .body :first-child {
@@ -259,8 +281,10 @@ const clientScript = `
   const thread = document.getElementById("thread");
   const send = document.getElementById("send");
   const clear = document.getElementById("clear");
+  const contextMeter = document.getElementById("context-meter");
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
   let statusEntry;
+  let assistantDraft;
 
   installMath(md);
   vscode.postMessage({ type: "ready" });
@@ -291,10 +315,12 @@ const clientScript = `
     if (message.type === "history") renderHistory(message.entries || []);
     if (message.type === "cleared") clearThread();
     if (message.type === "status") showStatus(message.text);
+    if (message.type === "metrics") updateMeter(message.inputTokens, message.maxContextTokens);
+    if (message.type === "assistantDelta") appendAssistantDelta(message.channel, message.text);
     if (message.type === "answer") {
       clearStatus();
       setBusy(false);
-      appendAssistant(message.text);
+      finishAssistant(message.text, message.reasoning || "");
     }
     if (message.type === "error") {
       clearStatus();
@@ -316,7 +342,8 @@ const clientScript = `
   }
 
   function appendAssistant(text) {
-    append("entry assistant", "Hackl", text, true);
+    const split = splitReasoning(text || "");
+    appendAssistantEntry(split.answer, split.reasoning);
   }
 
   function appendError(text) {
@@ -342,6 +369,85 @@ const clientScript = `
     element.scrollIntoView({ block: "end" });
   }
 
+  function appendAssistantEntry(answer, reasoning) {
+    const entry = createAssistantEntry();
+    renderAssistantEntry(entry, answer, reasoning);
+    thread.appendChild(entry.element);
+    entry.element.scrollIntoView({ block: "end" });
+    return entry;
+  }
+
+  function appendAssistantDelta(channel, text) {
+    if (!assistantDraft) {
+      assistantDraft = createAssistantEntry();
+      thread.appendChild(assistantDraft.element);
+    }
+    if (channel === "reasoning") {
+      assistantDraft.reasoning += text || "";
+    } else {
+      assistantDraft.answer += text || "";
+    }
+    renderAssistantEntry(assistantDraft, assistantDraft.answer, assistantDraft.reasoning);
+    assistantDraft.element.scrollIntoView({ block: "end" });
+  }
+
+  function finishAssistant(answer, reasoning) {
+    if (!assistantDraft) {
+      appendAssistantEntry(answer || "", reasoning || "");
+      return;
+    }
+    renderAssistantEntry(assistantDraft, answer || assistantDraft.answer, reasoning || assistantDraft.reasoning);
+    assistantDraft.element.scrollIntoView({ block: "end" });
+    assistantDraft = undefined;
+  }
+
+  function createAssistantEntry() {
+    const element = document.createElement("section");
+    const label = document.createElement("div");
+    const reasoning = document.createElement("div");
+    const body = document.createElement("div");
+    element.className = "entry assistant";
+    label.className = "role";
+    label.textContent = "Hackl";
+    reasoning.className = "reasoning";
+    body.className = "body";
+    element.appendChild(label);
+    element.appendChild(reasoning);
+    element.appendChild(body);
+    return { element, reasoningElement: reasoning, body, reasoning: "", answer: "" };
+  }
+
+  function renderAssistantEntry(entry, answer, reasoning) {
+    entry.reasoning = reasoning || "";
+    entry.answer = answer || "";
+    entry.reasoningElement.textContent = entry.reasoning;
+    entry.reasoningElement.hidden = !entry.reasoning;
+    entry.body.innerHTML = md.render(entry.answer || "");
+  }
+
+  function splitReasoning(text) {
+    let answer = "";
+    const reasoning = [];
+    let position = 0;
+    while (position < text.length) {
+      const start = text.indexOf("<think>", position);
+      if (start < 0) {
+        answer += text.slice(position);
+        break;
+      }
+      answer += text.slice(position, start);
+      const bodyStart = start + "<think>".length;
+      const end = text.indexOf("</think>", bodyStart);
+      if (end < 0) {
+        reasoning.push(text.slice(bodyStart));
+        break;
+      }
+      reasoning.push(text.slice(bodyStart, end));
+      position = end + "</think>".length;
+    }
+    return { answer: answer.trimStart(), reasoning: reasoning.join("\\n\\n").trim() };
+  }
+
   function showStatus(text) {
     clearStatus();
     statusEntry = document.createElement("section");
@@ -363,8 +469,16 @@ const clientScript = `
 
   function clearThread() {
     thread.textContent = "";
+    assistantDraft = undefined;
     clearStatus();
     setBusy(false);
+  }
+
+  function updateMeter(inputTokens, maxContextTokens) {
+    if (!contextMeter || !inputTokens || !maxContextTokens) return;
+    const percent = Math.round((inputTokens / maxContextTokens) * 100);
+    contextMeter.textContent = "~" + inputTokens.toLocaleString() + "/" + maxContextTokens.toLocaleString() + " tok";
+    contextMeter.title = "Estimated prompt tokens: " + percent + "% of configured context";
   }
 
   function setBusy(busy) {
