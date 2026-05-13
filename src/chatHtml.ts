@@ -136,7 +136,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 10px 10px;
   border-bottom: 1px solid var(--hackl-border);
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
@@ -189,7 +189,7 @@ h1 {
   min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
-  padding: 14px 14px 8px;
+  padding: 12px 10px 8px;
   scrollbar-width: thin;
 }
 
@@ -539,7 +539,7 @@ form {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 12px 12px;
+  padding: 6px 8px 10px;
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 
