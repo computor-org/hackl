@@ -1,0 +1,81 @@
+{
+  "name": "hackl",
+  "displayName": "Hackl",
+  "description": "Hack with local AI.",
+  "version": "0.0.1",
+  "publisher": "computor-org",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:computor-org/hackl.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:hackl.chat"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hackl.chat",
+        "title": "Chat with Hackl",
+        "category": "Hackl",
+        "icon": "$(comment-discussion)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "hackl.chat",
+        "key": "ctrl+alt+h",
+        "mac": "cmd+alt+h",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "hackl.chat",
+          "group": "navigation@50",
+          "when": "editorTextFocus"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Hackl",
+      "properties": {
+        "hackl.endpoint": {
+          "type": "string",
+          "default": "http://localhost:8080/v1",
+          "description": "OpenAI-compatible API base URL."
+        },
+        "hackl.model": {
+          "type": "string",
+          "default": "qwen",
+          "description": "Model name sent to the chat completions endpoint."
+        },
+        "hackl.maxOpenFileChars": {
+          "type": "number",
+          "default": 12000,
+          "minimum": 1000,
+          "description": "Maximum characters included per open file."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test tests/*.test.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.4"
+  }
+}
