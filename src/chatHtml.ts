@@ -928,6 +928,7 @@ const clientScript = `
       const next = reasoningToggle.getAttribute("aria-pressed") !== "true";
       reasoningToggle.setAttribute("aria-pressed", String(next));
       vscode.postMessage({ type: "setThinking", value: next });
+      focusPrompt();
     });
   }
 
