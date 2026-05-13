@@ -798,14 +798,14 @@ button:disabled {
 }
 
 .send-button.stop {
-  background: var(--vscode-errorForeground);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 65%, var(--vscode-descriptionForeground) 35%);
   color: var(--vscode-button-foreground, #fff);
   opacity: 1;
   cursor: pointer;
 }
 
 .send-button.stop:hover {
-  background: color-mix(in srgb, var(--vscode-errorForeground) 85%, white);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 85%, var(--vscode-foreground) 15%);
 }
 
 .send-button.stop .codicon {
