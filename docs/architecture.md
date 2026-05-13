@@ -10,8 +10,9 @@ The durable foundation is independent of the current chat surface:
 - `ChatPanel` is the current UI shell only.
 
 Hackl's broader product role is the missing local Copilot layer: a policy-safe
-VS Code assistant that can grow from chat into autocomplete, edit mode, and
-agent mode without requiring the GitHub Copilot extension or a hosted service.
+VS Code assistant that grows from chat into edit mode and agent mode without
+requiring the GitHub Copilot extension or a hosted service. Inline FIM
+autocomplete was explored and intentionally dropped — see "Model Policy".
 
 ## Backend Boundary
 
@@ -85,35 +86,21 @@ prompt contracts, not on a specific Hackl chat surface.
 
 ## Model Policy
 
-Hackl should prefer one loaded local model. The user should not have to swap
-models for chat, autocomplete, edit, and agent workflows. For the first
-autocomplete implementation, assume the server is serving Qwen 3.5 or Qwen3.6
-and use only the Qwen FIM format. Do not add generic FIM-template support yet.
+Hackl prefers one loaded local model used for chat, edit, and agent workflows.
+The user should not have to swap models.
 
 Initial local tiers:
 
-- Small RAM or weak GPU: Qwen3.5 4B, or Gemma 4 E2B/E4B for chat/edit only.
-- Normal laptop or desktop: Qwen3.5 9B, or Gemma 4 E4B for chat/edit only.
-- Large local machine: Qwen3.6-35B-A3B, or Gemma 4 26B A4B / 31B for
-  chat/edit/agent work only.
+- Small RAM or weak GPU: Qwen3.5 4B, or Gemma 4 E2B/E4B.
+- Normal laptop or desktop: Qwen3.5 9B, or Gemma 4 E4B.
+- Large local machine: Qwen3.6-35B-A3B, or Gemma 4 26B A4B / 31B.
 
-For Qwen3.6-35B-A3B autocomplete, first test the Qwen FIM template:
-
-```text
-<|fim_prefix|>{prefix}<|fim_suffix|>{suffix}<|fim_middle|>
-```
-
-Use short completion budgets, low temperature, stop tokens for Qwen FIM/chat
-markers, and non-thinking mode where the server supports it. Do not recommend
-swapping to Qwen-Coder as the fallback; it is weaker for the broader Hackl
-workflow. If Qwen3.6-35B-A3B cannot provide acceptable autocomplete, suppress
-autocomplete before making users leave the primary model.
-
-Do not enable FIM autocomplete for Gemma 4. Current official Gemma 4
-documentation covers chat formatting, coding/agentic capability, and MTP, but
-not fill-in-the-middle support. If the loaded model id is Gemma, Hackl should
-keep chat/edit/agent features and suppress autocomplete until official FIM
-support or a tested template exists.
+Inline FIM autocomplete is intentionally out of scope. It was prototyped
+(v0.0.13 – v0.0.15) and removed: at the latency a single locally-loaded
+chat-class model can deliver, the UX did not beat the chat/edit workflow that
+is Hackl's core, and maintaining a parallel FIM client, dialect detector, and
+prompt template added surface area without proportionate value. The chat/edit
+loop replaces autocomplete for Hackl's use case.
 
 ## UI Direction
 

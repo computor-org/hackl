@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -18,9 +18,7 @@
   "activationEvents": [
     "onCommand:hackl.chat",
     "onCommand:hackl.chatEditor",
-    "onCommand:hackl.toggleAutocomplete",
-    "onView:hackl.chatView",
-    "onStartupFinished"
+    "onView:hackl.chatView"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -36,12 +34,6 @@
         "title": "Open Chat in Editor",
         "category": "Hackl",
         "icon": "$(comment-discussion)"
-      },
-      {
-        "command": "hackl.toggleAutocomplete",
-        "title": "Toggle Inline Autocomplete",
-        "category": "Hackl",
-        "icon": "$(sparkle)"
       }
     ],
     "viewsContainers": {
@@ -70,12 +62,6 @@
         "key": "ctrl+alt+h",
         "mac": "cmd+alt+h",
         "when": "editorTextFocus"
-      },
-      {
-        "command": "editor.action.inlineSuggest.acceptNextWord",
-        "key": "alt+right",
-        "mac": "alt+right",
-        "when": "inlineSuggestionVisible && !editorReadonly"
       }
     ],
     "menus": {
@@ -122,44 +108,6 @@
           "type": "boolean",
           "default": true,
           "description": "Write Hackl prompt and tool-loop diagnostics to the Hackl Debug output channel and the VS Code Extension Host debug console."
-        },
-        "hackl.autocomplete.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable inline ghost-text autocomplete (FIM). Toggle from the Hackl AC status-bar icon. Automatically inactive when the loaded model has no FIM tokens."
-        },
-        "hackl.autocomplete.endpoint": {
-          "type": "string",
-          "default": "",
-          "description": "Override the endpoint for autocomplete requests (OpenAI-style base URL or llama.cpp root). When empty, autocomplete falls back to hackl.endpoint (with autodiscovery)."
-        },
-        "hackl.autocomplete.model": {
-          "type": "string",
-          "default": "",
-          "description": "Model alias to send for autocomplete. When empty, uses the chat target's model."
-        },
-        "hackl.autocomplete.maxTokens": {
-          "type": "number",
-          "default": 48,
-          "minimum": 8,
-          "description": "Maximum tokens to predict per inline suggestion."
-        },
-        "hackl.autocomplete.debounceMs": {
-          "type": "number",
-          "default": 150,
-          "minimum": 0,
-          "description": "Debounce in milliseconds after the last keystroke before issuing an autocomplete request."
-        },
-        "hackl.autocomplete.multiLine": {
-          "type": "boolean",
-          "default": false,
-          "description": "Allow multi-line completions. When off (default), Hackl stops at the first newline so Tab accepts exactly one line."
-        },
-        "hackl.autocomplete.maxPredictMs": {
-          "type": "number",
-          "default": 400,
-          "minimum": 50,
-          "description": "Server-side time budget per autocomplete request in milliseconds (t_max_predict_ms)."
         }
       }
     }
@@ -169,7 +117,7 @@
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test tests/*.test.cjs",
     "test:ui": "npm run compile && node scripts/run-webview-ui-smoke.mjs",
-    "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/chatClient.js --test-coverage-include=dist/context.js --test-coverage-include=dist/localServers.js --test-coverage-include=dist/prompt.js --test-coverage-include=dist/fimDetect.js --test-coverage-include=dist/fimClient.js --test tests/*.test.cjs",
+    "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/chatClient.js --test-coverage-include=dist/context.js --test-coverage-include=dist/localServers.js --test-coverage-include=dist/prompt.js --test tests/*.test.cjs",
     "test:extension": "npm run compile && node scripts/run-vscode-smoke.mjs",
     "package:vsix": "npm run compile && vsce package",
     "smoke:openai": "npm run compile && node scripts/smoke-openai-compatible.mjs"

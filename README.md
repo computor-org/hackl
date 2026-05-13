@@ -3,8 +3,8 @@
 Hackl - hack with local AI.
 
 Hackl is a local-first VS Code assistant for coding. It is the general
-local-AI layer for chat now, and later autocomplete, edit mode, and agentic
-coding without requiring GitHub Copilot.
+local-AI layer for chat, edit, and agentic coding without requiring GitHub
+Copilot.
 
 ## Scope
 
@@ -23,16 +23,15 @@ Current:
 
 Not current:
 
-- File edits.
 - Custom diffs.
-- Autocomplete.
+- Inline ghost-text autocomplete (intentionally out of scope; see docs).
 - Hosted API presets.
 
 Direction:
 
-- Local Copilot replacement for policy-safe VS Code use.
+- Local chat/edit/agent assistant for policy-safe VS Code use.
 - Computor/Luna assignment chat surface with optional human tutor escalation.
-- One loaded local model by default; no model swap for autocomplete.
+- One loaded local model by default.
 
 ## Development
 
