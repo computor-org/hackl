@@ -26,12 +26,7 @@ export function buildPromptContext(documents: ContextDocument[], options: Contex
     return "";
   }
   const sections = documents.map((document) => formatDocumentContext(document, options));
-  return [
-    "Open editor metadata only. File contents and selected text are omitted.",
-    `Use read_file when contents are needed. read_file returns at most ${options.maxToolFileChars} characters.`,
-    "",
-    sections.join("\n"),
-  ].join("\n");
+  return [`ctx (read_file max ${options.maxToolFileChars} chars):`, ...sections].join("\n");
 }
 
 export function collectEditorContext(): ContextDocument[] {
@@ -95,30 +90,20 @@ function toContextDocument(
   };
 }
 
-function formatDocumentContext(document: ContextDocument, options: ContextOptions): string {
-  const active = document.isActive ? "active" : "open";
+function formatDocumentContext(document: ContextDocument, _options: ContextOptions): string {
+  const state = document.isActive ? "active" : "open";
   const cursor = document.cursorLine === undefined
     ? ""
-    : `\nCursor: line ${document.cursorLine}, column ${document.cursorCharacter}`;
-  const selection = document.selection ? `\nSelection: ${formatSelection(document.selection)}` : "";
-
-  return [
-    `- File: ${document.path}`,
-    `  Absolute path: ${document.fileName}`,
-    `  State: ${active}`,
-    `  Language: ${document.languageId}${cursor}${selection}`,
-    `  Content: omitted; request read_file for a needed range.`,
-  ].join("\n");
+    : ` cur ${document.cursorLine}:${document.cursorCharacter}`;
+  const selection = document.selection ? ` sel ${formatSelection(document.selection)}` : "";
+  return `- ${document.path} [${state} ${document.languageId}]${cursor}${selection}`;
 }
 
 function formatSelection(selection: ContextSelection): string {
   if (selection.startLine === selection.endLine) {
-    return `line ${selection.startLine}, columns ${selection.startCharacter}-${selection.endCharacter}`;
+    return `${selection.startLine}:${selection.startCharacter}-${selection.endCharacter}`;
   }
-  return [
-    `line ${selection.startLine}, column ${selection.startCharacter}`,
-    `to line ${selection.endLine}, column ${selection.endCharacter}`,
-  ].join(" ");
+  return `${selection.startLine}:${selection.startCharacter}-${selection.endLine}:${selection.endCharacter}`;
 }
 
 function editorPath(vscode: typeof vscodeTypes, uri: vscodeTypes.Uri, fallback: string): string {

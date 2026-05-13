@@ -21,12 +21,10 @@ test("buildPromptContext includes active file metadata without file text", () =>
     },
   ], { maxToolFileChars: 1000 });
 
-  assert.match(context, /File: example\.ts/);
-  assert.match(context, /Absolute path: \/tmp\/example\.ts/);
-  assert.match(context, /State: active/);
-  assert.match(context, /Cursor: line 2, column 8/);
-  assert.match(context, /Selection: line 2, columns 3-8/);
-  assert.match(context, /Content: omitted/);
+  assert.match(context, /- example\.ts \[active typescript\]/);
+  assert.match(context, /cur 2:8/);
+  assert.match(context, /sel 2:3-8/);
+  assert.match(context, /ctx \(read_file max 1000 chars\):/);
   assert.doesNotMatch(context, /const value = 1/);
 });
 

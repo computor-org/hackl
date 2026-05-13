@@ -9,9 +9,9 @@ test("buildHacklMessages includes system prompt, history, editor context, and re
   ]);
 
   assert.equal(messages[0].role, "system");
-  assert.match(messages[0].content, /local coding assistant/);
+  assert.match(messages[0].content, /Hackl/);
   assert.match(messages[0].content, /HACKL_TOOL/);
-  assert.match(messages[0].content, /Do not output long scratchpad/);
+  assert.match(messages[0].content, /No long think/);
   assert.deepEqual(messages.slice(1, 3), [
     { role: "user", content: "previous question" },
     { role: "assistant", content: "previous answer" },
@@ -43,5 +43,5 @@ test("buildHacklMessages trims history to recent non-empty chat messages", () =>
     "message 8",
     "message 9",
   ]);
-  assert.match(messages[9].content, /\[No open editor context\]/);
+  assert.match(messages[9].content, /\[no editor context\]/);
 });

@@ -121,3 +121,56 @@ function trimSlash(value: string): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
+
+export async function detectMaxContextTokens(
+  endpoint: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<number | undefined> {
+  const base = trimSlash(endpoint);
+  const root = base.replace(/\/v1$/, "");
+
+  const llamaCtx = await tryFetchNumber(`${base}/props`, fetchImpl, (data) => {
+    if (!isRecord(data)) return undefined;
+    const direct = positiveNumber(data.n_ctx);
+    if (direct) return direct;
+    const settings = isRecord(data.default_generation_settings) ? data.default_generation_settings : undefined;
+    return settings ? positiveNumber(settings.n_ctx) : undefined;
+  });
+  if (llamaCtx) return llamaCtx;
+
+  const lmStudioCtx = await tryFetchNumber(`${root}/api/v0/models`, fetchImpl, (data) => {
+    if (!isRecord(data) || !Array.isArray(data.data)) return undefined;
+    for (const model of data.data) {
+      if (!isRecord(model)) continue;
+      const loaded = positiveNumber(model.loaded_context_length);
+      if (loaded) return loaded;
+      const max = positiveNumber(model.max_context_length);
+      if (max) return max;
+    }
+    return undefined;
+  });
+  return lmStudioCtx;
+}
+
+async function tryFetchNumber(
+  url: string,
+  fetchImpl: typeof fetch,
+  extract: (data: unknown) => number | undefined,
+): Promise<number | undefined> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(url, { signal: controller.signal });
+    if (!response.ok) return undefined;
+    const data = await response.json();
+    return extract(data);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}

@@ -4,13 +4,14 @@ import { ChatPanel } from "./chatPanel";
 import { ChatAnswer, PromptProgress } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
-import { resolveChatTarget } from "./localServers";
+import { detectMaxContextTokens, resolveChatTarget } from "./localServers";
 import { buildHacklMessages, ConversationMessage } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
 
 let chatPanel: ChatPanel | undefined;
+const detectedContextCache = new Map<string, number | undefined>();
 
 interface ConfigInspection<T> {
   globalValue?: T;
@@ -53,7 +54,13 @@ async function answerPrompt(
     endpointConfigured: hasUserConfigured(config.inspect<string>("endpoint")),
   });
   const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
-  const maxContextTokens = config.get<number>("maxContextTokens", 32768);
+  const configuredMaxContext = hasUserConfigured(config.inspect<number>("maxContextTokens"))
+    ? config.get<number>("maxContextTokens", 32768)
+    : undefined;
+  const detectedMaxContext = configuredMaxContext === undefined
+    ? await getDetectedMaxContext(target.endpoint)
+    : undefined;
+  const maxContextTokens = configuredMaxContext ?? detectedMaxContext ?? 32768;
   const enableThinking = config.get<boolean>("enableThinking", false);
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
   const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history);
@@ -91,6 +98,15 @@ function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): bool
     inspection.workspaceLanguageValue,
     inspection.workspaceFolderLanguageValue,
   ].some((value) => value !== undefined && (typeof value !== "string" || value.trim() !== ""));
+}
+
+async function getDetectedMaxContext(endpoint: string): Promise<number | undefined> {
+  if (detectedContextCache.has(endpoint)) {
+    return detectedContextCache.get(endpoint);
+  }
+  const detected = await detectMaxContextTokens(endpoint).catch(() => undefined);
+  detectedContextCache.set(endpoint, detected);
+  return detected;
 }
 
 function openChatPanel(context: vscode.ExtensionContext): void {

@@ -11,10 +11,9 @@ export interface ToolResult {
 }
 
 export const TOOL_INSTRUCTIONS = [
-  "Files are not included by default.",
-  "When you need file contents, answer with exactly one tool call and no prose:",
-  'HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}',
-  "Use small line ranges. Wait for HACKL_TOOL_RESULT before answering.",
+  "Files hidden. Need file? Reply ONLY:",
+  'HACKL_TOOL {"name":"read_file","path":"X","start_line":1,"end_line":120}',
+  "Small range. Wait for HACKL_TOOL_RESULT.",
 ].join("\n");
 
 const TOOL_PREFIX = "HACKL_TOOL";

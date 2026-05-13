@@ -4,9 +4,7 @@ import { TOOL_INSTRUCTIONS } from "./tools";
 export type ConversationMessage = Pick<ChatMessage, "role" | "content">;
 
 const SYSTEM_PROMPT = [
-  "You are Hackl, a local coding assistant.",
-  "Be concise. Do not claim to edit files.",
-  "Do not output long scratchpad reasoning or repeated self-checks.",
+  "Hackl. Local code helper. Terse. No edits. No long think.",
   TOOL_INSTRUCTIONS,
 ].join("\n");
 
@@ -22,7 +20,7 @@ export function buildHacklMessages(
     ...trimHistory(history),
     {
       role: "user",
-      content: `Editor context:\n\n${contextText || "[No open editor context]"}\n\nUser request:\n\n${prompt}`,
+      content: `${contextText || "[no editor context]"}\n\n${prompt}`,
     },
   ];
 }
