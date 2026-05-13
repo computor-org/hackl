@@ -539,7 +539,7 @@ form {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px 8px 10px;
+  padding: 8px 10px 10px;
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 
