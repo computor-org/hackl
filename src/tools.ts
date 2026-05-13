@@ -86,22 +86,24 @@ export function parseToolRequest(content: string): ToolRequest | undefined {
 
   try {
     const payload = JSON.parse(jsonText) as Record<string, unknown>;
-    if (payload.name === "search_files") {
+    const name = toolName(payload.name);
+    if (name === "search_files") {
       return parseSearchFilesRequest(payload);
     }
-    if (payload.name === "run_command") {
+    if (name === "run_command") {
       return parseRunCommandRequest(payload);
     }
-    if (payload.name !== "read_file" && payload.name !== "replace_text") {
+    if (name !== "read_file" && name !== "replace_text") {
       return undefined;
     }
-    if (typeof payload.path !== "string" || !payload.path.trim()) {
+    const path = stringValue(payload.path, payload.file, payload.filepath);
+    if (!path) {
       return undefined;
     }
-    if (payload.name === "replace_text") {
-      return parseReplaceTextRequest(payload);
+    if (name === "replace_text") {
+      return parseReplaceTextRequest(payload, path);
     }
-    return parseReadFileRequest(payload);
+    return parseReadFileRequest(payload, path);
   } catch {
     return undefined;
   }
@@ -168,69 +170,87 @@ function extractToolJson(content: string): string | undefined {
   return undefined;
 }
 
-function parseReadFileRequest(payload: Record<string, unknown>): ReadFileRequest {
+function parseReadFileRequest(payload: Record<string, unknown>, path: string): ReadFileRequest {
   return {
     name: "read_file",
-    path: String(payload.path).trim(),
-    start_line: positiveInteger(payload.start_line),
-    end_line: positiveInteger(payload.end_line),
+    path,
+    start_line: positiveInteger(payload.start_line ?? payload.start ?? payload.line),
+    end_line: positiveInteger(payload.end_line ?? payload.end),
   };
 }
 
-function parseReplaceTextRequest(payload: Record<string, unknown>): ReplaceTextRequest | undefined {
-  if (typeof payload.old_text !== "string" || payload.old_text.length === 0) {
+function parseReplaceTextRequest(payload: Record<string, unknown>, path: string): ReplaceTextRequest | undefined {
+  const oldText = stringValue(payload.old_text, payload.old, payload.find, payload.search);
+  if (oldText === undefined || oldText.length === 0) {
     return undefined;
   }
-  if (typeof payload.new_text !== "string") {
+  const newText = stringValue(payload.new_text, payload.new, payload.replace, payload.replacement);
+  if (newText === undefined) {
     return undefined;
   }
   return {
     name: "replace_text",
-    path: String(payload.path).trim(),
-    old_text: payload.old_text,
-    new_text: payload.new_text,
+    path,
+    old_text: oldText,
+    new_text: newText,
   };
 }
 
 function parseSearchFilesRequest(payload: Record<string, unknown>): SearchFilesRequest | undefined {
-  if (typeof payload.query !== "string" || !payload.query.trim()) {
+  const query = stringValue(payload.query, payload.pattern, payload.text, payload.term, payload.q)?.trim() ?? "";
+  const glob = stringValue(payload.glob, payload.path, payload.files)?.trim() ?? "";
+  if (!query && !glob) {
     return undefined;
   }
   const request: SearchFilesRequest = {
     name: "search_files",
-    query: payload.query.trim(),
+    query,
     max_results: boundedPositiveInteger(payload.max_results, 50),
   };
-  if (typeof payload.glob === "string" && payload.glob.trim()) {
-    request.glob = payload.glob.trim();
+  if (glob) {
+    request.glob = glob;
   }
   return request;
 }
 
 function parseRunCommandRequest(payload: Record<string, unknown>): RunCommandRequest | undefined {
-  if (typeof payload.cmd !== "string" || !payload.cmd.trim()) {
+  const cmd = stringValue(payload.cmd, payload.command);
+  if (!cmd?.trim()) {
     return undefined;
   }
-  const args = parseStringArray(payload.args);
+  const args = parseCommandArgs(payload.args);
   if (payload.args !== undefined && !args) {
     return undefined;
   }
   return {
     name: "run_command",
-    cmd: payload.cmd.trim(),
+    cmd: cmd.trim(),
     args,
     timeout_ms: boundedPositiveInteger(payload.timeout_ms, 600000),
   };
 }
 
-function parseStringArray(value: unknown): string[] | undefined {
+function parseCommandArgs(value: unknown): string[] | undefined {
   if (value === undefined) {
     return undefined;
   }
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+  if (typeof value === "string") {
+    return splitArgs(value);
+  }
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" && typeof item !== "number")) {
     return undefined;
   }
-  return value;
+  return value.map(String);
+}
+
+function splitArgs(value: string): string[] {
+  const args: string[] = [];
+  const pattern = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|[^\s]+/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value))) {
+    args.push((match[1] ?? match[2] ?? match[0]).replace(/\\(["'\\])/g, "$1"));
+  }
+  return args;
 }
 
 function positiveInteger(value: unknown): number | undefined {
@@ -243,4 +263,34 @@ function positiveInteger(value: unknown): number | undefined {
 function boundedPositiveInteger(value: unknown, max: number): number | undefined {
   const parsed = positiveInteger(value);
   return parsed === undefined ? undefined : Math.min(parsed, max);
+}
+
+function stringValue(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string") {
+      return value.trim();
+    }
+    if (typeof value === "number") {
+      return String(value);
+    }
+  }
+  return undefined;
+}
+
+function toolName(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim();
+  const aliases: Record<string, string> = {
+    read: "read_file",
+    readFile: "read_file",
+    search: "search_files",
+    grep: "search_files",
+    replace: "replace_text",
+    edit: "replace_text",
+    run: "run_command",
+    command: "run_command",
+  };
+  return aliases[normalized] ?? normalized;
 }

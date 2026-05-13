@@ -21,6 +21,8 @@ test("command policy denies destructive commands and shell syntax", () => {
   assert.equal(classifyCommand({ name: "run_command", cmd: "sudo", args: ["npm", "test"] }, options).decision, "deny");
   assert.equal(classifyCommand({ name: "run_command", cmd: "npm", args: ["test", "&&", "rm", "-rf", "/"] }, options).decision, "deny");
   assert.equal(classifyCommand({ name: "run_command", cmd: "npm", args: ["install"] }, options).decision, "deny");
+  assert.equal(classifyCommand({ name: "run_command", cmd: "git", args: ["clean", "-fd"] }, options).decision, "deny");
+  assert.equal(classifyCommand({ name: "run_command", cmd: "git", args: ["reset", "--hard"] }, options).decision, "deny");
 });
 
 test("command policy denies outside workspace paths", () => {

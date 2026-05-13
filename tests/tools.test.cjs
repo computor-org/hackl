@@ -10,6 +10,10 @@ test("parseToolRequest reads Qwen-friendly HACKL_TOOL JSON", () => {
     parseToolRequest('HACKL_TOOL {"name":"read_file","path":"src/a.ts","start_line":2,"end_line":4}'),
     { name: "read_file", path: "src/a.ts", start_line: 2, end_line: 4 },
   );
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"read","file":"src/a.ts","line":7}'),
+    { name: "read_file", path: "src/a.ts", start_line: 7, end_line: undefined },
+  );
   assert.equal(parseToolRequest("no tool"), undefined);
   assert.equal(parseToolRequest('HACKL_TOOL {"name":"run","path":"x"}'), undefined);
 });
@@ -19,6 +23,10 @@ test("parseToolRequest reads exact replacement edit requests", () => {
     parseToolRequest('HACKL_TOOL {"name":"replace_text","path":"src/a.ts","old_text":"const x = 1;","new_text":"const x = 2;"}'),
     { name: "replace_text", path: "src/a.ts", old_text: "const x = 1;", new_text: "const x = 2;" },
   );
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"edit","file":"src/a.ts","old":"a","new":"b"}'),
+    { name: "replace_text", path: "src/a.ts", old_text: "a", new_text: "b" },
+  );
   assert.equal(parseToolRequest('HACKL_TOOL {"name":"replace_text","path":"src/a.ts","old_text":"","new_text":"x"}'), undefined);
 });
 
@@ -26,6 +34,14 @@ test("parseToolRequest reads bounded search requests", () => {
   assert.deepEqual(
     parseToolRequest('HACKL_TOOL {"name":"search_files","query":"ChatSession","glob":"src/**/*.ts","max_results":99}'),
     { name: "search_files", query: "ChatSession", glob: "src/**/*.ts", max_results: 50 },
+  );
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"search_files","query":"","glob":"**/*","max_results":50}'),
+    { name: "search_files", query: "", glob: "**/*", max_results: 50 },
+  );
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"grep","pattern":"TODO","files":"src/**/*.ts"}'),
+    { name: "search_files", query: "TODO", glob: "src/**/*.ts", max_results: undefined },
   );
   assert.equal(parseToolRequest('HACKL_TOOL {"name":"search_files","query":" "}'), undefined);
 });
@@ -35,7 +51,14 @@ test("parseToolRequest reads bounded command requests", () => {
     parseToolRequest('HACKL_TOOL {"name":"run_command","cmd":"npm","args":["test"],"timeout_ms":999999}'),
     { name: "run_command", cmd: "npm", args: ["test"], timeout_ms: 600000 },
   );
-  assert.equal(parseToolRequest('HACKL_TOOL {"name":"run_command","cmd":"npm","args":"test"}'), undefined);
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"command","command":"npm","args":"run test"}'),
+    { name: "run_command", cmd: "npm", args: ["run", "test"], timeout_ms: undefined },
+  );
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"run_command","cmd":"node","args":["-e",1]}'),
+    { name: "run_command", cmd: "node", args: ["-e", "1"], timeout_ms: undefined },
+  );
 });
 
 test("buildToolResultMessage returns a compact tool result block", () => {
@@ -223,4 +246,37 @@ test("completeWithTools runs a streamed complete tool call without waiting for t
 
   assert.equal(answer.content, "done");
   assert.equal(calls, 2);
+});
+
+test("completeWithTools runs empty-query glob searches instead of rendering them", async () => {
+  const progress = [];
+  const seen = [];
+  const backend = {
+    async complete(messages, options) {
+      seen.push(messages.map((message) => message.content));
+      if (seen.length === 1) {
+        const content = 'HACKL_TOOL {"name":"search_files","query":"","glob":"**/*","max_results":50}';
+        options.onDelta({ type: "answer", text: content });
+        return { content };
+      }
+      return { content: "I found candidate files." };
+    },
+  };
+  const tools = [];
+
+  const answer = await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "do some cleanup chores" }],
+    maxToolCalls: 4,
+    progress: (event) => progress.push(event),
+    runTool: async (request) => {
+      tools.push(request);
+      return { ok: true, content: "src/a.ts: file name match" };
+    },
+  });
+
+  assert.equal(progress.some((event) => event.type === "delta" && /HACKL_TOOL/.test(event.text)), false);
+  assert.deepEqual(tools, [{ name: "search_files", query: "", glob: "**/*", max_results: 50 }]);
+  assert.match(seen[1].at(-1), /HACKL_TOOL_RESULT search_files ok/);
+  assert.equal(answer.content, "I found candidate files.");
 });

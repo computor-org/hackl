@@ -33,6 +33,7 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
   const messages = [...options.messages];
   const toolHistory: ToolInteraction[] = [];
   const requestCounts = new Map<string, number>();
+  const invalidToolCalls = new Map<string, number>();
   options.debug?.("toolLoop.start", { messages: messages.length, maxToolCalls: options.maxToolCalls });
 
   for (let toolCalls = 0; toolCalls <= options.maxToolCalls; toolCalls++) {
@@ -46,6 +47,17 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
     options.debug?.("toolLoop.completion", { toolCalls, content, reasoning: completion.reasoning });
     const request = parseToolRequest(content);
     if (!request) {
+      if (containsToolCall(content)) {
+        messages.push({ role: "assistant", content });
+        const repeatedInvalid = (invalidToolCalls.get(content) ?? 0) + 1;
+        invalidToolCalls.set(content, repeatedInvalid);
+        options.debug?.("toolLoop.invalidToolRequest", { toolCalls, content, repeatedInvalid });
+        if (toolCalls === options.maxToolCalls || repeatedInvalid > 2) {
+          break;
+        }
+        messages.push({ role: "user", content: invalidToolResult(content) });
+        continue;
+      }
       router.flushAnswer();
       const split = splitReasoning(content);
       const text = split.answer || content;
@@ -144,6 +156,26 @@ function finalContent(answer: string, toolHistory: ToolInteraction[]): string {
 
 function stripToolCalls(content: string): string {
   return content.replace(/HACKL_TOOL\s*\{[\s\S]*?\}/g, "").trim();
+}
+
+function containsToolCall(content: string): boolean {
+  return /\bHACKL_TOOL\b/.test(content);
+}
+
+function invalidToolResult(content: string): string {
+  const reason = invalidToolReason(content);
+  return [
+    "HACKL_TOOL_RESULT invalid error",
+    "",
+    `${reason} Reply with one valid HACKL_TOOL JSON object only, or answer in plain text.`,
+  ].join("\n");
+}
+
+function invalidToolReason(content: string): string {
+  if (/\"name\"\s*:\s*\"search_files\"/.test(content) && /\"query\"\s*:\s*\"\\s*\"/.test(content)) {
+    return "Invalid search_files request: query must not be empty.";
+  }
+  return "Invalid tool request.";
 }
 
 function toolSignature(request: ToolRequest): string {

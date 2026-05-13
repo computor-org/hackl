@@ -20,6 +20,7 @@ const HARD_DENY = new Set([
 
 const SHELL_TOKENS = ["&&", "||", ";", "|", "|&", "&", "`", "$(", ">", "<", "\n", "\r"];
 const GIT_READ_ONLY = new Set(["status", "diff", "log", "show"]);
+const GIT_DESTRUCTIVE = new Set(["clean", "reset", "checkout", "restore", "rm", "rebase"]);
 const PACKAGE_INSTALLS = new Set(["install", "i", "add", "ci", "update", "upgrade"]);
 
 export function classifyCommand(request: RunCommandRequest, options: CommandPolicyOptions): CommandPolicyResult {
@@ -58,6 +59,9 @@ function classifyGit(args: string[]): CommandPolicyResult {
   const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
   if (GIT_READ_ONLY.has(subcommand)) {
     return { decision: "allow", reason: `Read-only git ${subcommand}.` };
+  }
+  if (GIT_DESTRUCTIVE.has(subcommand)) {
+    return deny(`Blocked git ${subcommand}.`);
   }
   return { decision: "ask", reason: "Git command requires approval." };
 }

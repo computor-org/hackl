@@ -361,6 +361,9 @@ function uniqueVsCodeTextRange(
 
 function createSearchMatcher(query: string): (text: string) => boolean {
   const trimmed = query.trim();
+  if (!trimmed) {
+    return () => true;
+  }
   const lower = trimmed.toLowerCase();
   const regex = searchRegex(trimmed);
   return (text) => {
