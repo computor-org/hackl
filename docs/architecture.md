@@ -50,10 +50,9 @@ prompt contracts, not on a specific Hackl chat surface.
 ## Model Policy
 
 Hackl should prefer one loaded local model. The user should not have to swap
-models for chat, autocomplete, edit, and agent workflows. Autocomplete is
-enabled only when the loaded model family is strong enough and likely
-FIM-capable. If the loaded model exposes Qwen-style FIM tokens, autocomplete
-should first try a FIM prompt mode against that same model.
+models for chat, autocomplete, edit, and agent workflows. For the first
+autocomplete implementation, assume the server is serving Qwen 3.5 or Qwen3.6
+and use only the Qwen FIM format. Do not add generic FIM-template support yet.
 
 Initial local tiers:
 
@@ -74,7 +73,7 @@ swapping to Qwen-Coder as the fallback; it is weaker for the broader Hackl
 workflow. If Qwen3.6-35B-A3B cannot provide acceptable autocomplete, suppress
 autocomplete before making users leave the primary model.
 
-Do not enable FIM autocomplete for Gemma 4 by default. Current official Gemma 4
+Do not enable FIM autocomplete for Gemma 4. Current official Gemma 4
 documentation covers chat formatting, coding/agentic capability, and MTP, but
 not fill-in-the-middle support. If the loaded model id is Gemma, Hackl should
 keep chat/edit/agent features and suppress autocomplete until official FIM

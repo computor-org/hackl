@@ -54,10 +54,10 @@ endpoint bridge for that policy-safe path.
 
 ## Model Policy
 
-Hackl defaults to one loaded model. Autocomplete should try a model-family
-specific FIM prompt mode only when the currently loaded model is strong enough
-and likely FIM-capable. Do not ask users to swap away from the primary coding
-model for autocomplete.
+Hackl defaults to one loaded model. For the first autocomplete implementation,
+assume the server is serving Qwen 3.5 or Qwen3.6 and use only the Qwen FIM
+format. Do not add a generic FIM-template matrix yet, and do not ask users to
+swap away from the primary coding model for autocomplete.
 
 Preferred hardware tiers:
 
@@ -84,11 +84,11 @@ Qwen3.6 via OpenAI-compatible servers, pass the equivalent of:
 }
 ```
 
-Gemma 4 should not get FIM autocomplete by default. Current official Gemma 4
-docs describe chat formatting, coding/agentic capability, and MTP speculative
-decoding, but do not document FIM tokens or fill-in-the-middle training. If the
-loaded model id looks like Gemma, Hackl should disable autocomplete and keep
-chat/edit/agent features available.
+Gemma 4 should not get FIM autocomplete. Current official Gemma 4 docs describe
+chat formatting, coding/agentic capability, and MTP speculative decoding, but
+do not document FIM tokens or fill-in-the-middle training. If the loaded model
+id looks like Gemma, Hackl should disable autocomplete and keep chat/edit/agent
+features available.
 
 Do not recommend Qwen-Coder as an automatic fallback. It has explicit FIM
 support, but it is weaker for the broader Hackl workload than Qwen3.6-35B-A3B.
@@ -99,9 +99,8 @@ making users swap models.
 
 1. Chat foundation over local OpenAI-compatible endpoints.
 2. Assignment-aware Luna prompt mode and Computor context bridge.
-3. Inline autocomplete using VS Code `InlineCompletionItemProvider`, gated by
-   loaded-model capability: try Qwen3.6 FIM, keep Gemma off, never swap to
-   Qwen-Coder.
+3. Inline autocomplete using VS Code `InlineCompletionItemProvider`, Qwen FIM
+   format only: try Qwen3.5/Qwen3.6, keep Gemma off, never swap to Qwen-Coder.
 4. Selection/file edit commands that produce normal workspace edits.
 5. Agent mode with plan, tests, diff, and optional commit.
 6. `@tutor` escalation into Computor human support threads.
