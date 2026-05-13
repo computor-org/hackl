@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -21,6 +21,9 @@
     "onView:hackl.chatView"
   ],
   "main": "./dist/extension.js",
+  "bin": {
+    "hackl": "./dist/cli.js"
+  },
   "contributes": {
     "commands": [
       {
