@@ -5,6 +5,7 @@ export type ConversationMessage = Pick<ChatMessage, "role" | "content">;
 
 const SYSTEM_PROMPT = [
   "Hackl. Local code helper. Terse. No edits. No long think.",
+  "If selection shown, 'this/that/it' = the selection. Do not read_file unless needed.",
   TOOL_INSTRUCTIONS,
 ].join("\n");
 
