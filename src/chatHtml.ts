@@ -115,6 +115,7 @@ body {
 
 body {
   margin: 0;
+  padding: 0;
   overflow: hidden;
   color: var(--vscode-foreground);
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
@@ -539,7 +540,7 @@ form {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 6px 8px;
+  padding: 8px 10px 10px;
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 
