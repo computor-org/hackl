@@ -7,6 +7,7 @@ import {
   ToolRequest,
   ToolResult,
 } from "./tools";
+import type { DebugLog } from "./debugLog";
 
 export type ToolRunner = (request: ToolRequest) => Promise<ToolResult>;
 
@@ -20,6 +21,7 @@ export interface ToolLoopOptions {
   runTool: ToolRunner;
   maxToolCalls: number;
   progress?: (event: PromptProgress) => void;
+  debug?: DebugLog;
   signal?: AbortSignal;
 }
 
@@ -30,6 +32,7 @@ export interface ToolLoopAnswer {
 
 export async function completeWithTools(options: ToolLoopOptions): Promise<ToolLoopAnswer> {
   const messages = [...options.messages];
+  options.debug?.("toolLoop.start", { messages: messages.length, maxToolCalls: options.maxToolCalls });
 
   for (let toolCalls = 0; toolCalls <= options.maxToolCalls; toolCalls++) {
     if (options.signal?.aborted) {
@@ -43,22 +46,28 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
     router.flush();
 
     const content = completion.content;
+    options.debug?.("toolLoop.completion", { toolCalls, content, reasoning: completion.reasoning });
     const request = parseToolRequest(content);
     if (!request) {
       const split = splitReasoning(content);
-      return {
+      const answer = {
         content: split.answer || content,
         reasoning: completion.reasoning || split.reasoning || undefined,
       };
+      options.debug?.("toolLoop.final", answer);
+      return answer;
     }
 
+    options.debug?.("toolLoop.toolRequest", { toolCalls, request });
     messages.push({ role: "assistant", content });
     if (toolCalls === options.maxToolCalls) {
+      options.debug?.("toolLoop.toolLimit", { toolCalls, request });
       break;
     }
 
     options.progress?.({ type: "phase", text: `Running tool: ${formatToolRequest(request)}` });
     const result = await options.runTool(request);
+    options.debug?.("toolLoop.toolResult", { toolCalls, request, result });
     messages.push({ role: "user", content: buildToolResultMessage(request, result) });
   }
 
@@ -96,14 +105,17 @@ async function forceFinalAnswer(
     signal: options.signal,
   });
   router.flush();
+  options.debug?.("toolLoop.forceCompletion", { content: completion.content, reasoning: completion.reasoning });
 
   const cleaned = stripToolCalls(completion.content);
   const split = splitReasoning(cleaned);
   const answer = split.answer || cleaned;
-  return {
+  const finalAnswer = {
     content: answer.trim() || "(no answer)",
     reasoning: completion.reasoning || split.reasoning || undefined,
   };
+  options.debug?.("toolLoop.forceFinal", { cleaned, answer: finalAnswer });
+  return finalAnswer;
 }
 
 function stripToolCalls(content: string): string {

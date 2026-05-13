@@ -102,3 +102,25 @@ test("completeWithTools runs read_file before final answer", async () => {
   assert.match(calls[1].at(-1), /HACKL_TOOL_RESULT read_file ok/);
   assert.deepEqual(progress.filter((event) => event.type === "delta").map((event) => event.text), ["final answer"]);
 });
+
+test("completeWithTools logs tool-only forced final answers", async () => {
+  const debug = [];
+  const backend = {
+    async complete() {
+      return { content: 'HACKL_TOOL {"name":"read_file","path":"src/a.ts"}' };
+    },
+  };
+
+  const answer = await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "question" }],
+    maxToolCalls: 0,
+    debug: (event, data) => debug.push({ event, data }),
+    runTool: async () => ({ ok: true, content: "unused" }),
+  });
+
+  assert.equal(answer.content, "(no answer)");
+  assert.ok(debug.some((entry) => entry.event === "toolLoop.toolLimit"));
+  assert.ok(debug.some((entry) => entry.event === "toolLoop.forceCompletion"));
+  assert.ok(debug.some((entry) => entry.event === "toolLoop.forceFinal"));
+});

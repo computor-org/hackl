@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -117,6 +117,11 @@
           "type": "boolean",
           "default": false,
           "description": "Allow model thinking/reasoning when the local OpenAI-compatible server supports this switch."
+        },
+        "hackl.debug": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write Hackl prompt and tool-loop diagnostics to the Hackl Debug output channel and the VS Code Extension Host debug console."
         },
         "hackl.autocomplete.enabled": {
           "type": "boolean",

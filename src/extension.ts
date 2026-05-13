@@ -10,6 +10,7 @@ import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
 import { registerAutocomplete } from "./autocomplete";
+import { createDebugLog, disposeDebugLog } from "./debugLog";
 
 let chatPanel: ChatPanel | undefined;
 let extensionContext: vscode.ExtensionContext | undefined;
@@ -44,6 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   chatPanel = undefined;
+  disposeDebugLog();
 }
 
 async function answerPrompt(
@@ -62,6 +64,7 @@ async function answerPrompt(
     endpointConfigured: hasUserConfigured(config.inspect<string>("endpoint")),
   });
   const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
+  const debug = createDebugLog(config.get<boolean>("debug", true));
   const configuredMaxContext = hasUserConfigured(config.inspect<number>("maxContextTokens"))
     ? config.get<number>("maxContextTokens", 32768)
     : undefined;
@@ -70,12 +73,20 @@ async function answerPrompt(
     : undefined;
   const maxContextTokens = configuredMaxContext ?? detectedMaxContext ?? 32768;
   const enableThinking = config.get<boolean>("enableThinking", false);
+  debug?.("prompt.start", {
+    mode,
+    endpoint: target.endpoint,
+    model: target.model,
+    maxToolFileChars,
+    enableThinking,
+  });
   if (mode === "yolo") {
     await confirmYoloMode(requestApproval);
   }
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
   const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history, mode);
   const inputTokens = estimateChatTokens(messages);
+  debug?.("prompt.context", { inputTokens, maxContextTokens, messages: messages.length });
   progress?.({
     type: "phase",
     text: `Preprocessing ${Date.now() - startedAt} ms · ${formatTokenBudget(inputTokens, maxContextTokens)}`,
@@ -99,8 +110,10 @@ async function answerPrompt(
     }),
     maxToolCalls: mode === "work" || mode === "agent" || mode === "yolo" ? 8 : 3,
     progress,
+    debug,
     signal,
   });
+  debug?.("prompt.answer", answer);
   progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
   return answer;
 }
