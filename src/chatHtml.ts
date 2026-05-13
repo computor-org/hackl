@@ -51,13 +51,16 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           <button id="attach" class="tool-button" type="button" disabled title="Attach (coming soon)" aria-label="Attach">
             <span class="codicon codicon-add" aria-hidden="true"></span>
           </button>
-          <div class="mode-select-wrap">
-            <select id="mode" class="mode-select" aria-label="Mode">
-              <option value="ask">Ask</option>
-              <option value="edit" disabled>Edit (soon)</option>
-              <option value="agent" disabled>Agent (soon)</option>
-            </select>
-            <span class="codicon codicon-chevron-down mode-caret" aria-hidden="true"></span>
+          <div class="mode-dropdown">
+            <button id="mode-button" class="mode-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Mode">
+              <span id="mode-label">Ask</span>
+              <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
+            </button>
+            <div id="mode-menu" class="mode-menu" role="listbox" hidden>
+              <button class="mode-option" type="button" role="option" data-value="ask" aria-selected="true">Ask</button>
+              <button class="mode-option" type="button" role="option" data-value="edit" disabled aria-disabled="true">Edit <span class="mode-option-tag">soon</span></button>
+              <button class="mode-option" type="button" role="option" data-value="agent" disabled aria-disabled="true">Agent <span class="mode-option-tag">soon</span></button>
+            </div>
           </div>
           <button id="reasoning-toggle" class="tool-button" type="button" title="Toggle reasoning" aria-label="Toggle reasoning" aria-pressed="false">
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
@@ -594,16 +597,22 @@ textarea::placeholder {
   justify-content: center;
   color: var(--vscode-descriptionForeground);
   background: transparent;
-  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease, opacity 100ms ease, transform 80ms ease;
 }
 
 .tool-button .codicon {
   font-size: 13px;
+  transition: transform 80ms ease;
 }
 
 .tool-button:not(:disabled):hover {
-  background: var(--hackl-surface);
+  background: var(--hackl-surface-strong);
   color: var(--vscode-foreground);
+}
+
+.tool-button:not(:disabled):active {
+  transform: scale(0.92);
 }
 
 .tool-button:disabled {
@@ -612,20 +621,26 @@ textarea::placeholder {
 }
 
 .tool-button[aria-pressed="true"] {
-  color: var(--hackl-accent);
-  background: color-mix(in srgb, var(--hackl-accent) 14%, transparent);
+  color: var(--vscode-button-foreground, #fff);
+  background: var(--hackl-accent);
 }
 
-.mode-select-wrap {
+.tool-button[aria-pressed="true"]:not(:disabled):hover {
+  background: color-mix(in srgb, var(--hackl-accent) 85%, white);
+  color: var(--vscode-button-foreground, #fff);
+}
+
+.mode-dropdown {
   position: relative;
   display: inline-flex;
-  align-items: center;
 }
 
-.mode-select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding: 2px 18px 2px 8px;
+.mode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px 2px 8px;
+  height: 22px;
   border-radius: 6px;
   border: 0;
   background: transparent;
@@ -634,27 +649,74 @@ textarea::placeholder {
   font-size: 11.5px;
   letter-spacing: 0.2px;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background 100ms ease, color 100ms ease;
 }
 
-.mode-select:hover {
-  background: var(--hackl-surface);
+.mode-button .codicon {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.mode-button:hover,
+.mode-button[aria-expanded="true"] {
+  background: var(--hackl-surface-strong);
   color: var(--vscode-foreground);
 }
 
-.mode-select:focus-visible {
-  outline: 1px solid var(--hackl-accent);
-  outline-offset: 1px;
+.mode-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  min-width: 140px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--hackl-border);
+  background: var(--vscode-menu-background, var(--vscode-editor-background));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
-.mode-caret {
-  position: absolute;
-  right: 3px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 11px;
+.mode-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-option:not(:disabled):hover {
+  background: var(--hackl-surface-strong);
+}
+
+.mode-option[aria-selected="true"] {
+  color: var(--hackl-accent);
+}
+
+.mode-option:disabled {
   color: var(--vscode-descriptionForeground);
-  pointer-events: none;
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mode-option-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--hackl-surface);
+  color: var(--vscode-descriptionForeground);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 
 .compose-spacer {
@@ -798,7 +860,9 @@ const clientScript = `
   const contextMeter = document.getElementById("context-meter");
   const emptyState = document.getElementById("empty-state");
   const reasoningToggle = document.getElementById("reasoning-toggle");
-  const modeSelect = document.getElementById("mode");
+  const modeButton = document.getElementById("mode-button");
+  const modeMenu = document.getElementById("mode-menu");
+  const modeLabel = document.getElementById("mode-label");
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
   let statusEntry;
   let assistantDraft;
@@ -872,10 +936,40 @@ const clientScript = `
     });
   }
 
-  if (modeSelect) {
-    modeSelect.addEventListener("change", () => {
-      if (modeSelect.value !== "ask") {
-        modeSelect.value = "ask";
+  if (modeButton && modeMenu) {
+    modeButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = modeMenu.hidden;
+      modeMenu.hidden = !open;
+      modeButton.setAttribute("aria-expanded", String(open));
+    });
+    modeMenu.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const option = target.closest(".mode-option");
+      if (!option || option.hasAttribute("disabled")) return;
+      const value = option.getAttribute("data-value") || "ask";
+      if (modeLabel) modeLabel.textContent = option.firstChild ? (option.firstChild.textContent || "").trim() : value;
+      modeMenu.querySelectorAll(".mode-option").forEach((opt) => {
+        opt.setAttribute("aria-selected", String(opt === option));
+      });
+      modeMenu.hidden = true;
+      modeButton.setAttribute("aria-expanded", "false");
+      focusPrompt();
+    });
+    document.addEventListener("click", (event) => {
+      if (modeMenu.hidden) return;
+      const target = event.target;
+      if (target instanceof Node && (modeButton.contains(target) || modeMenu.contains(target))) return;
+      modeMenu.hidden = true;
+      modeButton.setAttribute("aria-expanded", "false");
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modeMenu.hidden) {
+        event.preventDefault();
+        modeMenu.hidden = true;
+        modeButton.setAttribute("aria-expanded", "false");
+        focusPrompt();
       }
     });
   }
