@@ -30,7 +30,6 @@ export interface ToolLoopAnswer {
 
 export async function completeWithTools(options: ToolLoopOptions): Promise<ToolLoopAnswer> {
   const messages = [...options.messages];
-  let lastAnswer: ToolLoopAnswer | undefined;
 
   for (let toolCalls = 0; toolCalls <= options.maxToolCalls; toolCalls++) {
     if (options.signal?.aborted) {
@@ -54,7 +53,6 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
     }
 
     messages.push({ role: "assistant", content });
-    lastAnswer = { content };
     if (toolCalls === options.maxToolCalls) {
       break;
     }
@@ -64,7 +62,42 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
     messages.push({ role: "user", content: buildToolResultMessage(request, result) });
   }
 
-  return lastAnswer ?? { content: "Tool call limit reached before Hackl produced an answer." };
+  return forceFinalAnswer(messages, options);
+}
+
+async function forceFinalAnswer(
+  messages: ChatMessage[],
+  options: ToolLoopOptions,
+): Promise<ToolLoopAnswer> {
+  if (options.signal?.aborted) {
+    throw new DOMException("Cancelled", "AbortError");
+  }
+  const nudged: ChatMessage[] = [
+    ...messages,
+    {
+      role: "user",
+      content: "Stop. Answer now in plain text. Do not output HACKL_TOOL.",
+    },
+  ];
+  options.progress?.({ type: "phase", text: "Forcing final answer..." });
+  const router = new DeltaRouter(options.progress);
+  const completion = await options.backend.complete(nudged, {
+    onDelta: (delta) => router.handle(delta),
+    signal: options.signal,
+  });
+  router.flush();
+
+  const cleaned = stripToolCalls(completion.content);
+  const split = splitReasoning(cleaned);
+  const answer = split.answer || cleaned;
+  return {
+    content: answer.trim() || "(no answer)",
+    reasoning: completion.reasoning || split.reasoning || undefined,
+  };
+}
+
+function stripToolCalls(content: string): string {
+  return content.replace(/HACKL_TOOL\s*\{[\s\S]*?\}/g, "").trim();
 }
 
 class DeltaRouter {

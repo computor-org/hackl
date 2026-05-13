@@ -11,9 +11,10 @@ export interface ToolResult {
 }
 
 export const TOOL_INSTRUCTIONS = [
+  "Only call HACKL_TOOL if the user asks about file contents. Else answer plainly.",
   "Files hidden. Need file? Reply ONLY:",
   'HACKL_TOOL {"name":"read_file","path":"X","start_line":1,"end_line":120}',
-  "Small range. Wait for HACKL_TOOL_RESULT.",
+  "Small range. One call. Wait for HACKL_TOOL_RESULT, then answer.",
 ].join("\n");
 
 const TOOL_PREFIX = "HACKL_TOOL";
