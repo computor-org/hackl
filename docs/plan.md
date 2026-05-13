@@ -52,6 +52,29 @@ Public Computor deployments should not have to host model inference. Students
 or institutions bring their own API key or local endpoint. Hackl is the local
 endpoint bridge for that policy-safe path.
 
+## Chat UI
+
+The default Hackl chat surface should be a VS Code view that is designed to
+live in the Secondary Sidebar, next to the editor like Copilot, Codex, Claude,
+and other current coding assistants. VS Code extensions cannot force a view
+directly into the Secondary Sidebar by default, so Hackl should contribute a
+normal view container and make it easy to focus. Users can move that view to the
+right sidebar as part of their workspace layout.
+
+The chat UI should be Hackl-owned rather than Copilot-owned:
+
+- local-first and usable when GitHub Copilot is disabled;
+- compact TUI-like transcript, using VS Code colors and fonts;
+- Markdown rendering for explanations and code blocks;
+- local LaTeX math rendering for physics and mathematics teaching;
+- context chips for the current editor, selection, assignment, and model state;
+- `@luna` and `@tutor` routing in the same conversation model;
+- normal editor files and Git diffs for future edit/agent review.
+
+Keep an editor-tab chat command as a secondary surface for long sessions. Add a
+native VS Code Chat Participant only as an optional bridge once the product
+needs that integration; it must not be required for local-only use.
+
 ## Model Policy
 
 Hackl defaults to one loaded model. For the first autocomplete implementation,
@@ -98,13 +121,14 @@ making users swap models.
 ## Roadmap
 
 1. Chat foundation over local OpenAI-compatible endpoints.
-2. Assignment-aware Luna prompt mode and Computor context bridge.
-3. Inline autocomplete using VS Code `InlineCompletionItemProvider`, Qwen FIM
+2. Right-side Hackl chat view with Markdown and local LaTeX math rendering.
+3. Assignment-aware Luna prompt mode and Computor context bridge.
+4. Inline autocomplete using VS Code `InlineCompletionItemProvider`, Qwen FIM
    format only: try Qwen3.5/Qwen3.6, keep Gemma off, never swap to Qwen-Coder.
-4. Selection/file edit commands that produce normal workspace edits.
-5. Agent mode with plan, tests, diff, and optional commit.
-6. `@tutor` escalation into Computor human support threads.
-7. Optional native VS Code chat participant or language model provider.
+5. Selection/file edit commands that produce normal workspace edits.
+6. Agent mode with plan, tests, diff, and optional commit.
+7. `@tutor` escalation into Computor human support threads.
+8. Optional native VS Code chat participant or language model provider.
 
 ## Research Notes
 

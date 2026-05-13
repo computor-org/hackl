@@ -81,14 +81,29 @@ support or a tested template exists.
 
 ## UI Direction
 
-The current webview is intentionally small: transcript, clear, busy state,
-Enter-to-send, and editor context on every turn. This keeps the user experience
-closer to modern assistant chat while avoiding premature commitments to edit
-mode, tools, native chat participants, or a merged tutor inbox.
+The default chat UI is a Hackl-owned `WebviewView` contributed to a Hackl view
+container. It is designed for the Secondary Sidebar: the same right-side work
+area users commonly use for Copilot, Codex, Claude, and similar assistants.
+VS Code does not let extensions contribute directly to the Secondary Sidebar by
+default, so the view must work as a normal contributed view and remain movable
+by the user.
 
-Native VS Code chat remains a candidate once the product needs deeper VS Code
-chat affordances. Until then, the webview is easier to package, smoke test, and
-keep local-first.
+Keep an editor-tab webview command as a secondary long-session surface. Both
+surfaces should share the same chat session and renderer behavior.
+
+The renderer should stay small and local:
+
+- no external network resources;
+- VS Code theme variables and codicon-compatible layout;
+- compact TUI-like transcript rather than a web app look;
+- Markdown rendering for assistant responses;
+- local LaTeX math rendering for physics and mathematics explanations;
+- clear busy/error states, Enter-to-send, and transcript clearing;
+- future room for context chips, `@luna`, and `@tutor`.
+
+Native VS Code chat remains a candidate once the product needs deeper built-in
+chat affordances. It is an optional bridge, not the default UI, because Hackl
+must keep working when GitHub Copilot and hosted AI surfaces are disabled.
 
 The current VS Code docs make the tradeoff explicit: chat participants are for
 domain-specific assistants that own prompt handling inside the VS Code chat
@@ -96,7 +111,8 @@ experience, while webviews are fully custom UI and should be used sparingly.
 For Hackl this means:
 
 - Keep the backend and prompt contracts reusable now.
-- Keep the custom webview while Hackl is a standalone local-first chat product.
+- Keep the custom webview view while Hackl is a standalone local-first chat
+  product.
 - Move to a native chat participant if Hackl should live inside VS Code Chat or
   share UI conventions with Copilot-style participants.
 - Consider the Language Model Chat Provider API only if Hackl should expose the
