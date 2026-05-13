@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { resolveChatTarget } = require("../dist/localServers.js");
+const { detectMaxContextTokens, resolveChatTarget } = require("../dist/localServers.js");
 
 test("resolveChatTarget preserves explicit endpoint and uses loaded model", async () => {
   const target = await resolveChatTarget({
@@ -114,6 +114,46 @@ test("resolveChatTarget uses first advertised model when server requires a model
     endpoint: "http://slopgate.example/v1",
     model: "qwen",
   });
+});
+
+test("detectMaxContextTokens reads llama.cpp root props with nested params", async () => {
+  const calls = [];
+  const detected = await detectMaxContextTokens("http://localhost:8080/v1", async (url) => {
+    calls.push(String(url));
+    if (String(url) === "http://localhost:8080/v1/props") {
+      return new Response("not found", { status: 404 });
+    }
+    if (String(url) === "http://localhost:8080/props") {
+      return new Response(JSON.stringify({
+        default_generation_settings: {
+          params: { n_ctx: 262144 },
+        },
+      }));
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  assert.equal(detected, 262144);
+  assert.deepEqual(calls, [
+    "http://localhost:8080/v1/props",
+    "http://localhost:8080/props",
+  ]);
+});
+
+test("detectMaxContextTokens falls back to model metadata context", async () => {
+  const detected = await detectMaxContextTokens("http://localhost:8080/v1", async (url) => {
+    if (String(url).endsWith("/props")) {
+      return new Response("not found", { status: 404 });
+    }
+    if (String(url) === "http://localhost:8080/v1/models") {
+      return new Response(JSON.stringify({
+        data: [{ id: "qwen", meta: { n_ctx_train: 262144 } }],
+      }));
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  assert.equal(detected, 262144);
 });
 
 function modelResponse(id) {

@@ -116,6 +116,7 @@ async function answerPrompt(
       workspace: createNodeWorkspaceHost(config.cwd),
     }),
     maxToolCalls: toolCallLimit(config.mode),
+    maxContextTokens,
     progress,
   });
 }

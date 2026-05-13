@@ -106,6 +106,7 @@ async function answerPrompt(
       signal,
     }),
     maxToolCalls: toolCallLimit(mode),
+    maxContextTokens,
     progress,
     debug,
     signal,

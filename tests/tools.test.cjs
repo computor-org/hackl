@@ -126,6 +126,59 @@ test("completeWithTools runs read_file before final answer", async () => {
   assert.deepEqual(progress.filter((event) => event.type === "delta").map((event) => event.text), ["final answer"]);
 });
 
+test("completeWithTools reports token metrics after tool results", async () => {
+  const progress = [];
+  let calls = 0;
+  const backend = {
+    async complete() {
+      calls += 1;
+      if (calls === 1) {
+        return { content: 'HACKL_TOOL {"name":"read_file","path":"src/a.ts"}' };
+      }
+      return { content: "done" };
+    },
+  };
+
+  await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "read" }],
+    maxToolCalls: 2,
+    maxContextTokens: 1000,
+    progress: (event) => progress.push(event),
+    runTool: async () => ({ ok: true, content: "1: const x = 1;" }),
+  });
+
+  const metrics = progress.filter((event) => event.type === "phase" && event.inputTokens !== undefined);
+  assert.equal(metrics.length, 1);
+  assert.equal(metrics[0].maxContextTokens, 1000);
+  assert.match(metrics[0].text, /Context ~\d+ \/ 1,000 tokens/);
+});
+
+test("completeWithTools reports token metrics after invalid tool feedback", async () => {
+  const progress = [];
+  let calls = 0;
+  const backend = {
+    async complete() {
+      calls += 1;
+      if (calls === 1) {
+        return { content: "HACKL_TOOL invalid" };
+      }
+      return { content: "done" };
+    },
+  };
+
+  await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "bad tool" }],
+    maxToolCalls: 2,
+    maxContextTokens: 1000,
+    progress: (event) => progress.push(event),
+    runTool: async () => ({ ok: true, content: "unused" }),
+  });
+
+  assert.equal(progress.some((event) => event.type === "phase" && event.inputTokens !== undefined), true);
+});
+
 test("completeWithTools explains tool-only forced final answers", async () => {
   const debug = [];
   const backend = {

@@ -1,5 +1,6 @@
 import type { ChatBackend, ChatDelta, ChatMessage } from "./chatClient";
 import { splitReasoning } from "./reasoning";
+import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import {
   buildToolResultMessage,
   parseToolRequest,
@@ -19,6 +20,7 @@ export interface ToolLoopOptions {
   messages: ChatMessage[];
   runTool: ToolRunner;
   maxToolCalls: number;
+  maxContextTokens?: number;
   progress?: (event: PromptProgress) => void;
   debug?: DebugLog;
   signal?: AbortSignal;
@@ -56,6 +58,7 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
           break;
         }
         messages.push({ role: "user", content: invalidToolResult(content) });
+        reportTokenBudget(messages, options);
         continue;
       }
       router.flushAnswer();
@@ -88,6 +91,7 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
     toolHistory.push({ request, result });
     options.debug?.("toolLoop.toolResult", { toolCalls, request, result });
     messages.push({ role: "user", content: buildToolResultMessage(request, result) });
+    reportTokenBudget(messages, options);
   }
 
   return forceFinalAnswer(messages, toolHistory, options);
@@ -180,6 +184,24 @@ function invalidToolReason(content: string): string {
 
 function toolSignature(request: ToolRequest): string {
   return JSON.stringify(request);
+}
+
+function reportTokenBudget(messages: ChatMessage[], options: ToolLoopOptions): void {
+  if (options.maxContextTokens === undefined) {
+    return;
+  }
+  const inputTokens = estimateChatTokens(messages);
+  options.debug?.("toolLoop.context", {
+    inputTokens,
+    maxContextTokens: options.maxContextTokens,
+    messages: messages.length,
+  });
+  options.progress?.({
+    type: "phase",
+    text: `Context ${formatTokenBudget(inputTokens, options.maxContextTokens)}`,
+    inputTokens,
+    maxContextTokens: options.maxContextTokens,
+  });
 }
 
 async function completeUntilToolRequest(

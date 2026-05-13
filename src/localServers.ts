@@ -137,14 +137,12 @@ export async function detectMaxContextTokens(
   const base = trimSlash(endpoint);
   const root = base.replace(/\/v1$/, "");
 
-  const llamaCtx = await tryFetchNumber(`${base}/props`, fetchImpl, (data) => {
-    if (!isRecord(data)) return undefined;
-    const direct = positiveNumber(data.n_ctx);
-    if (direct) return direct;
-    const settings = isRecord(data.default_generation_settings) ? data.default_generation_settings : undefined;
-    return settings ? positiveNumber(settings.n_ctx) : undefined;
-  });
+  const llamaCtx = await tryFetchNumber(`${base}/props`, fetchImpl, contextFromProps)
+    ?? await tryFetchNumber(`${root}/props`, fetchImpl, contextFromProps);
   if (llamaCtx) return llamaCtx;
+
+  const modelCtx = await tryFetchNumber(`${base}/models`, fetchImpl, contextFromModels);
+  if (modelCtx) return modelCtx;
 
   const lmStudioCtx = await tryFetchNumber(`${root}/api/v0/models`, fetchImpl, (data) => {
     if (!isRecord(data) || !Array.isArray(data.data)) return undefined;
@@ -158,6 +156,37 @@ export async function detectMaxContextTokens(
     return undefined;
   });
   return lmStudioCtx;
+}
+
+function contextFromProps(data: unknown): number | undefined {
+  if (!isRecord(data)) return undefined;
+  const direct = positiveNumber(data.n_ctx);
+  if (direct) return direct;
+  const settings = isRecord(data.default_generation_settings) ? data.default_generation_settings : undefined;
+  if (!settings) return undefined;
+  const settingsDirect = positiveNumber(settings.n_ctx);
+  if (settingsDirect) return settingsDirect;
+  const params = isRecord(settings.params) ? settings.params : undefined;
+  return params ? positiveNumber(params.n_ctx) : undefined;
+}
+
+function contextFromModels(data: unknown): number | undefined {
+  if (!isRecord(data)) return undefined;
+  const lists = [data.data, data.models];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const model of list) {
+      if (!isRecord(model)) continue;
+      const direct = positiveNumber(model.n_ctx) ?? positiveNumber(model.n_ctx_train);
+      if (direct) return direct;
+      const meta = isRecord(model.meta) ? model.meta : undefined;
+      const metaCtx = meta
+        ? positiveNumber(meta.n_ctx) ?? positiveNumber(meta.n_ctx_train) ?? positiveNumber(meta.context_length)
+        : undefined;
+      if (metaCtx) return metaCtx;
+    }
+  }
+  return undefined;
 }
 
 async function tryFetchNumber(
