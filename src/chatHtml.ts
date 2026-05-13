@@ -70,7 +70,6 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           <button id="send" class="send-button" type="submit" title="Send (Enter)" aria-label="Send"><span class="codicon codicon-arrow-up" aria-hidden="true"></span></button>
         </div>
       </div>
-      <div class="compose-hint">Enter to send  ·  Shift+Enter newline  ·  Esc to stop</div>
     </form>
   </div>
   <script nonce="${nonce}" src="${assets.markdownItScript}"></script>
@@ -679,6 +678,10 @@ textarea::placeholder {
   gap: 1px;
 }
 
+.mode-menu[hidden] {
+  display: none;
+}
+
 .mode-option {
   display: flex;
   align-items: center;
@@ -723,14 +726,6 @@ textarea::placeholder {
   flex: 1;
 }
 
-.compose-hint {
-  text-align: center;
-  padding: 0 4px;
-  font-size: 10.5px;
-  color: var(--vscode-descriptionForeground);
-  opacity: 0.6;
-  letter-spacing: 0.2px;
-}
 
 button {
   cursor: pointer;
