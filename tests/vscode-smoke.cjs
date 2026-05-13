@@ -9,12 +9,16 @@ async function run() {
   assert.ok(properties["hackl.endpoint"], "hackl.endpoint setting is contributed");
   assert.equal(properties["hackl.endpoint"].default, "");
   assert.equal(properties["hackl.model"], undefined);
+  assert.ok(extension.packageJSON.contributes.views.hackl, "Hackl view container has views");
+  assert.equal(extension.packageJSON.contributes.views.hackl[0].id, "hackl.chatView");
 
   await extension.activate();
   const commands = await vscode.commands.getCommands(true);
   assert.ok(commands.includes("hackl.chat"), "hackl.chat command is registered");
+  assert.ok(commands.includes("hackl.chatEditor"), "hackl.chatEditor command is registered");
 
   await vscode.commands.executeCommand("hackl.chat");
+  await vscode.commands.executeCommand("hackl.chatEditor");
 }
 
 module.exports = { run };

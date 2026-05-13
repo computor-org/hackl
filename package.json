@@ -16,18 +16,45 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:hackl.chat"
+    "onCommand:hackl.chat",
+    "onCommand:hackl.chatEditor",
+    "onView:hackl.chatView"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "hackl.chat",
-        "title": "Chat with Hackl",
+        "title": "Open Chat",
+        "category": "Hackl",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "hackl.chatEditor",
+        "title": "Open Chat in Editor",
         "category": "Hackl",
         "icon": "$(comment-discussion)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hackl",
+          "title": "Hackl",
+          "icon": "media/hackl.svg"
+        }
+      ]
+    },
+    "views": {
+      "hackl": [
+        {
+          "id": "hackl.chatView",
+          "name": "Chat",
+          "icon": "media/hackl.svg",
+          "contextualTitle": "Hackl Chat"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "hackl.chat",
@@ -41,6 +68,11 @@
         {
           "command": "hackl.chat",
           "group": "navigation@50",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "hackl.chatEditor",
+          "group": "navigation@51",
           "when": "editorTextFocus"
         }
       ]
@@ -67,16 +99,21 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test tests/*.test.cjs",
+    "test:ui": "npm run compile && node scripts/run-webview-ui-smoke.mjs",
     "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/chatClient.js --test-coverage-include=dist/context.js --test-coverage-include=dist/localServers.js --test-coverage-include=dist/prompt.js --test tests/*.test.cjs",
     "test:extension": "npm run compile && node scripts/run-vscode-smoke.mjs",
     "package:vsix": "npm run compile && vsce package",
     "smoke:openai": "npm run compile && node scripts/smoke-openai-compatible.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^20.14.10",
     "@types/vscode": "^1.90.0",
+    "@vscode/codicons": "^0.0.45",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
+    "katex": "^0.16.45",
+    "markdown-it": "^14.1.1",
     "typescript": "^5.5.4"
   }
 }

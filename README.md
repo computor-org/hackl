@@ -10,7 +10,9 @@ coding without requiring GitHub Copilot.
 
 Current:
 
-- Chat panel.
+- Right-side chat view.
+- Optional editor chat panel.
+- Markdown and local LaTeX math rendering.
 - Open-file context.
 - Active selection and cursor position.
 - Command palette, editor context menu, and hotkey entry points.
@@ -35,6 +37,7 @@ Direction:
 npm install
 npm run compile
 npm test
+npm run test:ui
 npm run test:coverage
 npm run test:extension
 npm run package:vsix

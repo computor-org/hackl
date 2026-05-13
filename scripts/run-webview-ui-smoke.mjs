@@ -1,0 +1,141 @@
+#!/usr/bin/env node
+
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import Module from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { chromium } from "@playwright/test";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const originalLoad = Module._load;
+
+Module._load = function load(request, parent, isMain) {
+  if (request === "vscode") {
+    return {
+      Uri: {
+        joinPath(base, ...parts) {
+          const fsPath = path.join(base.fsPath, ...parts);
+          return { fsPath, toString: () => pathToFileURL(fsPath).href };
+        },
+      },
+    };
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+
+const { renderChatHtml } = require("../dist/chatHtml.js");
+const vscodeApiShim = `<script>
+  window.__hacklPosted = [];
+  window.acquireVsCodeApi = () => ({
+    postMessage(message) {
+      window.__hacklPosted.push(message);
+    }
+  });
+</script>`;
+
+const server = await startStaticServer(process.cwd());
+const extensionUri = { fsPath: process.cwd() };
+const webview = {
+  cspSource: server.origin,
+  asWebviewUri(uri) {
+    return { toString: () => server.urlFor(uri.fsPath) };
+  },
+};
+const html = renderChatHtml(webview, extensionUri);
+const browser = await chromium.launch({ executablePath: findChromium() });
+
+try {
+  const page = await browser.newPage();
+  const diagnostics = [];
+  page.on("console", (message) => diagnostics.push(`console:${message.type()}: ${message.text()}`));
+  page.on("pageerror", (error) => diagnostics.push(`pageerror: ${error.message}`));
+
+  await page.setContent(`${vscodeApiShim}${html}`, { waitUntil: "load" });
+  await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "ready"), diagnostics);
+  await page.locator("#prompt").fill("Explain energy");
+  await page.keyboard.press("Enter");
+  await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "prompt"), diagnostics);
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "status", text: "Thinking..." } }));
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "answer",
+        text: "Energy is $E=mc^2$.\n\n$$F=ma$$\n\n```js\nconst mass = 1;\n```",
+      },
+    }));
+  });
+
+  await page.locator(".assistant .katex").first().waitFor();
+  assert.equal(await page.locator(".user .body").innerText(), "Explain energy");
+  assert.match(await page.locator(".assistant .body").innerText(), /Energy is/);
+  assert.match(await page.locator(".assistant pre code").innerText(), /const mass = 1/);
+  assert.equal(await page.locator(".status").count(), 0);
+  console.log("webview UI smoke passed");
+} finally {
+  await browser.close();
+  await server.close();
+  Module._load = originalLoad;
+}
+
+async function waitFor(page, predicate, diagnostics) {
+  try {
+    await page.waitForFunction(predicate, undefined, { timeout: 30000 });
+  } catch (error) {
+    if (diagnostics.length > 0) {
+      console.error(diagnostics.join("\n"));
+    }
+    throw error;
+  }
+}
+
+function findChromium() {
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE) {
+    return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  }
+  for (const candidate of ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+async function startStaticServer(root) {
+  const listener = createServer((request, response) => {
+    const requestPath = decodeURIComponent(new URL(request.url ?? "/", "http://localhost").pathname);
+    const file = path.resolve(root, `.${requestPath}`);
+    if (!file.startsWith(root) || !existsSync(file)) {
+      response.writeHead(404);
+      response.end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": mimeType(file) });
+    response.end(require("node:fs").readFileSync(file));
+  });
+  await new Promise((resolve) => listener.listen(0, "127.0.0.1", resolve));
+  const address = listener.address();
+  assert.ok(address && typeof address === "object");
+  const origin = `http://127.0.0.1:${address.port}`;
+  return {
+    origin,
+    urlFor(file) {
+      const relative = path.relative(root, file).split(path.sep).map(encodeURIComponent).join("/");
+      return `${origin}/${relative}`;
+    },
+    close() {
+      return new Promise((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+    },
+  };
+}
+
+function mimeType(file) {
+  if (file.endsWith(".css")) return "text/css";
+  if (file.endsWith(".js")) return "text/javascript";
+  if (file.endsWith(".ttf")) return "font/ttf";
+  if (file.endsWith(".woff2")) return "font/woff2";
+  return "application/octet-stream";
+}

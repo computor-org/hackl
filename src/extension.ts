@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { sendChat, ChatMessage } from "./chatClient";
 import { ChatPanel } from "./chatPanel";
+import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
 import { resolveChatTarget } from "./localServers";
 import { buildHacklMessages, ConversationMessage } from "./prompt";
@@ -17,12 +18,23 @@ interface ConfigInspection<T> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(vscode.commands.registerCommand("hackl.chat", async () => {
-    if (!chatPanel) {
-      chatPanel = new ChatPanel(context, answerPrompt);
-    }
-    chatPanel.reveal();
-  }));
+  const chatViewProvider = new ChatViewProvider(context, answerPrompt);
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
+    vscode.commands.registerCommand("hackl.chat", async () => {
+      await vscode.commands.executeCommand("workbench.view.extension.hackl");
+      chatViewProvider.show();
+    }),
+    vscode.commands.registerCommand("hackl.chatEditor", () => {
+      if (!chatPanel) {
+        chatPanel = new ChatPanel(context, answerPrompt, () => {
+          chatPanel = undefined;
+        });
+      }
+      chatPanel.reveal();
+    }),
+  );
 }
 
 export function deactivate(): void {
