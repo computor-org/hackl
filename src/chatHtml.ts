@@ -25,17 +25,34 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
 <body>
   <div class="shell">
     <header class="topbar">
-      <div>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
         <h1>Hackl</h1>
-        <span class="subtitle">local AI chat</span>
+        <span class="subtitle">local</span>
       </div>
       <span id="context-meter" class="meter" title="Estimated prompt tokens / configured context window"></span>
       <button id="clear" class="icon-button" type="button" title="Clear transcript" aria-label="Clear transcript"><span class="codicon codicon-clear-all" aria-hidden="true"></span></button>
     </header>
-    <main id="thread" aria-live="polite"></main>
+    <main id="thread" aria-live="polite">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-mark" aria-hidden="true"></div>
+        <div class="empty-title">Hi. How can I help?</div>
+        <div class="empty-hint">Ask about the open file, paste code, or describe what you want to build.</div>
+        <div class="empty-chips">
+          <button class="chip" type="button" data-suggest="Explain what this file does and how it fits into the project.">Explain this file</button>
+          <button class="chip" type="button" data-suggest="Find potential bugs or risky patterns in the current selection.">Find bugs in selection</button>
+          <button class="chip" type="button" data-suggest="Suggest a clean refactor for the selected code.">Refactor selection</button>
+        </div>
+      </div>
+    </main>
     <form id="form">
-      <textarea id="prompt" placeholder="Ask Hackl about the current editor context" rows="3"></textarea>
-      <button id="send" class="send-button" type="submit" title="Send" aria-label="Send"><span class="codicon codicon-send" aria-hidden="true"></span></button>
+      <div class="compose">
+        <textarea id="prompt" placeholder="Message Hackl" rows="1"></textarea>
+        <div class="compose-actions">
+          <button id="send" class="send-button" type="submit" title="Send" aria-label="Send"><span class="codicon codicon-send" aria-hidden="true"></span></button>
+        </div>
+      </div>
+      <div class="compose-hint">Enter to send  ·  Shift+Enter for newline</div>
     </form>
   </div>
   <script nonce="${nonce}" src="${assets.markdownItScript}"></script>
@@ -66,6 +83,12 @@ function getNonce(): string {
 const styles = `
 :root {
   color-scheme: light dark;
+  --hackl-accent: var(--vscode-textLink-foreground, #4c9aff);
+  --hackl-surface: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+  --hackl-surface-strong: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  --hackl-border: color-mix(in srgb, var(--vscode-foreground) 14%, transparent);
+  --hackl-radius: 10px;
+  --hackl-radius-sm: 6px;
 }
 
 html,
@@ -79,7 +102,9 @@ body {
   color: var(--vscode-foreground);
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 .shell {
@@ -93,73 +118,154 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  padding: 9px 10px;
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hackl-border);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 
-.topbar > div {
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   min-width: 0;
+}
+
+.brand-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--hackl-accent), color-mix(in srgb, var(--hackl-accent) 30%, transparent));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hackl-accent) 18%, transparent);
 }
 
 h1 {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: 0.1px;
 }
 
 .subtitle {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .meter {
   margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hackl-surface);
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-editor-font-family);
-  font-size: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.2px;
   white-space: nowrap;
+}
+
+.meter:empty {
+  display: none;
 }
 
 #thread {
   min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
-  padding: 6px 10px 2px;
+  padding: 14px 14px 8px;
+  scrollbar-width: thin;
+}
+
+#thread::-webkit-scrollbar {
+  width: 8px;
+}
+
+#thread::-webkit-scrollbar-thumb {
+  background: var(--hackl-surface-strong);
+  border-radius: 4px;
 }
 
 .entry {
-  padding: 10px 0;
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  padding: 0 0 18px;
+  animation: hackl-fade 160ms ease-out both;
 }
 
 .entry:last-child {
-  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+@keyframes hackl-fade {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
 }
 
 .role {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
+  margin: 0 0 6px;
+  padding: 0;
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-editor-font-family);
   font-size: 11px;
-  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: lowercase;
+}
+
+.role::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vscode-descriptionForeground);
+  opacity: 0.55;
+}
+
+.assistant .role::before {
+  background: var(--hackl-accent);
+  opacity: 1;
+}
+
+.user .role::before {
+  background: color-mix(in srgb, var(--vscode-foreground) 60%, transparent);
+}
+
+.error .role::before {
+  background: var(--vscode-errorForeground);
 }
 
 .body {
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.55;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.user .body {
+  display: inline-block;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--hackl-radius);
+  border-bottom-left-radius: 3px;
+  background: var(--hackl-surface);
+  white-space: pre-wrap;
+}
+
+.assistant .body {
+  padding: 0;
 }
 
 .reasoning {
-  margin-bottom: 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: var(--hackl-radius-sm);
+  background: var(--hackl-surface);
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-editor-font-family);
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
 .reasoning[hidden] {
@@ -167,19 +273,21 @@ h1 {
 }
 
 .reasoning-toggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   width: auto;
   height: auto;
   min-width: 0;
-  margin: 0 0 3px;
+  margin: 0 0 4px;
   padding: 0;
   color: var(--vscode-descriptionForeground);
   background: transparent;
   font-family: var(--vscode-editor-font-family);
-  font-size: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
 .reasoning-toggle:hover {
@@ -187,14 +295,20 @@ h1 {
   background: transparent;
 }
 
+.reasoning-toggle .codicon {
+  transition: transform 120ms ease;
+}
+
 .reasoning-text {
-  max-height: 46px;
+  max-height: 42px;
   overflow: hidden;
   white-space: pre-wrap;
+  opacity: 0.85;
 }
 
 .reasoning.expanded .reasoning-text {
   max-height: none;
+  opacity: 1;
 }
 
 .reasoning.expanded .codicon-chevron-right {
@@ -209,72 +323,243 @@ h1 {
   margin-bottom: 0;
 }
 
+.body p {
+  margin: 0 0 10px;
+}
+
+.body h1,
+.body h2,
+.body h3,
+.body h4 {
+  margin: 14px 0 6px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.body h1 { font-size: 16px; }
+.body h2 { font-size: 14.5px; }
+.body h3 { font-size: 13.5px; }
+
+.body ul,
+.body ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.body li { margin: 2px 0; }
+
+.body hr {
+  border: 0;
+  border-top: 1px solid var(--hackl-border);
+  margin: 14px 0;
+}
+
 .body pre {
   overflow: auto;
-  padding: 8px;
-  border: 1px solid var(--vscode-textBlockQuote-border);
-  background: var(--vscode-textCodeBlock-background);
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: var(--hackl-radius-sm);
+  border: 1px solid var(--hackl-border);
+  background: var(--vscode-textCodeBlock-background, var(--hackl-surface));
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .body code {
   font-family: var(--vscode-editor-font-family);
-  font-size: var(--vscode-editor-font-size);
+  font-size: 12px;
 }
 
 .body p code,
-.body li code {
-  padding: 1px 3px;
-  background: var(--vscode-textCodeBlock-background);
+.body li code,
+.body td code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--hackl-surface);
+  font-size: 12px;
 }
 
 .body blockquote {
-  margin-left: 0;
-  padding-left: 10px;
+  margin: 8px 0;
+  padding: 2px 0 2px 12px;
   color: var(--vscode-descriptionForeground);
-  border-left: 2px solid var(--vscode-textBlockQuote-border);
+  border-left: 2px solid color-mix(in srgb, var(--hackl-accent) 60%, transparent);
 }
 
 .body a {
   color: var(--vscode-textLink-foreground);
+  text-decoration: none;
 }
 
-.user .body {
-  white-space: pre-wrap;
+.body a:hover { text-decoration: underline; }
+
+.body table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin: 6px 0;
+}
+
+.body th,
+.body td {
+  padding: 4px 8px;
+  border: 1px solid var(--hackl-border);
+}
+
+.status {
+  padding: 0 0 14px;
 }
 
 .status .body {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--hackl-surface);
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-editor-font-family);
+  font-size: 11.5px;
+}
+
+.status .body::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hackl-accent);
+  animation: hackl-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes hackl-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
 }
 
 .error .body {
+  padding: 8px 12px;
+  border-radius: var(--hackl-radius-sm);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent);
   color: var(--vscode-errorForeground);
+  border: 1px solid color-mix(in srgb, var(--vscode-errorForeground) 30%, transparent);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px 18px;
+  gap: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.empty-state.hidden { display: none; }
+
+.empty-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--hackl-accent), color-mix(in srgb, var(--hackl-accent) 30%, transparent));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--hackl-accent) 14%, transparent);
+  margin-bottom: 4px;
+}
+
+.empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.empty-hint {
+  font-size: 12px;
+  max-width: 240px;
+  line-height: 1.45;
+}
+
+.empty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--hackl-border);
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.chip:hover {
+  background: var(--hackl-surface);
+  border-color: color-mix(in srgb, var(--hackl-accent) 50%, var(--hackl-border));
 }
 
 form {
-  display: grid;
-  grid-template-columns: 1fr 32px;
-  gap: 6px;
-  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px 12px;
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
-  border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+}
+
+.compose {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--hackl-border);
+  background: var(--vscode-input-background);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.compose:focus-within {
+  border-color: color-mix(in srgb, var(--hackl-accent) 70%, var(--hackl-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hackl-accent) 18%, transparent);
 }
 
 textarea {
-  min-height: 66px;
-  max-height: 180px;
-  resize: vertical;
+  flex: 1;
+  min-height: 22px;
+  max-height: 200px;
+  resize: none;
   color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  padding: 7px;
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
   font: inherit;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
 }
 
-textarea:focus {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: -1px;
+textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--vscode-descriptionForeground));
+  opacity: 0.8;
+}
+
+.compose-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.compose-hint {
+  text-align: right;
+  padding: 0 4px;
+  font-size: 10.5px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.7;
+  letter-spacing: 0.2px;
 }
 
 button {
@@ -282,6 +567,7 @@ button {
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
   border: 0;
+  font-family: inherit;
 }
 
 button:hover {
@@ -289,30 +575,49 @@ button:hover {
 }
 
 button:disabled {
-  opacity: 0.65;
+  opacity: 0.55;
   cursor: default;
 }
 
-.icon-button,
-.send-button {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 3px;
-}
-
 .icon-button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--vscode-icon-foreground);
   background: transparent;
 }
 
 .icon-button:hover {
-  background: var(--vscode-toolbar-hoverBackground);
+  background: var(--hackl-surface);
 }
 
 .send-button {
-  align-self: end;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hackl-accent);
+  color: var(--vscode-button-foreground, #fff);
+  transition: transform 80ms ease, opacity 120ms ease;
+}
+
+.send-button:hover {
+  background: color-mix(in srgb, var(--hackl-accent) 85%, white);
+}
+
+.send-button:active {
+  transform: scale(0.94);
+}
+
+.send-button .codicon {
+  font-size: 14px;
 }
 
 .katex-display {
@@ -331,11 +636,14 @@ const clientScript = `
   const send = document.getElementById("send");
   const clear = document.getElementById("clear");
   const contextMeter = document.getElementById("context-meter");
+  const emptyState = document.getElementById("empty-state");
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
   let statusEntry;
   let assistantDraft;
 
   installMath(md);
+  autoResize();
+  updateEmptyState();
   vscode.postMessage({ type: "ready" });
 
   form.addEventListener("submit", (event) => {
@@ -344,9 +652,12 @@ const clientScript = `
     if (!text) return;
     appendUser(text);
     prompt.value = "";
+    autoResize();
     setBusy(true);
     vscode.postMessage({ type: "prompt", prompt: text });
   });
+
+  prompt.addEventListener("input", autoResize);
 
   prompt.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -358,6 +669,31 @@ const clientScript = `
   clear.addEventListener("click", () => {
     vscode.postMessage({ type: "clear" });
   });
+
+  if (emptyState) {
+    emptyState.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const chip = target.closest(".chip");
+      if (!chip) return;
+      const suggestion = chip.getAttribute("data-suggest") || chip.textContent || "";
+      prompt.value = suggestion;
+      autoResize();
+      prompt.focus();
+    });
+  }
+
+  function autoResize() {
+    prompt.style.height = "auto";
+    const next = Math.min(prompt.scrollHeight, 200);
+    prompt.style.height = next + "px";
+  }
+
+  function updateEmptyState() {
+    if (!emptyState) return;
+    const hasEntries = thread.querySelector(".entry");
+    emptyState.classList.toggle("hidden", Boolean(hasEntries));
+  }
 
   window.addEventListener("message", (event) => {
     const message = event.data;
@@ -415,6 +751,7 @@ const clientScript = `
     element.appendChild(label);
     element.appendChild(body);
     thread.appendChild(element);
+    updateEmptyState();
     scrollThreadToBottom();
   }
 
@@ -422,6 +759,7 @@ const clientScript = `
     const entry = createAssistantEntry();
     renderAssistantEntry(entry, answer, reasoning);
     thread.appendChild(entry.element);
+    updateEmptyState();
     scrollThreadToBottom();
     return entry;
   }
@@ -430,6 +768,7 @@ const clientScript = `
     if (!assistantDraft) {
       assistantDraft = createAssistantEntry();
       thread.appendChild(assistantDraft.element);
+      updateEmptyState();
     }
     if (channel === "reasoning") {
       assistantDraft.reasoning += text || "";
@@ -535,10 +874,12 @@ const clientScript = `
   }
 
   function clearThread() {
-    thread.textContent = "";
+    const entries = thread.querySelectorAll(".entry");
+    entries.forEach((node) => node.remove());
     assistantDraft = undefined;
     clearStatus();
     setBusy(false);
+    updateEmptyState();
   }
 
   function updateMeter(inputTokens, maxContextTokens) {
