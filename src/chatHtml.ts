@@ -30,7 +30,6 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
         <h1>Hackl</h1>
         <span class="subtitle">local</span>
       </div>
-      <span id="context-meter" class="meter" title="Estimated prompt tokens / configured context window"></span>
       <button id="clear" class="icon-button" type="button" title="Clear transcript" aria-label="Clear transcript"><span class="codicon codicon-clear-all" aria-hidden="true"></span></button>
     </header>
     <main id="thread" aria-live="polite">
@@ -48,11 +47,27 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
     <form id="form">
       <div class="compose">
         <textarea id="prompt" placeholder="Message Hackl" rows="1"></textarea>
-        <div class="compose-actions">
-          <button id="send" class="send-button" type="submit" title="Send" aria-label="Send"><span class="codicon codicon-send" aria-hidden="true"></span></button>
+        <div class="compose-toolbar">
+          <button id="attach" class="tool-button" type="button" disabled title="Attach (coming soon)" aria-label="Attach">
+            <span class="codicon codicon-add" aria-hidden="true"></span>
+          </button>
+          <div class="mode-select-wrap">
+            <select id="mode" class="mode-select" aria-label="Mode">
+              <option value="ask">Ask</option>
+              <option value="edit" disabled>Edit (soon)</option>
+              <option value="agent" disabled>Agent (soon)</option>
+            </select>
+            <span class="codicon codicon-chevron-down mode-caret" aria-hidden="true"></span>
+          </div>
+          <button id="reasoning-toggle" class="tool-button" type="button" title="Toggle reasoning" aria-label="Toggle reasoning" aria-pressed="false">
+            <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
+          </button>
+          <div class="compose-spacer"></div>
+          <span id="context-meter" class="meter" title="Estimated prompt tokens / configured context window"></span>
+          <button id="send" class="send-button" type="submit" title="Send (Enter)" aria-label="Send"><span class="codicon codicon-arrow-up" aria-hidden="true"></span></button>
         </div>
       </div>
-      <div class="compose-hint">Enter to send  ·  Shift+Enter for newline</div>
+      <div class="compose-hint">Enter to send  ·  Shift+Enter newline  ·  Esc to stop</div>
     </form>
   </div>
   <script nonce="${nonce}" src="${assets.markdownItScript}"></script>
@@ -154,15 +169,14 @@ h1 {
 }
 
 .meter {
-  margin-left: auto;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--hackl-surface);
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-editor-font-family);
   font-size: 10.5px;
   letter-spacing: 0.2px;
   white-space: nowrap;
+  opacity: 0.85;
 }
 
 .meter:empty {
@@ -528,11 +542,10 @@ form {
 }
 
 .compose {
-  position: relative;
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 8px 8px 8px 12px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 6px;
   border-radius: 14px;
   border: 1px solid var(--hackl-border);
   background: var(--vscode-input-background);
@@ -545,14 +558,14 @@ form {
 }
 
 textarea {
-  flex: 1;
+  width: 100%;
   min-height: 22px;
   max-height: 200px;
   resize: none;
   color: var(--vscode-input-foreground);
   background: transparent;
   border: 0;
-  padding: 4px 0;
+  padding: 2px 0;
   font: inherit;
   font-size: 13px;
   line-height: 1.5;
@@ -564,18 +577,96 @@ textarea::placeholder {
   opacity: 0.8;
 }
 
-.compose-actions {
+.compose-toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-height: 26px;
+}
+
+.tool-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+.tool-button .codicon {
+  font-size: 13px;
+}
+
+.tool-button:not(:disabled):hover {
+  background: var(--hackl-surface);
+  color: var(--vscode-foreground);
+}
+
+.tool-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tool-button[aria-pressed="true"] {
+  color: var(--hackl-accent);
+  background: color-mix(in srgb, var(--hackl-accent) 14%, transparent);
+}
+
+.mode-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.mode-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 2px 18px 2px 8px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.mode-select:hover {
+  background: var(--hackl-surface);
+  color: var(--vscode-foreground);
+}
+
+.mode-select:focus-visible {
+  outline: 1px solid var(--hackl-accent);
+  outline-offset: 1px;
+}
+
+.mode-caret {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  pointer-events: none;
+}
+
+.compose-spacer {
+  flex: 1;
 }
 
 .compose-hint {
-  text-align: right;
+  text-align: center;
   padding: 0 4px;
   font-size: 10.5px;
   color: var(--vscode-descriptionForeground);
-  opacity: 0.7;
+  opacity: 0.6;
   letter-spacing: 0.2px;
 }
 
@@ -613,28 +704,80 @@ button:disabled {
 }
 
 .send-button {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--hackl-accent);
   color: var(--vscode-button-foreground, #fff);
-  transition: transform 80ms ease, opacity 120ms ease;
+  transition: transform 80ms ease, background 120ms ease, opacity 120ms ease;
 }
 
-.send-button:hover {
+.send-button:not(:disabled):hover {
   background: color-mix(in srgb, var(--hackl-accent) 85%, white);
 }
 
-.send-button:active {
-  transform: scale(0.94);
+.send-button:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+.send-button:disabled {
+  background: var(--hackl-surface-strong);
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+  cursor: default;
 }
 
 .send-button .codicon {
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.send-button.stop {
+  background: var(--vscode-errorForeground);
+  color: var(--vscode-button-foreground, #fff);
+  opacity: 1;
+  cursor: pointer;
+}
+
+.send-button.stop:hover {
+  background: color-mix(in srgb, var(--vscode-errorForeground) 85%, white);
+}
+
+.send-button.stop .codicon {
+  font-size: 11px;
+}
+
+.queued-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.queued-remove .codicon {
+  font-size: 11px;
+}
+
+.user.queued:hover .queued-remove {
+  opacity: 1;
+}
+
+.queued-remove:hover {
+  background: var(--hackl-surface-strong);
+  color: var(--vscode-foreground);
 }
 
 .katex-display {
@@ -654,6 +797,8 @@ const clientScript = `
   const clear = document.getElementById("clear");
   const contextMeter = document.getElementById("context-meter");
   const emptyState = document.getElementById("empty-state");
+  const reasoningToggle = document.getElementById("reasoning-toggle");
+  const modeSelect = document.getElementById("mode");
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
   let statusEntry;
   let assistantDraft;
@@ -675,12 +820,19 @@ const clientScript = `
     autoResize();
     focusPrompt();
     if (isBusy) {
-      pendingQueue.push({ text, entry });
-      markQueued(entry, true);
+      const item = { text, entry };
+      pendingQueue.push(item);
+      markQueued(entry, true, () => removeQueuedItem(item));
       updateSendState();
       return;
     }
     sendPrompt(text);
+  });
+
+  send.addEventListener("click", (event) => {
+    if (!isBusy) return;
+    event.preventDefault();
+    stopRun();
   });
 
   prompt.addEventListener("input", () => {
@@ -691,13 +843,42 @@ const clientScript = `
   prompt.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
+      if (isBusy) return;
       form.requestSubmit();
+      return;
+    }
+    if (event.key === "Escape" && isBusy) {
+      event.preventDefault();
+      stopRun();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isBusy && event.target !== prompt) {
+      event.preventDefault();
+      stopRun();
     }
   });
 
   clear.addEventListener("click", () => {
     vscode.postMessage({ type: "clear" });
   });
+
+  if (reasoningToggle) {
+    reasoningToggle.addEventListener("click", () => {
+      const next = reasoningToggle.getAttribute("aria-pressed") !== "true";
+      reasoningToggle.setAttribute("aria-pressed", String(next));
+      vscode.postMessage({ type: "setThinking", value: next });
+    });
+  }
+
+  if (modeSelect) {
+    modeSelect.addEventListener("change", () => {
+      if (modeSelect.value !== "ask") {
+        modeSelect.value = "ask";
+      }
+    });
+  }
 
   if (emptyState) {
     emptyState.addEventListener("click", (event) => {
@@ -730,6 +911,7 @@ const clientScript = `
     if (message.type === "cleared") clearThread();
     if (message.type === "status") showStatus(message.text);
     if (message.type === "metrics") updateMeter(message.inputTokens, message.maxContextTokens);
+    if (message.type === "state") applyState(message);
     if (message.type === "assistantDelta") appendAssistantDelta(message.channel, message.text);
     if (message.type === "answer") {
       clearStatus();
@@ -761,18 +943,87 @@ const clientScript = `
     sendPrompt(next.text);
   }
 
-  function markQueued(entry, queued) {
+  function markQueued(entry, queued, onRemove) {
     if (!entry) return;
     entry.classList.toggle("queued", queued);
+    const existing = entry.querySelector(".queued-remove");
+    if (queued && !existing && typeof onRemove === "function") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "queued-remove";
+      button.title = "Remove from queue";
+      button.setAttribute("aria-label", "Remove from queue");
+      const icon = document.createElement("span");
+      icon.className = "codicon codicon-close";
+      icon.setAttribute("aria-hidden", "true");
+      button.appendChild(icon);
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onRemove();
+      });
+      const label = entry.querySelector(".role");
+      if (label) label.appendChild(button);
+    }
+    if (!queued && existing) {
+      existing.remove();
+    }
+  }
+
+  function removeQueuedItem(item) {
+    const index = pendingQueue.indexOf(item);
+    if (index >= 0) pendingQueue.splice(index, 1);
+    if (item.entry) item.entry.remove();
+    updateEmptyState();
+  }
+
+  function stopRun() {
+    if (!isBusy) return;
+    vscode.postMessage({ type: "cancel" });
+    for (const item of pendingQueue.splice(0)) {
+      if (item.entry) item.entry.remove();
+    }
+    if (assistantDraft) {
+      assistantDraft.element.remove();
+      assistantDraft = undefined;
+    }
+    clearStatus();
+    setBusy(false);
+    updateEmptyState();
+    focusPrompt();
   }
 
   function focusPrompt() {
     requestAnimationFrame(() => prompt.focus());
   }
 
+  function applyState(message) {
+    if (reasoningToggle && typeof message.enableThinking === "boolean") {
+      reasoningToggle.setAttribute("aria-pressed", String(message.enableThinking));
+    }
+  }
+
   function updateSendState() {
+    if (isBusy) {
+      send.disabled = false;
+      send.classList.add("stop");
+      send.title = "Stop (Esc)";
+      send.setAttribute("aria-label", "Stop");
+      setSendIcon("debug-stop");
+      return;
+    }
+    send.classList.remove("stop");
+    setSendIcon("arrow-up");
+    send.title = "Send (Enter)";
+    send.setAttribute("aria-label", "Send");
     const hasText = prompt.value.trim().length > 0;
     send.disabled = !hasText;
+  }
+
+  function setSendIcon(name) {
+    const icon = send.querySelector(".codicon");
+    if (!icon) return;
+    icon.className = "codicon codicon-" + name;
   }
 
   function renderHistory(entries) {
@@ -949,8 +1200,16 @@ const clientScript = `
   function updateMeter(inputTokens, maxContextTokens) {
     if (!contextMeter || !inputTokens || !maxContextTokens) return;
     const percent = Math.round((inputTokens / maxContextTokens) * 100);
-    contextMeter.textContent = "~" + inputTokens.toLocaleString() + "/" + maxContextTokens.toLocaleString() + " tok";
-    contextMeter.title = "Estimated prompt tokens: " + percent + "% of configured context";
+    contextMeter.textContent = compactTokens(inputTokens) + " / " + compactTokens(maxContextTokens);
+    contextMeter.title = "~" + inputTokens.toLocaleString() + " of " + maxContextTokens.toLocaleString() + " tokens (" + percent + "%)";
+  }
+
+  function compactTokens(n) {
+    if (n >= 1000) {
+      const k = n / 1000;
+      return (k >= 10 ? Math.round(k) : Math.round(k * 10) / 10) + "k";
+    }
+    return String(n);
   }
 
   function scrollThreadToBottom() {

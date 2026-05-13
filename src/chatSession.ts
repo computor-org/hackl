@@ -3,6 +3,7 @@ import type { ConversationMessage } from "./prompt";
 export interface ChatIncomingMessage {
   type: string;
   prompt?: string;
+  value?: unknown;
 }
 
 export type ChatOutgoingMessage =
@@ -11,7 +12,8 @@ export type ChatOutgoingMessage =
   | { type: "error" | "status"; text: string }
   | { type: "metrics"; inputTokens: number; maxContextTokens: number }
   | { type: "cleared" }
-  | { type: "history"; entries: ConversationMessage[] };
+  | { type: "history"; entries: ConversationMessage[] }
+  | { type: "state"; enableThinking: boolean };
 
 export type ChatPost = (message: ChatOutgoingMessage) => Thenable<unknown> | Promise<unknown>;
 
@@ -26,12 +28,14 @@ export type PromptProgress =
 
 export class ChatSession {
   private readonly history: ConversationMessage[] = [];
+  private currentController: AbortController | undefined;
 
   constructor(
     private readonly onPrompt: (
       prompt: string,
       history: ConversationMessage[],
       progress: (event: PromptProgress) => void,
+      signal?: AbortSignal,
     ) => Promise<ChatAnswer | string>,
   ) {}
 
@@ -41,8 +45,13 @@ export class ChatSession {
       return;
     }
     if (message.type === "clear") {
+      this.currentController?.abort();
       this.history.length = 0;
       await post({ type: "cleared" });
+      return;
+    }
+    if (message.type === "cancel") {
+      this.currentController?.abort();
       return;
     }
     if (message.type === "prompt") {
@@ -59,22 +68,40 @@ export class ChatSession {
     await post({ type: "status", text: "Preprocessing..." });
     const previousHistory = [...this.history];
     this.history.push({ role: "user", content: prompt });
+    const controller = new AbortController();
+    this.currentController = controller;
     try {
       const progress = (event: PromptProgress) => {
+        if (controller.signal.aborted) return;
         for (const message of progressToMessages(event)) {
           void post(message);
         }
       };
-      const rawAnswer = await this.onPrompt(prompt, previousHistory, progress);
+      const rawAnswer = await this.onPrompt(prompt, previousHistory, progress, controller.signal);
+      if (controller.signal.aborted) {
+        this.history.pop();
+        return;
+      }
       const answer = normalizeAnswer(rawAnswer);
       this.history.push({ role: "assistant", content: answer.content });
       await post({ type: "answer", text: answer.content, reasoning: answer.reasoning });
     } catch (error) {
       this.history.pop();
+      if (controller.signal.aborted || isAbortError(error)) {
+        return;
+      }
       const text = error instanceof Error ? error.message : String(error);
       await post({ type: "error", text });
+    } finally {
+      if (this.currentController === controller) {
+        this.currentController = undefined;
+      }
     }
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === "AbortError" || error.message === "Cancelled");
 }
 
 function normalizeAnswer(answer: ChatAnswer | string): ChatAnswer {

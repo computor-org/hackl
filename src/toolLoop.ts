@@ -20,6 +20,7 @@ export interface ToolLoopOptions {
   runTool: ToolRunner;
   maxToolCalls: number;
   progress?: (event: PromptProgress) => void;
+  signal?: AbortSignal;
 }
 
 export interface ToolLoopAnswer {
@@ -32,9 +33,13 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
   let lastAnswer: ToolLoopAnswer | undefined;
 
   for (let toolCalls = 0; toolCalls <= options.maxToolCalls; toolCalls++) {
+    if (options.signal?.aborted) {
+      throw new DOMException("Cancelled", "AbortError");
+    }
     const router = new DeltaRouter(options.progress);
     const completion = await options.backend.complete(messages, {
       onDelta: (delta) => router.handle(delta),
+      signal: options.signal,
     });
     router.flush();
 

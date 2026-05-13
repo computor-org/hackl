@@ -22,6 +22,7 @@ export interface ChatBackend {
 
 export interface ChatCompleteOptions {
   onDelta?: (delta: ChatDelta) => void;
+  signal?: AbortSignal;
 }
 
 export type ChatDelta =
@@ -67,6 +68,7 @@ class OpenAICompatibleBackend implements ChatBackend {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(this.buildRequestBody(messages, Boolean(options.onDelta))),
+      signal: options.signal,
     });
 
     if (!response.ok) {

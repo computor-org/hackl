@@ -45,6 +45,7 @@ async function answerPrompt(
   prompt: string,
   history: ConversationMessage[] = [],
   progress?: (event: PromptProgress) => void,
+  signal?: AbortSignal,
 ): Promise<ChatAnswer> {
   const startedAt = Date.now();
   progress?.({ type: "phase", text: "Preprocessing prompt..." });
@@ -80,6 +81,7 @@ async function answerPrompt(
     runTool: createWorkspaceToolRunner({ maxFileChars: maxToolFileChars }),
     maxToolCalls: 3,
     progress,
+    signal,
   });
   progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
   return answer;

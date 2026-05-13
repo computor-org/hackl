@@ -14,6 +14,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       prompt: string,
       history: ConversationMessage[],
       progress: (event: PromptProgress) => void,
+      signal?: AbortSignal,
     ) => Promise<ChatAnswer | string>,
   ) {
     this.session = new ChatSession(onPrompt);
@@ -27,8 +28,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this.context.extensionUri],
     };
     webviewView.webview.html = renderChatHtml(webviewView.webview, this.context.extensionUri);
-    webviewView.webview.onDidReceiveMessage((message: ChatIncomingMessage) => {
-      void this.session.handle(message, (response) => post(webviewView.webview, response));
+    webviewView.webview.onDidReceiveMessage(async (message: ChatIncomingMessage) => {
+      if (message.type === "setThinking") {
+        await vscode.workspace.getConfiguration("hackl").update("enableThinking", Boolean(message.value), vscode.ConfigurationTarget.Global);
+        return;
+      }
+      if (message.type === "ready") {
+        const enableThinking = vscode.workspace.getConfiguration("hackl").get<boolean>("enableThinking", false);
+        await webviewView.webview.postMessage({ type: "state", enableThinking });
+      }
+      await this.session.handle(message, (response) => post(webviewView.webview, response));
     });
     webviewView.onDidDispose(() => {
       if (this.view === webviewView) {

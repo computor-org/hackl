@@ -13,6 +13,7 @@ export class ChatPanel {
       prompt: string,
       history: ConversationMessage[],
       progress: (event: PromptProgress) => void,
+      signal?: AbortSignal,
     ) => Promise<ChatAnswer | string>,
     onDispose: () => void,
   ) {
@@ -27,8 +28,16 @@ export class ChatPanel {
       },
     );
     this.panel.webview.html = renderChatHtml(this.panel.webview, context.extensionUri);
-    this.panel.webview.onDidReceiveMessage((message: ChatIncomingMessage) => {
-      void this.session.handle(message, (response) => post(this.panel.webview, response));
+    this.panel.webview.onDidReceiveMessage(async (message: ChatIncomingMessage) => {
+      if (message.type === "setThinking") {
+        await vscode.workspace.getConfiguration("hackl").update("enableThinking", Boolean(message.value), vscode.ConfigurationTarget.Global);
+        return;
+      }
+      if (message.type === "ready") {
+        const enableThinking = vscode.workspace.getConfiguration("hackl").get<boolean>("enableThinking", false);
+        await this.panel.webview.postMessage({ type: "state", enableThinking });
+      }
+      await this.session.handle(message, (response) => post(this.panel.webview, response));
     });
     this.panel.onDidDispose(onDispose);
   }
