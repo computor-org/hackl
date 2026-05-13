@@ -105,7 +105,7 @@ async function answerPrompt(
       requestApproval,
       signal,
     }),
-    maxToolCalls: mode === "work" || mode === "agent" || mode === "yolo" ? 8 : 3,
+    maxToolCalls: toolCallLimit(mode),
     progress,
     debug,
     signal,
@@ -113,6 +113,13 @@ async function answerPrompt(
   debug?.("prompt.answer", answer);
   progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
   return answer;
+}
+
+function toolCallLimit(mode: PromptMode): number {
+  if (mode === "agent" || mode === "yolo") return 48;
+  if (mode === "work") return 24;
+  if (mode === "edit") return 12;
+  return 4;
 }
 
 async function confirmYoloMode(requestApproval: ApprovalRequester | undefined): Promise<void> {

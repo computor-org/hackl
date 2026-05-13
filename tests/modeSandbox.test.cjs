@@ -47,6 +47,19 @@ test("work mode searches, edits, rejects commands, and still answers", async () 
   assert.deepEqual(spawns, []);
 });
 
+test("work mode finds emoji lines from the regex-style queries real models use", async () => {
+  const sandbox = makeSandbox();
+  fs.writeFileSync(path.join(sandbox, "a.txt"), "hello 😀\n");
+  fs.mkdirSync(path.join(sandbox, "src"), { recursive: true });
+  fs.writeFileSync(path.join(sandbox, "src/app.ts"), "export const label = \"done ✅\";\n");
+  const answer = await runModeScenario(sandbox, "work", [
+    'HACKL_TOOL {"name":"search_files","query":"[\\\\u{1F600}-\\\\u{1F64F}]|[\\\\u{2700}-\\\\u{27BF}]","glob":"**/*","max_results":5}',
+    "found emoji lines",
+  ]);
+
+  assert.equal(answer.content, "found emoji lines");
+});
+
 test("agent mode can run an approved safe command in the sandbox", async () => {
   const sandbox = makeSandbox();
   const approvals = [];

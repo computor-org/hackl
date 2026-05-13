@@ -64,15 +64,15 @@ async function nodeSearchFiles(
 ): Promise<ToolResult> {
   try {
     const files = await listNodeFiles(root, request.glob, spawnImpl);
-    const query = request.query.toLowerCase();
+    const matcher = createSearchMatcher(request.query);
     const limit = request.max_results ?? 20;
     const results: string[] = [];
     for (const relative of files) {
-      if (relative.toLowerCase().includes(query)) {
+      if (matcher(relative)) {
         results.push(`${relative}: file name match`);
       }
       if (results.length >= limit) break;
-      await addNodeTextMatches(root, relative, query, results, limit);
+      await addNodeTextMatches(root, relative, matcher, results, limit);
       if (results.length >= limit) break;
     }
     return { ok: true, content: results.length === 0 ? "No matches." : results.join("\n") };
@@ -134,7 +134,7 @@ async function walkFiles(root: string, dir = root): Promise<string[]> {
 async function addNodeTextMatches(
   root: string,
   relative: string,
-  query: string,
+  matcher: (text: string) => boolean,
   results: string[],
   limit: number,
 ): Promise<void> {
@@ -149,7 +149,7 @@ async function addNodeTextMatches(
   const lines = text.split(/\r?\n/);
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    if (!line.toLowerCase().includes(query)) {
+    if (!matcher(line)) {
       continue;
     }
     results.push(`${relative}:${index + 1}: ${line.trim().slice(0, 160)}`);
@@ -224,4 +224,43 @@ function globToRegExp(glob: string): RegExp {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function createSearchMatcher(query: string): (text: string) => boolean {
+  const trimmed = query.trim();
+  const lower = trimmed.toLowerCase();
+  const regex = searchRegex(trimmed);
+  return (text) => {
+    if (looksLikeEmojiSearch(trimmed) && containsEmoji(text)) {
+      return true;
+    }
+    if (regex?.test(text)) {
+      regex.lastIndex = 0;
+      return true;
+    }
+    return text.toLowerCase().includes(lower);
+  };
+}
+
+function searchRegex(query: string): RegExp | undefined {
+  if (!looksLikeRegex(query)) {
+    return undefined;
+  }
+  try {
+    return new RegExp(query, "u");
+  } catch {
+    return undefined;
+  }
+}
+
+function looksLikeRegex(query: string): boolean {
+  return /[\\[\]{}()|+?^$]/.test(query);
+}
+
+function looksLikeEmojiSearch(query: string): boolean {
+  return /emoji/i.test(query) || /\\u\{1F|[\p{Extended_Pictographic}\uFE0F]/u.test(query);
+}
+
+function containsEmoji(text: string): boolean {
+  return /[\p{Extended_Pictographic}\uFE0F]/u.test(text);
 }

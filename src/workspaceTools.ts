@@ -251,14 +251,14 @@ async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFile
     const limit = request.max_results ?? 20;
     const files = await vscode.workspace.findFiles(request.glob || "**/*", "**/{node_modules,.git,dist,out,build}/**", 200);
     const results: string[] = [];
-    const query = request.query.toLowerCase();
+    const matcher = createSearchMatcher(request.query);
     for (const uri of files) {
       const relative = vscode.workspace.asRelativePath(uri, false);
-      if (relative.toLowerCase().includes(query)) {
+      if (matcher(relative)) {
         results.push(`${relative}: file name match`);
       }
       if (results.length >= limit) break;
-      await addVsCodeTextMatches(vscode, uri, query, results, limit);
+      await addVsCodeTextMatches(vscode, uri, matcher, results, limit);
       if (results.length >= limit) break;
     }
     return { ok: true, content: results.length === 0 ? "No matches." : results.join("\n") };
@@ -328,14 +328,14 @@ function findVsCodeOpenDocument(
 async function addVsCodeTextMatches(
   vscode: typeof vscodeTypes,
   uri: vscodeTypes.Uri,
-  query: string,
+  matcher: (text: string) => boolean,
   results: string[],
   limit: number,
 ): Promise<void> {
   const document = await vscode.workspace.openTextDocument(uri);
   for (let index = 0; index < document.lineCount; index++) {
     const line = document.lineAt(index).text;
-    if (!line.toLowerCase().includes(query)) {
+    if (!matcher(line)) {
       continue;
     }
     const relative = vscode.workspace.asRelativePath(uri, false);
@@ -357,4 +357,43 @@ function uniqueVsCodeTextRange(
     return undefined;
   }
   return new vscode.Range(document.positionAt(first), document.positionAt(first + oldText.length));
+}
+
+function createSearchMatcher(query: string): (text: string) => boolean {
+  const trimmed = query.trim();
+  const lower = trimmed.toLowerCase();
+  const regex = searchRegex(trimmed);
+  return (text) => {
+    if (looksLikeEmojiSearch(trimmed) && containsEmoji(text)) {
+      return true;
+    }
+    if (regex?.test(text)) {
+      regex.lastIndex = 0;
+      return true;
+    }
+    return text.toLowerCase().includes(lower);
+  };
+}
+
+function searchRegex(query: string): RegExp | undefined {
+  if (!looksLikeRegex(query)) {
+    return undefined;
+  }
+  try {
+    return new RegExp(query, "u");
+  } catch {
+    return undefined;
+  }
+}
+
+function looksLikeRegex(query: string): boolean {
+  return /[\\[\]{}()|+?^$]/.test(query);
+}
+
+function looksLikeEmojiSearch(query: string): boolean {
+  return /emoji/i.test(query) || /\\u\{1F|[\p{Extended_Pictographic}\uFE0F]/u.test(query);
+}
+
+function containsEmoji(text: string): boolean {
+  return /[\p{Extended_Pictographic}\uFE0F]/u.test(text);
 }

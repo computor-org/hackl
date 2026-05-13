@@ -103,7 +103,7 @@ test("completeWithTools runs read_file before final answer", async () => {
   assert.deepEqual(progress.filter((event) => event.type === "delta").map((event) => event.text), ["final answer"]);
 });
 
-test("completeWithTools logs tool-only forced final answers", async () => {
+test("completeWithTools explains tool-only forced final answers", async () => {
   const debug = [];
   const backend = {
     async complete() {
@@ -119,8 +119,108 @@ test("completeWithTools logs tool-only forced final answers", async () => {
     runTool: async () => ({ ok: true, content: "unused" }),
   });
 
-  assert.equal(answer.content, "(no answer)");
+  assert.match(answer.content, /did not receive usable assistant text/);
   assert.ok(debug.some((entry) => entry.event === "toolLoop.toolLimit"));
   assert.ok(debug.some((entry) => entry.event === "toolLoop.forceCompletion"));
   assert.ok(debug.some((entry) => entry.event === "toolLoop.forceFinal"));
+});
+
+test("completeWithTools reports denied tool results instead of no answer", async () => {
+  const backend = {
+    async complete() {
+      return { content: 'HACKL_TOOL {"name":"search_files","query":"emoji"}' };
+    },
+  };
+
+  const answer = await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "find all emojis" }],
+    maxToolCalls: 1,
+    runTool: async () => ({ ok: false, content: "search_files is only available in Work mode." }),
+  });
+
+  assert.equal(answer.content, "I could not complete the request: search_files is only available in Work mode.");
+});
+
+test("completeWithTools reports empty model completions", async () => {
+  const backend = {
+    async complete() {
+      return { content: "" };
+    },
+  };
+
+  const answer = await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "hello" }],
+    maxToolCalls: 1,
+    runTool: async () => ({ ok: true, content: "unused" }),
+  });
+
+  assert.equal(answer.content, "I did not receive usable assistant text from the model.");
+});
+
+test("completeWithTools does not stream prose-wrapped tool calls", async () => {
+  const progress = [];
+  const backend = {
+    async complete(_messages, options) {
+      const content = 'I will inspect first.\nHACKL_TOOL {"name":"read_file","path":"src/a.ts"}';
+      options.onDelta({ type: "answer", text: content });
+      return { content };
+    },
+  };
+
+  const answer = await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "inspect" }],
+    maxToolCalls: 0,
+    progress: (event) => progress.push(event),
+    runTool: async () => ({ ok: true, content: "unused" }),
+  });
+
+  assert.equal(progress.some((event) => event.type === "delta" && /HACKL_TOOL/.test(event.text)), false);
+  assert.equal(answer.content, "I will inspect first.");
+});
+
+test("completeWithTools stops repeated identical tool calls before a high cap", async () => {
+  let calls = 0;
+  const backend = {
+    async complete() {
+      calls += 1;
+      return { content: 'HACKL_TOOL {"name":"search_files","query":"emoji"}' };
+    },
+  };
+
+  const answer = await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "search" }],
+    maxToolCalls: 48,
+    runTool: async () => ({ ok: true, content: "No matches." }),
+  });
+
+  assert.equal(calls, 4);
+  assert.match(answer.content, /Last tool result/);
+});
+
+test("completeWithTools runs a streamed complete tool call without waiting for trailing text", async () => {
+  let calls = 0;
+  const backend = {
+    async complete(_messages, options) {
+      calls += 1;
+      if (calls === 1) {
+        options.onDelta({ type: "answer", text: 'HACKL_TOOL {"name":"read_file","path":"src/a.ts"}' });
+        throw new Error("should be interrupted by tool detection");
+      }
+      return { content: "done" };
+    },
+  };
+
+  const answer = await completeWithTools({
+    backend,
+    messages: [{ role: "user", content: "read" }],
+    maxToolCalls: 4,
+    runTool: async () => ({ ok: true, content: "1: ok" }),
+  });
+
+  assert.equal(answer.content, "done");
+  assert.equal(calls, 2);
 });

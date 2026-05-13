@@ -97,13 +97,21 @@ function firstAvailableModel(text: string): string | undefined {
 }
 
 function firstModelId(payload: unknown): string | undefined {
-  if (!isRecord(payload) || !Array.isArray(payload.data)) {
+  if (!isRecord(payload)) {
     return undefined;
   }
+  const openAi = firstModelIdFromList(payload.data, "id");
+  if (openAi) return openAi;
+  return firstModelIdFromList(payload.models, "model") ?? firstModelIdFromList(payload.models, "name");
+}
 
-  for (const model of payload.data) {
-    if (isRecord(model) && typeof model.id === "string" && model.id.trim()) {
-      return model.id;
+function firstModelIdFromList(value: unknown, key: "id" | "model" | "name"): string | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  for (const model of value) {
+    if (isRecord(model) && typeof model[key] === "string" && model[key].trim()) {
+      return model[key];
     }
   }
   return undefined;

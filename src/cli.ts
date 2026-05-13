@@ -115,7 +115,7 @@ async function answerPrompt(
       requestApproval,
       workspace: createNodeWorkspaceHost(config.cwd),
     }),
-    maxToolCalls: canWork(config.mode) ? 8 : 3,
+    maxToolCalls: toolCallLimit(config.mode),
     progress,
   });
 }
@@ -238,6 +238,13 @@ function canEdit(mode: PromptMode): boolean {
 
 function canWork(mode: PromptMode): boolean {
   return mode === "work" || mode === "agent" || mode === "yolo";
+}
+
+function toolCallLimit(mode: PromptMode): number {
+  if (mode === "agent" || mode === "yolo") return 48;
+  if (mode === "work") return 24;
+  if (mode === "edit") return 12;
+  return 4;
 }
 
 function parseMode(value: string | undefined): PromptMode {

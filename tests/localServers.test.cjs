@@ -85,6 +85,21 @@ test("resolveChatTarget skips blank model ids from /v1/models", async () => {
   });
 });
 
+test("resolveChatTarget reads Ollama-style OpenAI-compatible model lists", async () => {
+  const target = await resolveChatTarget({
+    endpoint: "http://localhost:8080/v1",
+    endpointConfigured: true,
+    fetchImpl: async () => new Response(JSON.stringify({
+      models: [{ name: "qwen", model: "qwen" }],
+    })),
+  });
+
+  assert.deepEqual(target, {
+    endpoint: "http://localhost:8080/v1",
+    model: "qwen",
+  });
+});
+
 test("resolveChatTarget uses first advertised model when server requires a model", async () => {
   const target = await resolveChatTarget({
     endpoint: "http://slopgate.example/v1",
