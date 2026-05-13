@@ -4,6 +4,7 @@ export interface FimRequest {
   prefix: string;
   suffix: string;
   maxTokens: number;
+  multiLine?: boolean;
   signal?: AbortSignal;
 }
 
@@ -66,7 +67,9 @@ export async function requestFim(
   const root = options.root.replace(/\/+$/, "");
   const prefix = capPrefix(request.prefix);
   const suffix = capSuffix(request.suffix);
-  const stops = [...options.support.stop, "\n\n\n"];
+  const stops = request.multiLine
+    ? [...options.support.stop, "\n\n\n"]
+    : [...options.support.stop, "\n"];
 
   const sharedBody = {
     n_predict: request.maxTokens,

@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -70,6 +70,12 @@
         "key": "ctrl+alt+h",
         "mac": "cmd+alt+h",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "editor.action.inlineSuggest.acceptNextWord",
+        "key": "alt+right",
+        "mac": "alt+right",
+        "when": "inlineSuggestionVisible && !editorReadonly"
       }
     ],
     "menus": {
@@ -129,15 +135,26 @@
         },
         "hackl.autocomplete.maxTokens": {
           "type": "number",
-          "default": 64,
+          "default": 48,
           "minimum": 8,
           "description": "Maximum tokens to predict per inline suggestion."
         },
         "hackl.autocomplete.debounceMs": {
           "type": "number",
-          "default": 200,
+          "default": 150,
           "minimum": 0,
           "description": "Debounce in milliseconds after the last keystroke before issuing an autocomplete request."
+        },
+        "hackl.autocomplete.multiLine": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow multi-line completions. When off (default), Hackl stops at the first newline so Tab accepts exactly one line."
+        },
+        "hackl.autocomplete.maxPredictMs": {
+          "type": "number",
+          "default": 400,
+          "minimum": 50,
+          "description": "Server-side time budget per autocomplete request in milliseconds (t_max_predict_ms)."
         }
       }
     }

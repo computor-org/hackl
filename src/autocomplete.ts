@@ -10,6 +10,8 @@ interface AutocompleteSettings {
   model?: string;
   maxTokens: number;
   debounceMs: number;
+  multiLine: boolean;
+  maxPredictMs: number;
 }
 
 interface ResolvedAutocomplete {
@@ -41,8 +43,10 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
       endpoint: endpointRaw.trim() || undefined,
       endpointConfigured: hasUserConfigured(inspect),
       model: (cfg.get<string>("autocomplete.model", "") || "").trim() || undefined,
-      maxTokens: cfg.get<number>("autocomplete.maxTokens", 64),
-      debounceMs: cfg.get<number>("autocomplete.debounceMs", 200),
+      maxTokens: cfg.get<number>("autocomplete.maxTokens", 48),
+      debounceMs: cfg.get<number>("autocomplete.debounceMs", 150),
+      multiLine: cfg.get<boolean>("autocomplete.multiLine", false),
+      maxPredictMs: cfg.get<number>("autocomplete.maxPredictMs", 400),
     };
   };
 
@@ -143,8 +147,19 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
       if (!prefix.trim() && !suffix.trim()) return undefined;
 
       const completion = await requestFim(
-        { root: res.root, model: res.model, support: res.detection },
-        { prefix, suffix, maxTokens: settings.maxTokens, signal: controller.signal },
+        {
+          root: res.root,
+          model: res.model,
+          support: res.detection,
+          maxPredictMs: settings.maxPredictMs,
+        },
+        {
+          prefix,
+          suffix,
+          maxTokens: settings.maxTokens,
+          multiLine: settings.multiLine,
+          signal: controller.signal,
+        },
       );
       if (!completion || !completion.trim()) return undefined;
 
