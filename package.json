@@ -51,13 +51,8 @@
       "properties": {
         "hackl.endpoint": {
           "type": "string",
-          "default": "http://localhost:8080/v1",
-          "description": "OpenAI-compatible API base URL."
-        },
-        "hackl.model": {
-          "type": "string",
-          "default": "qwen",
-          "description": "Model name sent to the chat completions endpoint."
+          "default": "",
+          "description": "OpenAI-compatible API base URL. Leave empty to auto-discover llama.cpp on port 8080 or LM Studio on port 1234."
         },
         "hackl.maxOpenFileChars": {
           "type": "number",
@@ -71,11 +66,17 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "test": "npm run compile && node --test tests/*.test.cjs"
+    "test": "npm run compile && node --test tests/*.test.cjs",
+    "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/chatClient.js --test-coverage-include=dist/context.js --test-coverage-include=dist/localServers.js --test-coverage-include=dist/prompt.js --test tests/*.test.cjs",
+    "test:extension": "npm run compile && node scripts/run-vscode-smoke.mjs",
+    "package:vsix": "npm run compile && vsce package",
+    "smoke:openai": "npm run compile && node scripts/smoke-openai-compatible.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
     "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.1",
     "typescript": "^5.5.4"
   }
 }
