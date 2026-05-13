@@ -9,6 +9,7 @@ import { buildHacklMessages, ConversationMessage, PromptMode } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
+import { registerAutocomplete } from "./autocomplete";
 
 let chatPanel: ChatPanel | undefined;
 let extensionContext: vscode.ExtensionContext | undefined;
@@ -37,6 +38,8 @@ export function activate(context: vscode.ExtensionContext): void {
       openChatPanel(context);
     }),
   );
+
+  registerAutocomplete(context);
 }
 
 export function deactivate(): void {
