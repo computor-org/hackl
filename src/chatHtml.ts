@@ -253,6 +253,23 @@ h1 {
   white-space: pre-wrap;
 }
 
+.user.queued .body {
+  border: 1px dashed color-mix(in srgb, var(--hackl-accent) 60%, var(--hackl-border));
+  background: transparent;
+}
+
+.user.queued .role::after {
+  content: "queued";
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hackl-accent) 18%, transparent);
+  color: var(--hackl-accent);
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
 .assistant .body {
   padding: 0;
 }
@@ -640,24 +657,36 @@ const clientScript = `
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
   let statusEntry;
   let assistantDraft;
+  let isBusy = false;
+  const pendingQueue = [];
 
   installMath(md);
   autoResize();
   updateEmptyState();
   vscode.postMessage({ type: "ready" });
+  focusPrompt();
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const text = prompt.value.trim();
     if (!text) return;
-    appendUser(text);
+    const entry = appendUser(text);
     prompt.value = "";
     autoResize();
-    setBusy(true);
-    vscode.postMessage({ type: "prompt", prompt: text });
+    focusPrompt();
+    if (isBusy) {
+      pendingQueue.push({ text, entry });
+      markQueued(entry, true);
+      updateSendState();
+      return;
+    }
+    sendPrompt(text);
   });
 
-  prompt.addEventListener("input", autoResize);
+  prompt.addEventListener("input", () => {
+    autoResize();
+    updateSendState();
+  });
 
   prompt.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -704,15 +733,47 @@ const clientScript = `
     if (message.type === "assistantDelta") appendAssistantDelta(message.channel, message.text);
     if (message.type === "answer") {
       clearStatus();
-      setBusy(false);
       finishAssistant(message.text, message.reasoning || "");
+      setBusy(false);
+      drainQueue();
     }
     if (message.type === "error") {
       clearStatus();
-      setBusy(false);
       appendError(message.text);
+      setBusy(false);
+      drainQueue();
     }
   });
+
+  function sendPrompt(text) {
+    setBusy(true);
+    vscode.postMessage({ type: "prompt", prompt: text });
+  }
+
+  function drainQueue() {
+    if (isBusy) return;
+    const next = pendingQueue.shift();
+    if (!next) {
+      focusPrompt();
+      return;
+    }
+    markQueued(next.entry, false);
+    sendPrompt(next.text);
+  }
+
+  function markQueued(entry, queued) {
+    if (!entry) return;
+    entry.classList.toggle("queued", queued);
+  }
+
+  function focusPrompt() {
+    requestAnimationFrame(() => prompt.focus());
+  }
+
+  function updateSendState() {
+    const hasText = prompt.value.trim().length > 0;
+    send.disabled = !hasText;
+  }
 
   function renderHistory(entries) {
     clearThread();
@@ -723,7 +784,7 @@ const clientScript = `
   }
 
   function appendUser(text) {
-    append("entry user", "You", text, false);
+    return append("entry user", "You", text, false);
   }
 
   function appendAssistant(text) {
@@ -753,6 +814,7 @@ const clientScript = `
     thread.appendChild(element);
     updateEmptyState();
     scrollThreadToBottom();
+    return element;
   }
 
   function appendAssistantEntry(answer, reasoning) {
@@ -877,9 +939,11 @@ const clientScript = `
     const entries = thread.querySelectorAll(".entry");
     entries.forEach((node) => node.remove());
     assistantDraft = undefined;
+    pendingQueue.length = 0;
     clearStatus();
     setBusy(false);
     updateEmptyState();
+    focusPrompt();
   }
 
   function updateMeter(inputTokens, maxContextTokens) {
@@ -896,9 +960,9 @@ const clientScript = `
   }
 
   function setBusy(busy) {
-    send.disabled = busy;
-    prompt.disabled = busy;
+    isBusy = busy;
     clear.disabled = busy;
+    updateSendState();
   }
 
   function installMath(markdown) {
