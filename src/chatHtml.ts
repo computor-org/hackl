@@ -979,6 +979,7 @@ const clientScript = `
       const suggestion = chip.getAttribute("data-suggest") || chip.textContent || "";
       prompt.value = suggestion;
       autoResize();
+      updateSendState();
       prompt.focus();
     });
   }
