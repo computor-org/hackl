@@ -26,6 +26,29 @@ test("sendChat posts an OpenAI-compatible chat completion request", async () => 
   });
 });
 
+test("sendChat can request non-thinking Qwen-compatible chat templates", async () => {
+  let request;
+  await sendChat(messages, {
+    endpoint: "http://localhost:1234/v1/",
+    model: "loaded-model",
+    enableThinking: false,
+    fetchImpl: async (url, init) => {
+      request = { url: String(url), init };
+      return jsonResponse({ choices: [{ message: { content: "pong" } }] });
+    },
+  });
+
+  assert.deepEqual(JSON.parse(request.init.body), {
+    model: "loaded-model",
+    messages,
+    stream: false,
+    temperature: 0.2,
+    chat_template_kwargs: { enable_thinking: false },
+    enable_thinking: false,
+  });
+});
+
+
 test("OpenAI-compatible backend returns response model metadata", async () => {
   const backend = createOpenAICompatibleBackend({
     endpoint: "http://localhost:8080/v1",

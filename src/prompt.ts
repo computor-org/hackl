@@ -6,6 +6,7 @@ export type ConversationMessage = Pick<ChatMessage, "role" | "content">;
 const SYSTEM_PROMPT = [
   "You are Hackl, a local coding assistant.",
   "Be concise. Do not claim to edit files.",
+  "Do not output long scratchpad reasoning or repeated self-checks.",
   TOOL_INSTRUCTIONS,
 ].join("\n");
 

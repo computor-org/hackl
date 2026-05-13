@@ -6,6 +6,7 @@ export interface ChatMessage {
 export interface ChatClientOptions {
   endpoint: string;
   model: string;
+  enableThinking?: boolean;
   fetchImpl?: typeof fetch;
 }
 
@@ -65,12 +66,7 @@ class OpenAICompatibleBackend implements ChatBackend {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: this.options.model,
-        messages,
-        stream: Boolean(options.onDelta),
-        temperature: 0.2,
-      }),
+      body: JSON.stringify(this.buildRequestBody(messages, Boolean(options.onDelta))),
     });
 
     if (!response.ok) {
@@ -90,6 +86,20 @@ class OpenAICompatibleBackend implements ChatBackend {
     }
     const reasoning = payload.choices?.[0]?.message?.reasoning_content ?? payload.choices?.[0]?.message?.reasoning;
     return definedCompletion({ content, model: payload.model, reasoning });
+  }
+
+  private buildRequestBody(messages: ChatMessage[], stream: boolean): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+        model: this.options.model,
+        messages,
+        stream,
+        temperature: 0.2,
+    };
+    if (this.options.enableThinking === false) {
+      body.chat_template_kwargs = { enable_thinking: false };
+      body.enable_thinking = false;
+    }
+    return body;
   }
 }
 

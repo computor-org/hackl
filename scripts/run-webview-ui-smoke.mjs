@@ -74,6 +74,37 @@ try {
   assert.match(await page.locator(".assistant .body").innerText(), /Energy is/);
   assert.match(await page.locator(".assistant pre code").innerText(), /const mass = 1/);
   assert.equal(await page.locator(".status").count(), 0);
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "assistantDelta",
+        channel: "reasoning",
+        text: Array.from({ length: 40 }, (_, index) => `step ${index}`).join("\n"),
+      },
+    }));
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "assistantDelta",
+        channel: "answer",
+        text: Array.from({ length: 80 }, (_, index) => `line ${index}`).join("\n"),
+      },
+    }));
+  });
+
+  const reasoningText = page.locator(".assistant").last().locator(".reasoning-text");
+  await reasoningText.waitFor();
+  const collapsedHeight = await reasoningText.evaluate((node) => node.getBoundingClientRect().height);
+  assert.ok(collapsedHeight <= 50, `reasoning should be collapsed, got ${collapsedHeight}`);
+  await page.locator(".assistant").last().locator(".reasoning-toggle").click();
+  const expandedHeight = await reasoningText.evaluate((node) => node.getBoundingClientRect().height);
+  assert.ok(expandedHeight > collapsedHeight, "reasoning should expand on click");
+
+  const promptBox = await page.locator("#prompt").boundingBox();
+  const viewport = page.viewportSize();
+  assert.ok(promptBox);
+  assert.ok(viewport);
+  assert.ok(promptBox.y + promptBox.height <= viewport.height, "prompt box should stay visible");
   console.log("webview UI smoke passed");
 } finally {
   await browser.close();

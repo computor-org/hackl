@@ -54,6 +54,7 @@ async function answerPrompt(
   });
   const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
   const maxContextTokens = config.get<number>("maxContextTokens", 32768);
+  const enableThinking = config.get<boolean>("enableThinking", false);
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
   const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history);
   const inputTokens = estimateChatTokens(messages);
@@ -67,7 +68,7 @@ async function answerPrompt(
 
   const modelStartedAt = Date.now();
   const answer = await completeWithTools({
-    backend: createOpenAICompatibleBackend(target),
+    backend: createOpenAICompatibleBackend({ ...target, enableThinking }),
     messages,
     runTool: createWorkspaceToolRunner({ maxFileChars: maxToolFileChars }),
     maxToolCalls: 3,

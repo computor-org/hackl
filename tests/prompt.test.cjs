@@ -11,6 +11,7 @@ test("buildHacklMessages includes system prompt, history, editor context, and re
   assert.equal(messages[0].role, "system");
   assert.match(messages[0].content, /local coding assistant/);
   assert.match(messages[0].content, /HACKL_TOOL/);
+  assert.match(messages[0].content, /Do not output long scratchpad/);
   assert.deepEqual(messages.slice(1, 3), [
     { role: "user", content: "previous question" },
     { role: "assistant", content: "previous answer" },

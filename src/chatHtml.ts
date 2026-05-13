@@ -68,8 +68,14 @@ const styles = `
   color-scheme: light dark;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  overflow: hidden;
   color: var(--vscode-foreground);
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   font-family: var(--vscode-font-family);
@@ -77,9 +83,11 @@ body {
 }
 
 .shell {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  overflow: hidden;
 }
 
 .topbar {
@@ -116,7 +124,9 @@ h1 {
 }
 
 #thread {
-  overflow: auto;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
   padding: 6px 10px 2px;
 }
 
@@ -148,9 +158,47 @@ h1 {
   margin-bottom: 8px;
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.reasoning[hidden] {
+  display: none;
+}
+
+.reasoning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  margin: 0 0 3px;
+  padding: 0;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.reasoning-toggle:hover {
+  color: var(--vscode-foreground);
+  background: transparent;
+}
+
+.reasoning-text {
+  max-height: 46px;
+  overflow: hidden;
   white-space: pre-wrap;
+}
+
+.reasoning.expanded .reasoning-text {
+  max-height: none;
+}
+
+.reasoning.expanded .codicon-chevron-right {
+  transform: rotate(90deg);
 }
 
 .body :first-child {
@@ -208,6 +256,7 @@ form {
   grid-template-columns: 1fr 32px;
   gap: 6px;
   padding: 8px 10px 10px;
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
 }
 
@@ -366,14 +415,14 @@ const clientScript = `
     element.appendChild(label);
     element.appendChild(body);
     thread.appendChild(element);
-    element.scrollIntoView({ block: "end" });
+    scrollThreadToBottom();
   }
 
   function appendAssistantEntry(answer, reasoning) {
     const entry = createAssistantEntry();
     renderAssistantEntry(entry, answer, reasoning);
     thread.appendChild(entry.element);
-    entry.element.scrollIntoView({ block: "end" });
+    scrollThreadToBottom();
     return entry;
   }
 
@@ -388,7 +437,7 @@ const clientScript = `
       assistantDraft.answer += text || "";
     }
     renderAssistantEntry(assistantDraft, assistantDraft.answer, assistantDraft.reasoning);
-    assistantDraft.element.scrollIntoView({ block: "end" });
+    scrollThreadToBottom();
   }
 
   function finishAssistant(answer, reasoning) {
@@ -397,7 +446,7 @@ const clientScript = `
       return;
     }
     renderAssistantEntry(assistantDraft, answer || assistantDraft.answer, reasoning || assistantDraft.reasoning);
-    assistantDraft.element.scrollIntoView({ block: "end" });
+    scrollThreadToBottom();
     assistantDraft = undefined;
   }
 
@@ -405,22 +454,40 @@ const clientScript = `
     const element = document.createElement("section");
     const label = document.createElement("div");
     const reasoning = document.createElement("div");
+    const reasoningToggle = document.createElement("button");
+    const reasoningIcon = document.createElement("span");
+    const reasoningLabel = document.createElement("span");
+    const reasoningText = document.createElement("div");
     const body = document.createElement("div");
     element.className = "entry assistant";
     label.className = "role";
     label.textContent = "Hackl";
     reasoning.className = "reasoning";
+    reasoningToggle.className = "reasoning-toggle";
+    reasoningToggle.type = "button";
+    reasoningToggle.title = "Expand reasoning";
+    reasoningIcon.className = "codicon codicon-chevron-right";
+    reasoningLabel.textContent = "reasoning";
+    reasoningText.className = "reasoning-text";
+    reasoningToggle.appendChild(reasoningIcon);
+    reasoningToggle.appendChild(reasoningLabel);
+    reasoning.appendChild(reasoningToggle);
+    reasoning.appendChild(reasoningText);
+    reasoningToggle.addEventListener("click", () => {
+      const expanded = reasoning.classList.toggle("expanded");
+      reasoningToggle.title = expanded ? "Collapse reasoning" : "Expand reasoning";
+    });
     body.className = "body";
     element.appendChild(label);
     element.appendChild(reasoning);
     element.appendChild(body);
-    return { element, reasoningElement: reasoning, body, reasoning: "", answer: "" };
+    return { element, reasoningElement: reasoning, reasoningText, body, reasoning: "", answer: "" };
   }
 
   function renderAssistantEntry(entry, answer, reasoning) {
     entry.reasoning = reasoning || "";
     entry.answer = answer || "";
-    entry.reasoningElement.textContent = entry.reasoning;
+    entry.reasoningText.textContent = entry.reasoning;
     entry.reasoningElement.hidden = !entry.reasoning;
     entry.body.innerHTML = md.render(entry.answer || "");
   }
@@ -457,7 +524,7 @@ const clientScript = `
     body.textContent = text;
     statusEntry.appendChild(body);
     thread.appendChild(statusEntry);
-    statusEntry.scrollIntoView({ block: "end" });
+    scrollThreadToBottom();
   }
 
   function clearStatus() {
@@ -479,6 +546,12 @@ const clientScript = `
     const percent = Math.round((inputTokens / maxContextTokens) * 100);
     contextMeter.textContent = "~" + inputTokens.toLocaleString() + "/" + maxContextTokens.toLocaleString() + " tok";
     contextMeter.title = "Estimated prompt tokens: " + percent + "% of configured context";
+  }
+
+  function scrollThreadToBottom() {
+    requestAnimationFrame(() => {
+      thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+    });
   }
 
   function setBusy(busy) {
