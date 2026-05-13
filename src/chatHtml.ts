@@ -218,11 +218,11 @@ h1 {
 }
 
 .role {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   margin: 0 0 6px;
-  padding: 0;
+  padding: 0 2px;
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-editor-font-family);
   font-size: 11px;
