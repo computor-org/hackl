@@ -58,6 +58,10 @@ try {
   await page.locator("#prompt").fill("Explain energy");
   await page.keyboard.press("Enter");
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "prompt"), diagnostics);
+  assert.deepEqual(
+    await page.evaluate(() => window.__hacklPosted.find((message) => message.type === "prompt")),
+    { type: "prompt", prompt: "Explain energy", mode: "ask" },
+  );
 
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", { data: { type: "status", text: "Thinking..." } }));
@@ -99,6 +103,76 @@ try {
   await page.locator(".assistant").last().locator(".reasoning-toggle").click();
   const expandedHeight = await reasoningText.evaluate((node) => node.getBoundingClientRect().height);
   assert.ok(expandedHeight > collapsedHeight, "reasoning should expand on click");
+
+  await page.locator("#mode-button").click();
+  assert.equal(await page.locator('.mode-option[data-value="agent"]').isDisabled(), false);
+  await page.locator('.mode-option[data-value="edit"]').click();
+  await page.locator("#prompt").fill("Rename x to y");
+  await page.keyboard.press("Enter");
+  await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Rename x to y"), diagnostics);
+  assert.deepEqual(
+    await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Rename x to y")),
+    { type: "prompt", prompt: "Rename x to y", mode: "edit" },
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "answer", text: "Renamed." } }));
+  });
+  await page.locator("#mode-button").click();
+  assert.equal(await page.locator('.mode-option[data-value="work"]').isDisabled(), false);
+  await page.locator('.mode-option[data-value="work"]').click();
+  await page.locator("#prompt").fill("Update the call sites");
+  await page.keyboard.press("Enter");
+  await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Update the call sites"), diagnostics);
+  assert.deepEqual(
+    await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Update the call sites")),
+    { type: "prompt", prompt: "Update the call sites", mode: "work" },
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "answer", text: "Updated." } }));
+  });
+
+  await page.locator("#mode-button").click();
+  await page.locator('.mode-option[data-value="agent"]').click();
+  await page.locator("#prompt").fill("Run the checks");
+  await page.keyboard.press("Enter");
+  await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Run the checks"), diagnostics);
+  assert.deepEqual(
+    await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Run the checks")),
+    { type: "prompt", prompt: "Run the checks", mode: "agent" },
+  );
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "approvalRequested",
+        id: "42",
+        title: "Run command?",
+        detail: "npm test",
+        approveLabel: "Run",
+        denyLabel: "Deny",
+      },
+    }));
+  });
+  await page.locator(".approval button", { hasText: "Run" }).click();
+  await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "approvalResponse"), diagnostics);
+  assert.deepEqual(
+    await page.evaluate(() => window.__hacklPosted.find((message) => message.type === "approvalResponse")),
+    { type: "approvalResponse", approvalId: "42", approved: true },
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "answer", text: "Checked." } }));
+  });
+
+  await page.locator("#mode-button").click();
+  assert.equal(await page.locator('.mode-option[data-value="yolo"]').isDisabled(), false);
+  await page.locator('.mode-option[data-value="yolo"]').click();
+  await page.locator("#prompt").fill("Do it without asking");
+  await page.keyboard.press("Enter");
+  await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Do it without asking"), diagnostics);
+  assert.deepEqual(
+    await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Do it without asking")),
+    { type: "prompt", prompt: "Do it without asking", mode: "yolo" },
+  );
 
   const promptBox = await page.locator("#prompt").boundingBox();
   const viewport = page.viewportSize();

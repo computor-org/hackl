@@ -1,21 +1,66 @@
 import * as path from "node:path";
+import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import * as fs from "node:fs";
 import * as vscode from "vscode";
-import type { ToolRequest, ToolResult } from "./tools";
+import { classifyCommand, commandLine } from "./commandPolicy";
+import type { ReadFileRequest, ReplaceTextRequest, RunCommandRequest, SearchFilesRequest, ToolRequest, ToolResult } from "./tools";
 
 export interface WorkspaceToolOptions {
   maxFileChars: number;
+  allowEdits?: boolean;
+  allowSearch?: boolean;
+  allowCommands?: boolean;
+  commandApproval?: "ask" | "auto";
+  requestApproval?: (request: ApprovalPrompt) => Promise<boolean>;
+  spawnImpl?: typeof spawn;
+  signal?: AbortSignal;
 }
 
+export interface ApprovalPrompt {
+  title: string;
+  detail: string;
+  approveLabel: string;
+  denyLabel: string;
+}
+
+const approvedNoGitRoots = new Set<string>();
+
 export function createWorkspaceToolRunner(options: WorkspaceToolOptions): (request: ToolRequest) => Promise<ToolResult> {
+  let noGitApproved = false;
   return async (request) => {
-    if (request.name !== "read_file") {
-      return { ok: false, content: `Unsupported tool: ${request.name}` };
+    if (request.name === "read_file") {
+      return readFile(request, options.maxFileChars);
     }
-    return readFile(request, options.maxFileChars);
+    if (request.name === "search_files") {
+      if (!options.allowSearch) {
+        return { ok: false, content: "search_files is only available in Work mode." };
+      }
+      return searchFiles(request);
+    }
+    if (request.name === "replace_text") {
+      if (!options.allowEdits) {
+        return { ok: false, content: "replace_text is only available in Edit, Work, Agent, or YOLO mode." };
+      }
+      const approval = await requireGitApproval(options, noGitApproved);
+      if (!approval.ok) return { ok: false, content: approval.content };
+      noGitApproved = approval.approved;
+      return replaceText(request);
+    }
+    if (request.name === "run_command") {
+      if (!options.allowCommands) {
+        return { ok: false, content: "run_command is only available in Agent or YOLO mode." };
+      }
+      const result = await runCommand(request, options, noGitApproved);
+      if (result.gitApproved) {
+        noGitApproved = true;
+      }
+      return { ok: result.ok, content: result.content };
+    }
+    return { ok: false, content: "Unsupported tool." };
   };
 }
 
-async function readFile(request: ToolRequest, maxFileChars: number): Promise<ToolResult> {
+async function readFile(request: ReadFileRequest, maxFileChars: number): Promise<ToolResult> {
   const uri = resolveWorkspaceUri(request.path);
   if (!uri) {
     return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
@@ -27,6 +72,33 @@ async function readFile(request: ToolRequest, maxFileChars: number): Promise<Too
     const end = Math.min(document.lineCount, Math.max(start, request.end_line ?? Math.min(start + 119, document.lineCount)));
     const content = readLineRange(document, start, end, maxFileChars);
     return { ok: true, content };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, content: message };
+  }
+}
+
+async function searchFiles(request: SearchFilesRequest): Promise<ToolResult> {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) {
+    return { ok: false, content: "No workspace is open." };
+  }
+
+  try {
+    const limit = request.max_results ?? 20;
+    const files = await vscode.workspace.findFiles(request.glob || "**/*", "**/{node_modules,.git,dist,out,build}/**", 200);
+    const results: string[] = [];
+    const query = request.query.toLowerCase();
+    for (const uri of files) {
+      const relative = vscode.workspace.asRelativePath(uri, false);
+      if (relative.toLowerCase().includes(query)) {
+        results.push(`${relative}: file name match`);
+      }
+      if (results.length >= limit) break;
+      await addTextMatches(uri, query, results, limit);
+      if (results.length >= limit) break;
+    }
+    return { ok: true, content: results.length === 0 ? "No matches." : results.join("\n") };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, content: message };
@@ -81,4 +153,173 @@ function readLineRange(document: vscode.TextDocument, startLine: number, endLine
   }
 
   return lines.join("\n");
+}
+
+async function addTextMatches(uri: vscode.Uri, query: string, results: string[], limit: number): Promise<void> {
+  const document = await vscode.workspace.openTextDocument(uri);
+  for (let index = 0; index < document.lineCount; index++) {
+    const line = document.lineAt(index).text;
+    if (!line.toLowerCase().includes(query)) {
+      continue;
+    }
+    const relative = vscode.workspace.asRelativePath(uri, false);
+    results.push(`${relative}:${index + 1}: ${line.trim().slice(0, 160)}`);
+    if (results.length >= limit) {
+      return;
+    }
+  }
+}
+
+async function replaceText(request: ReplaceTextRequest): Promise<ToolResult> {
+  const uri = resolveWorkspaceUri(request.path);
+  if (!uri) {
+    return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
+  }
+
+  try {
+    const document = await vscode.workspace.openTextDocument(uri);
+    const range = uniqueTextRange(document, request.old_text);
+    if (!range) {
+      return { ok: false, content: "old_text must match exactly once in the file." };
+    }
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(uri, range, request.new_text);
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (!applied) {
+      return { ok: false, content: "VS Code rejected the workspace edit." };
+    }
+    await document.save();
+    return { ok: true, content: `Replaced text in ${request.path}.` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, content: message };
+  }
+}
+
+function uniqueTextRange(document: vscode.TextDocument, oldText: string): vscode.Range | undefined {
+  const text = document.getText();
+  const first = text.indexOf(oldText);
+  if (first < 0 || text.indexOf(oldText, first + oldText.length) >= 0) {
+    return undefined;
+  }
+  return new vscode.Range(document.positionAt(first), document.positionAt(first + oldText.length));
+}
+
+async function runCommand(
+  request: RunCommandRequest,
+  options: WorkspaceToolOptions,
+  noGitApproved: boolean,
+): Promise<ToolResult & { gitApproved?: boolean }> {
+  const root = workspaceRoot();
+  if (!root) {
+    return { ok: false, content: "No workspace is open." };
+  }
+  const policy = classifyCommand(request, { workspaceRoot: root, packageScripts: packageScripts(root) });
+  if (policy.decision === "deny") {
+    return { ok: false, content: policy.reason };
+  }
+  const gitApproval = await requireGitApproval(options, noGitApproved);
+  if (!gitApproval.ok) {
+    return { ok: false, content: gitApproval.content, gitApproved: gitApproval.approved };
+  }
+  if (policy.decision === "ask" && options.commandApproval !== "auto") {
+    const approved = await options.requestApproval?.({
+      title: "Run command?",
+      detail: `${commandLine(request)}\n\n${policy.reason}`,
+      approveLabel: "Run",
+      denyLabel: "Deny",
+    });
+    if (!approved) {
+      return { ok: false, content: "Command denied by user.", gitApproved: gitApproval.approved };
+    }
+  }
+  const result = await spawnCommand(request, root, options);
+  return { ...result, gitApproved: gitApproval.approved };
+}
+
+function spawnCommand(request: RunCommandRequest, cwd: string, options: WorkspaceToolOptions): Promise<ToolResult> {
+  return new Promise((resolve) => {
+    const spawnCommandImpl = options.spawnImpl ?? spawn;
+    const child = spawnCommandImpl(request.cmd, request.args ?? [], { cwd, shell: false });
+    let done = false;
+    let output = "";
+    const timeout = setTimeout(() => finish(false, "Command timed out."), request.timeout_ms ?? 120000);
+    const abort = () => finish(false, "Command cancelled.");
+    options.signal?.addEventListener("abort", abort, { once: true });
+    child.stdout.on("data", (chunk) => appendOutput("stdout", chunk));
+    child.stderr.on("data", (chunk) => appendOutput("stderr", chunk));
+    child.on("error", (error) => finish(false, error.message));
+    child.on("close", (code) => finish(code === 0, `exit ${code ?? "unknown"}\n${output}`.trim()));
+
+    function appendOutput(channel: string, chunk: Buffer): void {
+      output += `${channel}: ${chunk.toString()}`;
+      if (output.length > 20000) {
+        output = `${output.slice(0, 20000)}\n[truncated after 20000 characters]`;
+      }
+    }
+
+    function finish(ok: boolean, content: string): void {
+      if (done) return;
+      done = true;
+      clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", abort);
+      killChild(child);
+      resolve({ ok, content });
+    }
+  });
+}
+
+async function requireGitApproval(
+  options: WorkspaceToolOptions,
+  alreadyApproved: boolean,
+): Promise<ToolResult & { approved: boolean }> {
+  const root = workspaceRoot();
+  if (!root || findGitRoot(root) || alreadyApproved || approvedNoGitRoots.has(root)) {
+    return { ok: true, content: "", approved: alreadyApproved };
+  }
+  const approved = await options.requestApproval?.({
+    title: "Workspace is not a Git repository",
+    detail: "Hackl cannot rely on Git diff/history to review or recover changes in this workspace. Continue?",
+    approveLabel: "Continue",
+    denyLabel: "Cancel",
+  });
+  if (approved) {
+    approvedNoGitRoots.add(root);
+    return { ok: true, content: "", approved: true };
+  }
+  return { ok: false, content: "Action cancelled because the workspace is not a Git repository.", approved: false };
+}
+
+function workspaceRoot(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+function findGitRoot(start: string): string | undefined {
+  let current = path.resolve(start);
+  while (true) {
+    if (fs.existsSync(path.join(current, ".git"))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function packageScripts(root: string): Set<string> {
+  try {
+    const raw = fs.readFileSync(path.join(root, "package.json"), "utf8");
+    const parsed = JSON.parse(raw) as { scripts?: Record<string, unknown> };
+    return new Set(Object.entries(parsed.scripts ?? {})
+      .filter(([, value]) => typeof value === "string")
+      .map(([name]) => name));
+  } catch {
+    return new Set();
+  }
+}
+
+function killChild(child: ChildProcessWithoutNullStreams): void {
+  if (!child.killed && child.exitCode === null) {
+    child.kill();
+  }
 }

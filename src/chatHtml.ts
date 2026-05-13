@@ -58,8 +58,10 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
             </button>
             <div id="mode-menu" class="mode-menu" role="listbox" hidden>
               <button class="mode-option" type="button" role="option" data-value="ask" aria-selected="true">Ask</button>
-              <button class="mode-option" type="button" role="option" data-value="edit" disabled aria-disabled="true">Edit <span class="mode-option-tag">soon</span></button>
-              <button class="mode-option" type="button" role="option" data-value="agent" disabled aria-disabled="true">Agent <span class="mode-option-tag">soon</span></button>
+              <button class="mode-option" type="button" role="option" data-value="edit" aria-selected="false">Edit</button>
+              <button class="mode-option" type="button" role="option" data-value="work" aria-selected="false">Work</button>
+              <button class="mode-option" type="button" role="option" data-value="agent" aria-selected="false">Agent</button>
+              <button class="mode-option" type="button" role="option" data-value="yolo" aria-selected="false">YOLO</button>
             </div>
           </div>
           <button id="reasoning-toggle" class="tool-button" type="button" title="Toggle reasoning" aria-label="Toggle reasoning" aria-pressed="false">
@@ -477,6 +479,35 @@ h1 {
   border: 1px solid color-mix(in srgb, var(--vscode-errorForeground) 30%, transparent);
 }
 
+.approval .body {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--hackl-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--hackl-accent) 38%, var(--hackl-border));
+  background: var(--hackl-surface);
+}
+
+.approval-title {
+  font-weight: 600;
+}
+
+.approval-detail {
+  color: var(--vscode-descriptionForeground);
+  white-space: pre-wrap;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.approval-actions button {
+  padding: 4px 9px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -861,6 +892,7 @@ const clientScript = `
   let statusEntry;
   let assistantDraft;
   let isBusy = false;
+  let selectedMode = "ask";
   const pendingQueue = [];
 
   installMath(md);
@@ -878,13 +910,13 @@ const clientScript = `
     autoResize();
     focusPrompt();
     if (isBusy) {
-      const item = { text, entry };
+      const item = { text, mode: selectedMode, entry };
       pendingQueue.push(item);
       markQueued(entry, true, () => removeQueuedItem(item));
       updateSendState();
       return;
     }
-    sendPrompt(text);
+    sendPrompt(text, selectedMode);
   });
 
   send.addEventListener("click", (event) => {
@@ -944,6 +976,7 @@ const clientScript = `
       const option = target.closest(".mode-option");
       if (!option || option.hasAttribute("disabled")) return;
       const value = option.getAttribute("data-value") || "ask";
+      selectedMode = normalizeMode(value);
       if (modeLabel) modeLabel.textContent = option.firstChild ? (option.firstChild.textContent || "").trim() : value;
       modeMenu.querySelectorAll(".mode-option").forEach((opt) => {
         opt.setAttribute("aria-selected", String(opt === option));
@@ -1002,6 +1035,7 @@ const clientScript = `
     if (message.type === "status") showStatus(message.text);
     if (message.type === "metrics") updateMeter(message.inputTokens, message.maxContextTokens);
     if (message.type === "state") applyState(message);
+    if (message.type === "approvalRequested") appendApproval(message);
     if (message.type === "assistantDelta") appendAssistantDelta(message.channel, message.text);
     if (message.type === "answer") {
       clearStatus();
@@ -1017,9 +1051,13 @@ const clientScript = `
     }
   });
 
-  function sendPrompt(text) {
+  function sendPrompt(text, mode) {
     setBusy(true);
-    vscode.postMessage({ type: "prompt", prompt: text });
+    vscode.postMessage({ type: "prompt", prompt: text, mode: normalizeMode(mode) });
+  }
+
+  function normalizeMode(mode) {
+    return ["edit", "work", "agent", "yolo"].includes(mode) ? mode : "ask";
   }
 
   function drainQueue() {
@@ -1030,7 +1068,7 @@ const clientScript = `
       return;
     }
     markQueued(next.entry, false);
-    sendPrompt(next.text);
+    sendPrompt(next.text, next.mode);
   }
 
   function markQueued(entry, queued, onRemove) {
@@ -1135,6 +1173,47 @@ const clientScript = `
 
   function appendError(text) {
     append("entry error", "Error", text, false);
+  }
+
+  function appendApproval(message) {
+    const element = document.createElement("section");
+    const label = document.createElement("div");
+    const body = document.createElement("div");
+    const title = document.createElement("div");
+    const detail = document.createElement("div");
+    const actions = document.createElement("div");
+    const approve = document.createElement("button");
+    const deny = document.createElement("button");
+    element.className = "entry approval";
+    label.className = "role";
+    label.textContent = "Approval";
+    body.className = "body";
+    title.className = "approval-title";
+    title.textContent = message.title || "Approve action?";
+    detail.className = "approval-detail";
+    detail.textContent = message.detail || "";
+    actions.className = "approval-actions";
+    approve.type = "button";
+    deny.type = "button";
+    approve.textContent = message.approveLabel || "Approve";
+    deny.textContent = message.denyLabel || "Deny";
+    approve.addEventListener("click", () => answerApproval(message.id, true, element));
+    deny.addEventListener("click", () => answerApproval(message.id, false, element));
+    actions.appendChild(approve);
+    actions.appendChild(deny);
+    body.appendChild(title);
+    body.appendChild(detail);
+    body.appendChild(actions);
+    element.appendChild(label);
+    element.appendChild(body);
+    thread.appendChild(element);
+    updateEmptyState();
+    scrollThreadToBottom();
+  }
+
+  function answerApproval(id, approved, element) {
+    vscode.postMessage({ type: "approvalResponse", approvalId: id, approved });
+    element.querySelectorAll("button").forEach((button) => button.disabled = true);
   }
 
   function append(className, role, text, markdown) {

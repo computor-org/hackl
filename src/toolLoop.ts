@@ -57,12 +57,22 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
       break;
     }
 
-    options.progress?.({ type: "phase", text: `Running tool: ${request.name} ${request.path}` });
+    options.progress?.({ type: "phase", text: `Running tool: ${formatToolRequest(request)}` });
     const result = await options.runTool(request);
     messages.push({ role: "user", content: buildToolResultMessage(request, result) });
   }
 
   return forceFinalAnswer(messages, options);
+}
+
+function formatToolRequest(request: ToolRequest): string {
+  if ("path" in request) {
+    return `${request.name} ${request.path}`;
+  }
+  if (request.name === "run_command") {
+    return `${request.name} ${[request.cmd, ...(request.args ?? [])].join(" ")}`;
+  }
+  return `${request.name} ${request.query}`;
 }
 
 async function forceFinalAnswer(

@@ -1,13 +1,17 @@
-import type { ConversationMessage } from "./prompt";
+import type { ConversationMessage, PromptMode } from "./prompt";
 
 export interface ChatIncomingMessage {
   type: string;
   prompt?: string;
+  mode?: PromptMode;
+  approvalId?: string;
+  approved?: boolean;
   value?: unknown;
 }
 
 export type ChatOutgoingMessage =
   | { type: "answer"; text: string; reasoning?: string }
+  | ApprovalRequest
   | { type: "assistantDelta"; channel: "answer" | "reasoning"; text: string }
   | { type: "error" | "status"; text: string }
   | { type: "metrics"; inputTokens: number; maxContextTokens: number }
@@ -16,6 +20,15 @@ export type ChatOutgoingMessage =
   | { type: "state"; enableThinking: boolean };
 
 export type ChatPost = (message: ChatOutgoingMessage) => Thenable<unknown> | Promise<unknown>;
+
+export interface ApprovalRequest {
+  type: "approvalRequested";
+  id: string;
+  title: string;
+  detail: string;
+  approveLabel: string;
+  denyLabel: string;
+}
 
 export interface ChatAnswer {
   content: string;
@@ -26,6 +39,8 @@ export type PromptProgress =
   | { type: "phase"; text: string; inputTokens?: number; maxContextTokens?: number }
   | { type: "delta"; channel: "answer" | "reasoning"; text: string };
 
+export type ApprovalRequester = (request: Omit<ApprovalRequest, "type" | "id">) => Promise<boolean>;
+
 export class ChatSession {
   private readonly history: ConversationMessage[] = [];
   private currentController: AbortController | undefined;
@@ -34,7 +49,9 @@ export class ChatSession {
     private readonly onPrompt: (
       prompt: string,
       history: ConversationMessage[],
+      mode: PromptMode,
       progress: (event: PromptProgress) => void,
+      requestApproval: ApprovalRequester,
       signal?: AbortSignal,
     ) => Promise<ChatAnswer | string>,
   ) {}
@@ -52,14 +69,19 @@ export class ChatSession {
     }
     if (message.type === "cancel") {
       this.currentController?.abort();
+      this.rejectApprovals();
+      return;
+    }
+    if (message.type === "approvalResponse" && message.approvalId) {
+      this.resolveApproval(message.approvalId, Boolean(message.approved));
       return;
     }
     if (message.type === "prompt") {
-      await this.handlePrompt(message.prompt, post);
+      await this.handlePrompt(message.prompt, normalizeMode(message.mode), post);
     }
   }
 
-  private async handlePrompt(rawPrompt: string | undefined, post: ChatPost): Promise<void> {
+  private async handlePrompt(rawPrompt: string | undefined, mode: PromptMode, post: ChatPost): Promise<void> {
     const prompt = rawPrompt?.trim();
     if (!prompt) {
       return;
@@ -77,7 +99,8 @@ export class ChatSession {
           void post(message);
         }
       };
-      const rawAnswer = await this.onPrompt(prompt, previousHistory, progress, controller.signal);
+      const requestApproval = (request: Omit<ApprovalRequest, "type" | "id">) => this.requestApproval(request, post);
+      const rawAnswer = await this.onPrompt(prompt, previousHistory, mode, progress, requestApproval, controller.signal);
       if (controller.signal.aborted) {
         this.history.pop();
         return;
@@ -96,8 +119,49 @@ export class ChatSession {
       if (this.currentController === controller) {
         this.currentController = undefined;
       }
+      this.rejectApprovals();
     }
   }
+
+  private readonly approvals = new Map<string, (approved: boolean) => void>();
+  private nextApprovalId = 1;
+
+  private async requestApproval(
+    request: Omit<ApprovalRequest, "type" | "id">,
+    post: ChatPost,
+  ): Promise<boolean> {
+    const id = String(this.nextApprovalId++);
+    await post({ ...request, type: "approvalRequested", id });
+    return new Promise((resolve) => {
+      this.approvals.set(id, resolve);
+    });
+  }
+
+  private resolveApproval(id: string, approved: boolean): void {
+    const resolve = this.approvals.get(id);
+    if (!resolve) {
+      return;
+    }
+    this.approvals.delete(id);
+    resolve(approved);
+  }
+
+  private rejectApprovals(): void {
+    for (const resolve of this.approvals.values()) {
+      resolve(false);
+    }
+    this.approvals.clear();
+  }
+}
+
+function normalizeMode(mode: PromptMode | undefined): PromptMode {
+  if (mode === "agent" || mode === "yolo") {
+    return mode;
+  }
+  if (mode === "work") {
+    return "work";
+  }
+  return mode === "edit" ? "edit" : "ask";
 }
 
 function isAbortError(error: unknown): boolean {

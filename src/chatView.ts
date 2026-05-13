@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { renderChatHtml } from "./chatHtml";
-import { ChatAnswer, ChatIncomingMessage, ChatOutgoingMessage, ChatSession, PromptProgress } from "./chatSession";
-import type { ConversationMessage } from "./prompt";
+import { ApprovalRequester, ChatAnswer, ChatIncomingMessage, ChatOutgoingMessage, ChatSession, PromptProgress } from "./chatSession";
+import type { ConversationMessage, PromptMode } from "./prompt";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = "hackl.chatView";
@@ -13,7 +13,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     onPrompt: (
       prompt: string,
       history: ConversationMessage[],
+      mode: PromptMode,
       progress: (event: PromptProgress) => void,
+      requestApproval: ApprovalRequester,
       signal?: AbortSignal,
     ) => Promise<ChatAnswer | string>,
   ) {

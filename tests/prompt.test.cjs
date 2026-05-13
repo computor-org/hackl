@@ -45,3 +45,29 @@ test("buildHacklMessages trims history to recent non-empty chat messages", () =>
   ]);
   assert.match(messages[9].content, /\[no editor context\]/);
 });
+
+test("buildHacklMessages enables edit tool instructions in edit mode", () => {
+  const messages = buildHacklMessages("rename this", "ctx", [], "edit");
+
+  assert.match(messages[0].content, /Local code editor/);
+  assert.match(messages[0].content, /replace_text/);
+  assert.doesNotMatch(messages[0].content, /No edits/);
+});
+
+test("buildHacklMessages enables work instructions in work mode", () => {
+  const messages = buildHacklMessages("update call sites", "ctx", [], "work");
+
+  assert.match(messages[0].content, /Local coding worker/);
+  assert.match(messages[0].content, /search_files/);
+  assert.match(messages[0].content, /No shell commands/);
+});
+
+test("buildHacklMessages enables command instructions in agent and yolo modes", () => {
+  const agent = buildHacklMessages("verify this", "ctx", [], "agent");
+  const yolo = buildHacklMessages("verify this", "ctx", [], "yolo");
+
+  assert.match(agent[0].content, /Local coding agent/);
+  assert.match(agent[0].content, /run_command/);
+  assert.match(yolo[0].content, /YOLO skips approval prompts/);
+  assert.match(yolo[0].content, /run_command/);
+});

@@ -14,10 +14,44 @@ test("parseToolRequest reads Qwen-friendly HACKL_TOOL JSON", () => {
   assert.equal(parseToolRequest('HACKL_TOOL {"name":"run","path":"x"}'), undefined);
 });
 
+test("parseToolRequest reads exact replacement edit requests", () => {
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"replace_text","path":"src/a.ts","old_text":"const x = 1;","new_text":"const x = 2;"}'),
+    { name: "replace_text", path: "src/a.ts", old_text: "const x = 1;", new_text: "const x = 2;" },
+  );
+  assert.equal(parseToolRequest('HACKL_TOOL {"name":"replace_text","path":"src/a.ts","old_text":"","new_text":"x"}'), undefined);
+});
+
+test("parseToolRequest reads bounded search requests", () => {
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"search_files","query":"ChatSession","glob":"src/**/*.ts","max_results":99}'),
+    { name: "search_files", query: "ChatSession", glob: "src/**/*.ts", max_results: 50 },
+  );
+  assert.equal(parseToolRequest('HACKL_TOOL {"name":"search_files","query":" "}'), undefined);
+});
+
+test("parseToolRequest reads bounded command requests", () => {
+  assert.deepEqual(
+    parseToolRequest('HACKL_TOOL {"name":"run_command","cmd":"npm","args":["test"],"timeout_ms":999999}'),
+    { name: "run_command", cmd: "npm", args: ["test"], timeout_ms: 600000 },
+  );
+  assert.equal(parseToolRequest('HACKL_TOOL {"name":"run_command","cmd":"npm","args":"test"}'), undefined);
+});
+
 test("buildToolResultMessage returns a compact tool result block", () => {
   assert.match(
     buildToolResultMessage({ name: "read_file", path: "src/a.ts" }, { ok: true, content: "1: const x = 1;" }),
     /HACKL_TOOL_RESULT read_file ok\npath: src\/a\.ts\n\n1: const x = 1;/,
+  );
+});
+
+test("buildToolResultMessage reports edit tool results", () => {
+  assert.match(
+    buildToolResultMessage(
+      { name: "replace_text", path: "src/a.ts", old_text: "a", new_text: "b" },
+      { ok: true, content: "Replaced text in src/a.ts." },
+    ),
+    /HACKL_TOOL_RESULT replace_text ok\npath: src\/a\.ts\n\nReplaced text/,
   );
 });
 

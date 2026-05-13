@@ -1,16 +1,17 @@
 import * as vscode from "vscode";
 import { ChatMessage, createOpenAICompatibleBackend } from "./chatClient";
 import { ChatPanel } from "./chatPanel";
-import { ChatAnswer, PromptProgress } from "./chatSession";
+import { ApprovalRequester, ChatAnswer, PromptProgress } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
 import { detectMaxContextTokens, resolveChatTarget } from "./localServers";
-import { buildHacklMessages, ConversationMessage } from "./prompt";
+import { buildHacklMessages, ConversationMessage, PromptMode } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
 
 let chatPanel: ChatPanel | undefined;
+let extensionContext: vscode.ExtensionContext | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
 
 interface ConfigInspection<T> {
@@ -23,6 +24,7 @@ interface ConfigInspection<T> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  extensionContext = context;
   const chatViewProvider = new ChatViewProvider(context, answerPrompt);
 
   context.subscriptions.push(
@@ -44,7 +46,9 @@ export function deactivate(): void {
 async function answerPrompt(
   prompt: string,
   history: ConversationMessage[] = [],
+  mode: PromptMode = "ask",
   progress?: (event: PromptProgress) => void,
+  requestApproval?: ApprovalRequester,
   signal?: AbortSignal,
 ): Promise<ChatAnswer> {
   const startedAt = Date.now();
@@ -63,8 +67,11 @@ async function answerPrompt(
     : undefined;
   const maxContextTokens = configuredMaxContext ?? detectedMaxContext ?? 32768;
   const enableThinking = config.get<boolean>("enableThinking", false);
+  if (mode === "yolo") {
+    await confirmYoloMode(requestApproval);
+  }
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
-  const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history);
+  const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history, mode);
   const inputTokens = estimateChatTokens(messages);
   progress?.({
     type: "phase",
@@ -78,13 +85,38 @@ async function answerPrompt(
   const answer = await completeWithTools({
     backend: createOpenAICompatibleBackend({ ...target, enableThinking }),
     messages,
-    runTool: createWorkspaceToolRunner({ maxFileChars: maxToolFileChars }),
-    maxToolCalls: 3,
+    runTool: createWorkspaceToolRunner({
+      maxFileChars: maxToolFileChars,
+      allowEdits: mode === "edit" || mode === "work" || mode === "agent" || mode === "yolo",
+      allowSearch: mode === "work" || mode === "agent" || mode === "yolo",
+      allowCommands: mode === "agent" || mode === "yolo",
+      commandApproval: mode === "yolo" ? "auto" : "ask",
+      requestApproval,
+      signal,
+    }),
+    maxToolCalls: mode === "work" || mode === "agent" || mode === "yolo" ? 8 : 3,
     progress,
     signal,
   });
   progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
   return answer;
+}
+
+async function confirmYoloMode(requestApproval: ApprovalRequester | undefined): Promise<void> {
+  const context = extensionContext;
+  if (!context || context.globalState.get<boolean>("hackl.yoloAccepted", false)) {
+    return;
+  }
+  const approved = await requestApproval?.({
+    title: "Enable YOLO mode?",
+    detail: "YOLO skips command approval prompts, but Hackl will still block destructive commands and paths outside the workspace.",
+    approveLabel: "Enable YOLO",
+    denyLabel: "Cancel",
+  });
+  if (!approved) {
+    throw new Error("YOLO mode was not enabled.");
+  }
+  await context.globalState.update("hackl.yoloAccepted", true);
 }
 
 function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): boolean {
