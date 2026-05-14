@@ -91,20 +91,33 @@ export class AnnotationController {
     this.refreshCommentingRanges();
   }
 
+  /**
+   * Force VS Code to re-evaluate commenting ranges for the active editor.
+   *
+   * VS Code's CommentsController clears its per-editor listeners as soon as
+   * the commenting decoration count reaches zero (see commentsController.ts
+   * → clearEditorListeners). Once cleared, model-change events no longer
+   * recompute, so the gutter strip stays gone until something forces a
+   * recompute. Reassigning `commentingRangeProvider` triggers the extension
+   * host's `$updateCommentingRanges` → main thread
+   * `commentService.updateCommentingRanges` → `onDidUpdateCommentingRanges`
+   * → `beginComputeAndHandleEditorChange`. That re-installs listeners and
+   * brings the strip back. We always reassign with a fresh provider
+   * instance, but throttle so rapid editor flicker (chat sidebar focus
+   * pings) doesn't thrash.
+   */
   refreshCommentingRanges(): void {
-    if (!this.commentingProvider) {
-      this.commentingProvider = this.createCommentingRangeProvider();
+    const now = Date.now();
+    if (now - this.lastRefreshAt < 800) {
+      this.debug?.("annotations.refreshCommentingRanges.throttled");
+      return;
     }
-    // Re-assign the same stable provider instance so VS Code re-registers it
-    // if some downstream event dropped it, without creating a new closure that
-    // could cause the gutter strip to flicker out.
-    if (this.controller.commentingRangeProvider !== this.commentingProvider) {
-      this.debug?.("annotations.refreshCommentingRanges.reassign");
-      this.controller.commentingRangeProvider = this.commentingProvider;
-    } else {
-      this.debug?.("annotations.refreshCommentingRanges.noop");
-    }
+    this.lastRefreshAt = now;
+    this.commentingProvider = this.createCommentingRangeProvider();
+    this.controller.commentingRangeProvider = this.commentingProvider;
+    this.debug?.("annotations.refreshCommentingRanges.assigned");
   }
+  private lastRefreshAt = 0;
 
   setDebugLog(debug: DebugLog | undefined): void {
     this.debug = debug;
@@ -114,23 +127,32 @@ export class AnnotationController {
     const VscRange = this.vscode.Range;
     const debug = this.debug;
     return {
-      provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.Range[] {
-        if (!isEditorDocumentScheme(document.uri?.scheme)) {
-          debug?.("annotations.provideCommentingRanges.skipped", {
+      provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.CommentingRanges {
+        const supported = isEditorDocumentScheme(document.uri?.scheme);
+        if (!supported) {
+          debug?.("annotations.provideCommentingRanges.unsupportedScheme", {
             uri: document.uri?.toString(),
             scheme: document.uri?.scheme,
             languageId: document.languageId,
           });
-          return [];
+          // Returning an empty array (or {enableFileComments:false, ranges:[]})
+          // makes the controller's decoration count drop to zero for this
+          // editor and clears its listeners — once that happens the strip
+          // cannot recover. Keep enableFileComments=true so the count stays
+          // positive even for non-editor schemes.
+          return { enableFileComments: true, ranges: [] };
         }
-        const ranges = [new VscRange(0, 0, Math.max(0, document.lineCount - 1), 0)];
+        // Cover the entire document — even when lineCount is briefly 0 during
+        // load, return a wide range so the decoration count is never zero.
+        const lastLine = Math.max(1, document.lineCount);
+        const ranges = [new VscRange(0, 0, lastLine, 0)];
         debug?.("annotations.provideCommentingRanges", {
           uri: document.uri.toString(),
           languageId: document.languageId,
           lineCount: document.lineCount,
           ranges: ranges.length,
         });
-        return ranges;
+        return { enableFileComments: true, ranges };
       },
     };
   }

@@ -81,70 +81,88 @@ test("AnnotationController.discardLastBatch removes only the most recent batch",
   });
 });
 
-test("AnnotationController provides editor line comment ranges without file comments", () => {
+test("AnnotationController provides editor line comment ranges with file commenting enabled", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
     const controller = new AnnotationController();
     const provider = controller.controller.commentingRangeProvider;
 
-    const ranges = provider.provideCommentingRanges({
+    const result = provider.provideCommentingRanges({
       uri: { scheme: "file", toString: () => "file:///x.ts" },
       languageId: "typescript",
       lineCount: 42,
     });
 
-    assert.equal(Array.isArray(ranges), true);
-    assert.equal(ranges.length, 1);
-    assert.deepEqual(ranges[0].start, { line: 0, character: 0 });
-    assert.deepEqual(ranges[0].end, { line: 41, character: 0 });
+    assert.equal(result.enableFileComments, true, "file-level commenting must stay enabled to keep the gutter strip alive");
+    assert.equal(Array.isArray(result.ranges), true);
+    assert.equal(result.ranges.length, 1);
+    assert.deepEqual(result.ranges[0].start, { line: 0, character: 0 });
+    // Wide range covers the document; end line is at least lineCount so the
+    // last line is included.
+    assert.ok(result.ranges[0].end.line >= 42);
   });
 });
 
-test("AnnotationController does not provide comment ranges for comment input documents", () => {
+test("AnnotationController never returns zero decorations for non-text schemes", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
     const controller = new AnnotationController();
     const provider = controller.controller.commentingRangeProvider;
 
-    const ranges = provider.provideCommentingRanges({
+    const result = provider.provideCommentingRanges({
       uri: { scheme: "comment", toString: () => "comment://hackl.annotations/input.md" },
       languageId: "markdown",
       lineCount: 1,
     });
 
-    assert.deepEqual(ranges, []);
+    // ranges empty is fine, but enableFileComments must be true so VS Code's
+    // commenting range decoration count never drops to zero (which would
+    // otherwise trigger clearEditorListeners and the strip would not recover).
+    assert.deepEqual(result.ranges, []);
+    assert.equal(result.enableFileComments, true);
   });
 });
 
-test("AnnotationController.refreshCommentingRanges keeps a stable provider instance", () => {
+test("AnnotationController.refreshCommentingRanges installs a fresh provider to force re-evaluation", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
     const controller = new AnnotationController();
     const first = controller.controller.commentingRangeProvider;
     assert.equal(typeof first.provideCommentingRanges, "function");
-
-    controller.refreshCommentingRanges();
-    controller.refreshCommentingRanges();
-
-    assert.equal(controller.controller.commentingRangeProvider, first, "provider must not be replaced on refresh; reassigning causes the gutter strip to vanish");
+    // Throttle is 150 ms; jump time forward so the second refresh is honoured.
+    const realDateNow = Date.now;
+    let t = realDateNow();
+    Date.now = () => t;
+    try {
+      t += 2000;
+      controller.refreshCommentingRanges();
+      assert.notEqual(
+        controller.controller.commentingRangeProvider,
+        first,
+        "refresh must replace the provider so VS Code fires $updateCommentingRanges and re-installs editor listeners",
+      );
+    } finally {
+      Date.now = realDateNow;
+    }
   });
 });
 
-test("AnnotationController.refreshCommentingRanges re-registers if controller drops the provider", () => {
+test("AnnotationController.refreshCommentingRanges throttles rapid calls", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
     const controller = new AnnotationController();
-    const original = controller.controller.commentingRangeProvider;
-    // Simulate VS Code internally dropping the registration.
-    controller.controller.commentingRangeProvider = undefined;
-
     controller.refreshCommentingRanges();
-
-    assert.equal(controller.controller.commentingRangeProvider, original);
+    const afterFirst = controller.controller.commentingRangeProvider;
+    controller.refreshCommentingRanges();
+    assert.equal(
+      controller.controller.commentingRangeProvider,
+      afterFirst,
+      "calls within the throttle window must not churn the provider",
+    );
   });
 });
 

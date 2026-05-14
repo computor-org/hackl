@@ -342,8 +342,13 @@ function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatView
 }
 
 function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): void {
-  // Comment providers from other extensions often register after startup.
-  for (const delay of [0, 100, 250, 500, 1000, 2000, 4000, 8000, 16000, 30000]) {
+  // Two startup heartbeats: one immediately so the provider is registered as
+  // soon as the comments controller spins up, and one after a short delay to
+  // catch the case where other extensions register their own comment
+  // controllers right after activation and would otherwise crowd ours out.
+  // Subsequent recompute is driven by editor events (below) with throttling
+  // inside AnnotationController.refreshCommentingRanges.
+  for (const delay of [0, 1500]) {
     const timer = setTimeout(() => {
       activationDebug?.("annotations.scheduledRefresh", { delay });
       annotationController?.refreshCommentingRanges();
