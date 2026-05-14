@@ -55,6 +55,18 @@ try {
 
   await page.setContent(`${vscodeApiShim}${html}`, { waitUntil: "load" });
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "ready"), diagnostics);
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "state",
+        enableThinking: false,
+        endpoint: "http://localhost:1234/v1",
+        model: "qwen3-coder",
+      },
+    }));
+  });
+  assert.equal(await page.locator("#endpoint-status").innerText(), "localhost:1234 · qwen3-coder");
+  assert.match(await page.locator("#endpoint-status").getAttribute("title"), /endpoint and model/i);
   await page.locator("#prompt").fill("Explain energy");
   await page.keyboard.press("Enter");
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "prompt"), diagnostics);

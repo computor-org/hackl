@@ -17,7 +17,7 @@ export type ChatOutgoingMessage =
   | { type: "metrics"; inputTokens: number; maxContextTokens: number }
   | { type: "cleared" }
   | { type: "history"; entries: ConversationMessage[] }
-  | { type: "state"; enableThinking: boolean }
+  | ChatState
   | { type: "focusInput" };
 
 export type ChatPost = (message: ChatOutgoingMessage) => Thenable<unknown> | Promise<unknown>;
@@ -38,7 +38,16 @@ export interface ChatAnswer {
 
 export type PromptProgress =
   | { type: "phase"; text: string; inputTokens?: number; maxContextTokens?: number }
+  | { type: "target"; endpoint: string; model: string }
   | { type: "delta"; channel: "answer" | "reasoning"; text: string };
+
+export interface ChatState {
+  type: "state";
+  enableThinking?: boolean;
+  endpoint?: string;
+  model?: string;
+  endpointApprovalRequired?: boolean;
+}
 
 export type ApprovalRequester = (request: Omit<ApprovalRequest, "type" | "id">) => Promise<boolean>;
 
@@ -174,6 +183,14 @@ function normalizeAnswer(answer: ChatAnswer | string): ChatAnswer {
 }
 
 function progressToMessages(event: PromptProgress): ChatOutgoingMessage[] {
+  if (event.type === "target") {
+    return [{
+      type: "state",
+      endpoint: event.endpoint,
+      model: event.model,
+      endpointApprovalRequired: false,
+    }];
+  }
   if (event.type === "delta") {
     return [{ type: "assistantDelta", channel: event.channel, text: event.text }];
   }

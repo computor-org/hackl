@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { renderChatHtml } from "./chatHtml";
-import { ApprovalRequester, ChatAnswer, ChatIncomingMessage, ChatOutgoingMessage, ChatSession, PromptProgress } from "./chatSession";
+import { ApprovalRequester, ChatAnswer, ChatIncomingMessage, ChatOutgoingMessage, ChatSession, ChatState, PromptProgress } from "./chatSession";
 import type { ConversationMessage, PromptMode } from "./prompt";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -19,6 +19,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       requestApproval: ApprovalRequester,
       signal?: AbortSignal,
     ) => Promise<ChatAnswer | string>,
+    private readonly getState: () => Promise<ChatState>,
   ) {
     this.session = new ChatSession(onPrompt);
   }
@@ -41,8 +42,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         return;
       }
       if (message.type === "ready") {
-        const enableThinking = vscode.workspace.getConfiguration("hackl").get<boolean>("enableThinking", false);
-        await webviewView.webview.postMessage({ type: "state", enableThinking });
+        await webviewView.webview.postMessage(await this.getState());
       }
       await this.session.handle(message, (response) => post(webviewView.webview, response));
     });

@@ -30,6 +30,7 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
         <h1>Hackl</h1>
         <span class="subtitle">local</span>
       </div>
+      <div id="endpoint-status" class="endpoint-status" title="" aria-label="Endpoint status"></div>
       <button id="clear" class="icon-button" type="button" title="Clear transcript" aria-label="Clear transcript"><span class="codicon codicon-clear-all" aria-hidden="true"></span></button>
     </header>
     <main id="thread" aria-live="polite">
@@ -170,6 +171,26 @@ h1 {
   font-size: 11px;
   letter-spacing: 0.4px;
   text-transform: uppercase;
+}
+
+.endpoint-status {
+  min-width: 0;
+  max-width: min(46vw, 320px);
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--vscode-descriptionForeground);
+  background: var(--hackl-surface);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.endpoint-status:empty {
+  display: none;
 }
 
 .meter {
@@ -882,6 +903,7 @@ const clientScript = `
   const send = document.getElementById("send");
   const clear = document.getElementById("clear");
   const contextMeter = document.getElementById("context-meter");
+  const endpointStatus = document.getElementById("endpoint-status");
   const emptyState = document.getElementById("empty-state");
   const reasoningToggle = document.getElementById("reasoning-toggle");
   const modeButton = document.getElementById("mode-button");
@@ -1134,6 +1156,26 @@ const clientScript = `
   function applyState(message) {
     if (reasoningToggle && typeof message.enableThinking === "boolean") {
       reasoningToggle.setAttribute("aria-pressed", String(message.enableThinking));
+    }
+    updateEndpointStatus(message);
+  }
+
+  function updateEndpointStatus(message) {
+    if (!endpointStatus || !message.endpoint) return;
+    const endpoint = endpointLabel(message.endpoint);
+    const model = message.model || (message.endpointApprovalRequired ? "approval required" : "");
+    const text = model ? endpoint + " · " + model : endpoint;
+    endpointStatus.textContent = text;
+    endpointStatus.title = message.endpointApprovalRequired
+      ? "Configured non-local endpoint. Hackl will ask before sending prompts or selected context."
+      : "OpenAI-compatible endpoint and model: " + text;
+  }
+
+  function endpointLabel(endpoint) {
+    try {
+      return new URL(endpoint).host || endpoint;
+    } catch {
+      return endpoint;
     }
   }
 

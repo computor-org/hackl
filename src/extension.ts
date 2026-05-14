@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { ChatMessage, createOpenAICompatibleBackend } from "./chatClient";
 import { ChatPanel } from "./chatPanel";
-import { ApprovalRequester, ChatAnswer, PromptProgress } from "./chatSession";
+import { ApprovalRequester, ChatAnswer, ChatState, PromptProgress } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
 import { detectMaxContextTokens, requiresNonLocalEndpointApproval, resolveChatTarget } from "./localServers";
@@ -24,7 +24,7 @@ interface ConfigInspection<T> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  const chatViewProvider = new ChatViewProvider(context, answerPrompt);
+  const chatViewProvider = new ChatViewProvider(context, answerPrompt, currentChatState);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
@@ -66,6 +66,7 @@ async function answerPrompt(
     endpoint: configuredEndpoint,
     endpointConfigured,
   });
+  progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
   const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
   const debug = createDebugLog(config.get<boolean>("debug", false));
   const configuredMaxContext = hasUserConfigured(config.inspect<number>("maxContextTokens"))
@@ -144,6 +145,29 @@ async function requireEndpointApproval(
     : { content: "Request cancelled because hackl.endpoint is configured to a non-local endpoint." };
 }
 
+async function currentChatState(): Promise<ChatState> {
+  const config = vscode.workspace.getConfiguration("hackl");
+  const endpoint = config.get<string>("endpoint", "");
+  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
+  const enableThinking = config.get<boolean>("enableThinking", false);
+  if (endpointConfigured && requiresNonLocalEndpointApproval(endpoint)) {
+    return {
+      type: "state",
+      enableThinking,
+      endpoint: endpoint.trim(),
+      endpointApprovalRequired: true,
+    };
+  }
+  const target = await resolveChatTarget({ endpoint, endpointConfigured });
+  return {
+    type: "state",
+    enableThinking,
+    endpoint: target.endpoint,
+    model: target.model,
+    endpointApprovalRequired: false,
+  };
+}
+
 function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): boolean {
   if (!inspection) {
     return false;
@@ -170,7 +194,7 @@ async function getDetectedMaxContext(endpoint: string): Promise<number | undefin
 
 function openChatPanel(context: vscode.ExtensionContext): void {
   if (!chatPanel) {
-    chatPanel = new ChatPanel(context, answerPrompt, () => {
+    chatPanel = new ChatPanel(context, answerPrompt, currentChatState, () => {
       chatPanel = undefined;
     });
   }
