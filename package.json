@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.23",
+  "version": "0.0.24",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -16,8 +16,15 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:hackl.chat",
     "onCommand:hackl.chatEditor",
+    "onCommand:hackl.localServer.setup",
+    "onCommand:hackl.localServer.manage",
+    "onCommand:hackl.localServer.start",
+    "onCommand:hackl.localServer.stop",
+    "onCommand:hackl.localServer.restart",
+    "onCommand:hackl.localServer.openLogs",
     "onView:hackl.chatView"
   ],
   "main": "./dist/extension.js",
@@ -37,6 +44,36 @@
         "title": "Open Chat in Editor",
         "category": "Hackl",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "hackl.localServer.setup",
+        "title": "Set up local model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.localServer.manage",
+        "title": "Manage local model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.localServer.start",
+        "title": "Start local server",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.localServer.stop",
+        "title": "Stop local server",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.localServer.restart",
+        "title": "Restart local server",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.localServer.openLogs",
+        "title": "Show local model logs",
+        "category": "Hackl"
       }
     ],
     "viewsContainers": {
@@ -111,14 +148,56 @@
           "type": "boolean",
           "default": false,
           "description": "Write Hackl prompt and tool-loop diagnostics to the Hackl Debug output channel and the VS Code Extension Host debug console."
+        },
+        "hackl.localServer.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "When a local model has been configured, start the llama.cpp server automatically on activation and stop it on deactivation."
+        },
+        "hackl.localServer.port": {
+          "type": "number",
+          "default": 8080,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Preferred port for the managed llama.cpp server. If busy, Hackl scans up to port+19."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "hackl.localModel",
+        "title": "Set up a local model with Hackl",
+        "description": "Hackl installs llama.cpp, downloads a curated GGUF, and tunes the server for your hardware. No keys, no cloud.",
+        "steps": [
+          {
+            "id": "hackl.walkthrough.setup",
+            "title": "Detect hardware and pick a model",
+            "description": "Open the setup wizard. Hackl probes your GPU, RAM, and platform, then recommends one of five curated models.\n\n[Open setup](command:hackl.localServer.setup)",
+            "media": { "markdown": "media/walkthrough-setup.md" },
+            "completionEvents": ["onCommand:hackl.localServer.setup"]
+          },
+          {
+            "id": "hackl.walkthrough.chat",
+            "title": "Start chatting locally",
+            "description": "Open the Hackl sidebar and ask about your code. Everything stays on your machine.\n\n[Open chat](command:hackl.chat)",
+            "media": { "markdown": "media/walkthrough-setup.md" },
+            "completionEvents": ["onCommand:hackl.chat"]
+          },
+          {
+            "id": "hackl.walkthrough.manage",
+            "title": "Manage the server later",
+            "description": "Start, stop, or swap models any time from the manage panel.\n\n[Open manage panel](command:hackl.localServer.manage)",
+            "media": { "markdown": "media/walkthrough-setup.md" },
+            "completionEvents": ["onCommand:hackl.localServer.manage"]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "test": "npm run compile && node --test tests/*.test.cjs",
+    "test": "npm run compile && node --test tests/*.test.cjs tests/**/*.test.cjs",
     "test:ui": "npm run compile && node scripts/run-webview-ui-smoke.mjs",
     "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/chatClient.js --test-coverage-include=dist/context.js --test-coverage-include=dist/localServers.js --test-coverage-include=dist/prompt.js --test tests/*.test.cjs",
     "test:extension": "npm run compile && node scripts/run-vscode-smoke.mjs",

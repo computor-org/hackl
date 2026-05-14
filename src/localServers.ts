@@ -8,6 +8,7 @@ export interface ChatTargetSettings {
   endpointConfigured: boolean;
   fetchImpl?: typeof fetch;
   candidates?: LocalServerCandidate[];
+  managedTarget?: ChatTarget;
 }
 
 export interface ChatTarget {
@@ -32,6 +33,10 @@ export const LOCAL_SERVER_CANDIDATES: LocalServerCandidate[] = [
 export async function resolveChatTarget(settings: ChatTargetSettings): Promise<ChatTarget> {
   const configuredEndpoint = clean(settings.endpoint);
   const fetchImpl = settings.fetchImpl ?? fetch;
+
+  if (settings.managedTarget) {
+    return settings.managedTarget;
+  }
 
   if (settings.endpointConfigured && configuredEndpoint) {
     const probed = await probeServer(configuredEndpoint, fetchImpl);
