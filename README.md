@@ -49,7 +49,9 @@ npm run package:vsix
 
 Hackl auto-discovers llama.cpp on `http://localhost:8080/v1` and LM Studio on
 `http://localhost:1234/v1`. Configure `hackl.endpoint` in VS Code settings to
-override discovery. Hackl uses the loaded model reported by `/v1/models`.
+override discovery. Hackl uses the loaded model reported by `/v1/models`. If
+`hackl.endpoint` points outside localhost/loopback, Hackl asks before sending
+the prompt or selected context.
 
 By default, Hackl does not send open-file contents. The prompt contains file
 paths, cursor position, selection ranges, and selected text capped at 4000

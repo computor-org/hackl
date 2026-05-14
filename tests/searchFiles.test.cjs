@@ -43,6 +43,27 @@ test("search_files with empty query lists files matched by glob", async () => {
   });
 });
 
+test("search_files skips symlinks that resolve outside the workspace", async () => {
+  const project = makeProject();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "hackl-search-outside-"));
+  const outsideFile = path.join(outside, "secret.txt");
+  const symlinkPath = path.join(project, "leak.txt");
+  fs.writeFileSync(outsideFile, "needle\n");
+  fs.symlinkSync(outsideFile, symlinkPath);
+
+  const vscode = vscodeStub(project, [
+    documentStub(symlinkPath, "needle\n"),
+  ]);
+
+  await withVscodeStub(vscode, async () => {
+    const { createWorkspaceToolRunner } = freshWorkspaceTools();
+    const runTool = createWorkspaceToolRunner({ maxFileChars: 1000, allowSearch: true });
+    const result = await runTool({ name: "search_files", query: "needle", glob: "**/*", max_results: 5 });
+
+    assert.deepEqual(result, { ok: true, content: "No matches." });
+  });
+});
+
 test("search_files is rejected outside work mode", async () => {
   const project = makeProject();
   await withVscodeStub(vscodeStub(project, []), async () => {
@@ -84,9 +105,12 @@ function makeProject() {
 function vscodeStub(root, documents) {
   for (const document of documents) {
     fs.mkdirSync(path.dirname(document.fileName), { recursive: true });
-    fs.writeFileSync(document.fileName, document.text);
+    if (!fs.existsSync(document.fileName)) {
+      fs.writeFileSync(document.fileName, document.text);
+    }
   }
   return {
+    Uri: { file: (fsPath) => ({ scheme: "file", fsPath }) },
     workspace: {
       workspaceFolders: [{ uri: { fsPath: root } }],
       textDocuments: documents,

@@ -257,12 +257,16 @@ async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFile
     const results: string[] = [];
     const matcher = createSearchMatcher(request.query);
     for (const uri of files) {
-      const relative = vscode.workspace.asRelativePath(uri, false);
+      const safeUri = await safeVsCodeFileUri(vscode, uri);
+      if (!safeUri) {
+        continue;
+      }
+      const relative = vscode.workspace.asRelativePath(safeUri, false);
       if (matcher(relative)) {
         results.push(`${relative}: file name match`);
       }
       if (results.length >= limit) break;
-      await addVsCodeTextMatches(vscode, uri, matcher, results, limit);
+      await addVsCodeTextMatches(vscode, safeUri, matcher, results, limit);
       if (results.length >= limit) break;
     }
     return { ok: true, content: results.length === 0 ? "No matches." : results.join("\n") };

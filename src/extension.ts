@@ -4,7 +4,7 @@ import { ChatPanel } from "./chatPanel";
 import { ApprovalRequester, ChatAnswer, PromptProgress } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
-import { detectMaxContextTokens, resolveChatTarget } from "./localServers";
+import { detectMaxContextTokens, requiresNonLocalEndpointApproval, resolveChatTarget } from "./localServers";
 import { buildHacklMessages, ConversationMessage, PromptMode } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
@@ -56,9 +56,15 @@ async function answerPrompt(
   const startedAt = Date.now();
   progress?.({ type: "phase", text: "Preprocessing prompt..." });
   const config = vscode.workspace.getConfiguration("hackl");
+  const configuredEndpoint = config.get<string>("endpoint", "");
+  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
+  const endpointApproval = await requireEndpointApproval(configuredEndpoint, endpointConfigured, requestApproval);
+  if (endpointApproval) {
+    return endpointApproval;
+  }
   const target = await resolveChatTarget({
-    endpoint: config.get<string>("endpoint", ""),
-    endpointConfigured: hasUserConfigured(config.inspect<string>("endpoint")),
+    endpoint: configuredEndpoint,
+    endpointConfigured,
   });
   const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
   const debug = createDebugLog(config.get<boolean>("debug", false));
@@ -117,6 +123,25 @@ function toolCallLimit(mode: PromptMode): number {
   if (mode === "work") return 24;
   if (mode === "edit") return 12;
   return 4;
+}
+
+async function requireEndpointApproval(
+  endpoint: string,
+  endpointConfigured: boolean,
+  requestApproval?: ApprovalRequester,
+): Promise<ChatAnswer | undefined> {
+  if (!endpointConfigured || !requiresNonLocalEndpointApproval(endpoint)) {
+    return undefined;
+  }
+  const approved = await requestApproval?.({
+    title: "Use non-local endpoint?",
+    detail: `Hackl is configured to send prompts and selected context to ${endpoint.trim()}. Continue?`,
+    approveLabel: "Use endpoint",
+    denyLabel: "Cancel",
+  }) ?? false;
+  return approved
+    ? undefined
+    : { content: "Request cancelled because hackl.endpoint is configured to a non-local endpoint." };
 }
 
 function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): boolean {

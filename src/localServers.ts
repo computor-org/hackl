@@ -52,6 +52,27 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
   };
 }
 
+export function requiresNonLocalEndpointApproval(endpoint: string | undefined): boolean {
+  const configuredEndpoint = clean(endpoint);
+  if (!configuredEndpoint) {
+    return false;
+  }
+
+  try {
+    const { hostname } = new URL(configuredEndpoint);
+    return !isLoopbackHostname(hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "localhost"
+    || host === "::1"
+    || host.startsWith("127.");
+}
+
 async function discoverLocalServer(
   candidates: LocalServerCandidate[],
   fetchImpl: typeof fetch,

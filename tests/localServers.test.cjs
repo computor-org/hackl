@@ -1,6 +1,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { detectMaxContextTokens, resolveChatTarget } = require("../dist/localServers.js");
+const {
+  detectMaxContextTokens,
+  requiresNonLocalEndpointApproval,
+  resolveChatTarget,
+} = require("../dist/localServers.js");
 
 test("resolveChatTarget preserves explicit endpoint and uses loaded model", async () => {
   const target = await resolveChatTarget({
@@ -114,6 +118,15 @@ test("resolveChatTarget uses first advertised model when server requires a model
     endpoint: "http://slopgate.example/v1",
     model: "qwen",
   });
+});
+
+test("requiresNonLocalEndpointApproval only flags configured non-loopback endpoints", () => {
+  assert.equal(requiresNonLocalEndpointApproval("http://slopgate.example/v1"), true);
+  assert.equal(requiresNonLocalEndpointApproval("https://192.168.1.5/v1"), true);
+  assert.equal(requiresNonLocalEndpointApproval("http://localhost:1234/v1"), false);
+  assert.equal(requiresNonLocalEndpointApproval("http://127.0.0.1:8080/v1"), false);
+  assert.equal(requiresNonLocalEndpointApproval("http://[::1]:8080/v1"), false);
+  assert.equal(requiresNonLocalEndpointApproval(""), false);
 });
 
 test("detectMaxContextTokens reads llama.cpp root props with nested params", async () => {
