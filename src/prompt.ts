@@ -15,9 +15,9 @@ const ASK_SYSTEM_PROMPT = [
 ].join("\n");
 
 const ANNOTATION_OUTPUT_INSTRUCTIONS = [
-  "annotations requested: in addition to your chat answer, emit one fenced block ```hackl-annotations containing a JSON array.",
+  "annotations requested: in addition to your chat answer, emit exactly one fenced block tagged ```hackl-annotations containing JSON only.",
   "Each annotation: { uri (copy from a source/Markdown target or staged/commit fileUris entry), startLine (1-based int), endLine (1-based int), severity (note|suggestion|warning|blocking), message, rationale? }.",
-  "Anchor each annotation to one target's uri and lines. Prefer actionable, non-duplicate annotations. If you have nothing concrete to anchor, emit an empty array.",
+  "Anchor each annotation to one target's uri and lines. Prefer actionable, non-duplicate annotations. If you have nothing concrete to anchor, emit [].",
 ].join("\n");
 
 const EDIT_SYSTEM_PROMPT = [

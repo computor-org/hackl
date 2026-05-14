@@ -87,11 +87,28 @@ test("AnnotationController.add dedupes by location + message + severity + author
     const controller = new AnnotationController();
     const a = controller.add({ uri: "file:///x.ts", startLine: 5, endLine: 7, severity: "warning", message: "same", authorType: "ai" });
     const b = controller.add({ uri: "file:///x.ts", startLine: 5, endLine: 7, severity: "warning", message: "same", authorType: "ai" });
+    assert.match(a.id, /^ann-/);
     assert.equal(a.id, b.id, "duplicate add should return existing annotation");
     assert.equal(controller.list().length, 1);
     const c = controller.add({ uri: "file:///x.ts", startLine: 5, endLine: 7, severity: "warning", message: "different", authorType: "ai" });
     assert.notEqual(a.id, c.id);
     assert.equal(controller.list().length, 2);
+  });
+});
+
+test("AnnotationController.registerHumanComment uses annotation ids", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    const thread = fake.threads[0] || {
+      uri: { toString: () => "file:///x.ts" },
+      range: { start: { line: 0 }, end: { line: 0 } },
+      comments: [],
+      label: "",
+    };
+    const annotation = controller.registerHumanComment(thread, "note");
+    assert.match(annotation.id, /^ann-/);
   });
 });
 

@@ -102,11 +102,12 @@ test("buildHacklMessages appends annotation output instructions when createAnnot
   });
   const body = messages[messages.length - 1].content;
   assert.match(body, /annotations requested/);
-  assert.match(body, /hackl-annotations/);
+  assert.match(body, /exactly one fenced block tagged ```hackl-annotations containing JSON only/);
+  assert.match(body, /emit \[\]/);
   assert.match(messages[0].content, /Local code helper/);
 });
 
-test("parseAnnotationsFromAnswer extracts JSON from fenced blocks", () => {
+test("parseAnnotationsFromAnswer extracts exact hackl-annotations fenced JSON", () => {
   const answer = [
     "Looks fine.",
     "```hackl-annotations",
@@ -124,6 +125,23 @@ test("parseAnnotationsFromAnswer extracts JSON from fenced blocks", () => {
   assert.equal(parsed.annotations[0].severity, "warning");
   assert.equal(parsed.annotations[1].uri, "file:///fallback.ts");
   assert.equal(parsed.annotations[1].endLine, 4);
+});
+
+test("parseAnnotationsFromAnswer accepts legacy annotation block tags", () => {
+  const answer = [
+    "```hackl-review",
+    JSON.stringify({ uri: "file:///legacy.ts", start_line: 3, message: "legacy" }),
+    "```",
+    "```review",
+    JSON.stringify({ uri: "file:///review.ts", line: 7, message: "review" }),
+    "```",
+  ].join("\n");
+  const parsed = parseAnnotationsFromAnswer(answer);
+  assert.equal(parsed.annotations.length, 2);
+  assert.equal(parsed.annotations[0].uri, "file:///legacy.ts");
+  assert.equal(parsed.annotations[0].startLine, 3);
+  assert.equal(parsed.annotations[1].uri, "file:///review.ts");
+  assert.equal(parsed.annotations[1].endLine, 7);
 });
 
 test("parseAnnotationsFromAnswer reports dropped entries and parse errors", () => {

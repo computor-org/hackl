@@ -37,7 +37,7 @@ test("handleAnnotationReply adds a basket target and registers a human annotatio
     remove: () => undefined,
   };
   const annotationController = {
-    registerHumanComment: (_t, text) => { humanText = text; return { id: "rev-1" }; },
+    registerHumanComment: (_t, text) => { humanText = text; return { id: "ann-1" }; },
     disposeThread: () => undefined,
   };
   const thread = {

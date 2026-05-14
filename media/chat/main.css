@@ -772,11 +772,16 @@ textarea::placeholder {
 .tool-button[aria-pressed="true"] {
   color: var(--vscode-button-foreground, #fff);
   background: var(--hackl-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hackl-accent) 30%, transparent);
 }
 
 .tool-button[aria-pressed="true"]:not(:disabled):hover {
   background: color-mix(in srgb, var(--hackl-accent) 85%, white);
   color: var(--vscode-button-foreground, #fff);
+}
+
+.tool-button[aria-pressed="true"] .codicon {
+  transform: scale(1.08);
 }
 
 .mode-dropdown {

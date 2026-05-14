@@ -94,7 +94,7 @@ export class AnnotationController {
       return dup;
     }
     counter += 1;
-    const id = `rev-${Date.now().toString(36)}-${counter.toString(36)}`;
+    const id = `ann-${Date.now().toString(36)}-${counter.toString(36)}`;
     const comment: HacklAnnotation = {
       id,
       targetId: input.targetId,
@@ -138,7 +138,7 @@ export class AnnotationController {
 
   registerHumanComment(thread: vscodeTypes.CommentThread, message: string): HacklAnnotation {
     counter += 1;
-    const id = `rev-${Date.now().toString(36)}-${counter.toString(36)}`;
+    const id = `ann-${Date.now().toString(36)}-${counter.toString(36)}`;
     const startLine = (thread.range?.start.line ?? 0) + 1;
     const endLine = (thread.range?.end.line ?? 0) + 1;
     const comment: HacklAnnotation = {
