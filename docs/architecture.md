@@ -57,7 +57,7 @@ Hackl has four modes:
 
 Modes control capability only. `/review` asks for a `hackl-annotations` JSON
 block, parses it into VS Code comment threads, and persists the finished Hackl
-session under `.hackl/sessions/` when configured.
+session under VS Code extension storage when configured.
 
 Current context target kinds are:
 

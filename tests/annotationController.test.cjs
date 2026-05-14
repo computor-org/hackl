@@ -90,10 +90,10 @@ test("AnnotationController provides editor line comment ranges without file comm
 
     const ranges = provider.provideCommentingRanges({ lineCount: 42 });
 
-    assert.equal(ranges.enableFileComments, false);
-    assert.equal(ranges.ranges.length, 1);
-    assert.deepEqual(ranges.ranges[0].start, { line: 0, character: 0 });
-    assert.deepEqual(ranges.ranges[0].end, { line: 41, character: 0 });
+    assert.equal(Array.isArray(ranges), true);
+    assert.equal(ranges.length, 1);
+    assert.deepEqual(ranges[0].start, { line: 0, character: 0 });
+    assert.deepEqual(ranges[0].end, { line: 41, character: 0 });
   });
 });
 
@@ -158,8 +158,32 @@ test("AnnotationController.registerHumanComment uses annotation ids", () => {
       comments: [],
       label: "",
     };
-    const annotation = controller.registerHumanComment(thread, "note");
+    const annotation = controller.registerHumanComment(thread, "note <ok>");
     assert.match(annotation.id, /^ann-/);
+    assert.equal(thread.canReply, false);
+    assert.match(thread.comments[0].body.value, /note &lt;ok&gt;/);
+  });
+});
+
+test("AnnotationController renders compact escaped comment bodies", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    controller.add({
+      uri: "file:///x.ts",
+      startLine: 1,
+      endLine: 1,
+      severity: "warning",
+      message: "mind <this>\nnow",
+      rationale: "because & why",
+      authorType: "ai",
+    });
+    const body = fake.threads[0].comments[0].body.value;
+
+    assert.equal(body.includes("\n\n"), false);
+    assert.match(body, /mind &lt;this&gt;<br>now/);
+    assert.match(body, /<em>because &amp; why<\/em>/);
   });
 });
 

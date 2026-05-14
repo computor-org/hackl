@@ -135,7 +135,7 @@ test("parseAnnotationsFromAnswer tags annotations as AI with model", () => {
   assert.equal(parsed.annotations[0].aiModel, "qwen3");
 });
 
-test("persistHacklSession writes a JSON file under .hackl/sessions/", async () => {
+test("persistHacklSession writes a JSON file under extension storage sessions", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "hackl-rs-"));
   try {
     const session = {
@@ -153,7 +153,8 @@ test("persistHacklSession writes a JSON file under .hackl/sessions/", async () =
     const written = JSON.parse(await fs.readFile(file, "utf8"));
     assert.equal(written.id, session.id);
     assert.equal(written.answer, "done");
-    assert.match(file, /\.hackl\/sessions\//);
+    assert.match(file, /\/sessions\//);
+    assert.doesNotMatch(file, /\.hackl/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

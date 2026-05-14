@@ -1,8 +1,8 @@
 {
   "name": "hackl",
   "displayName": "Hackl",
-  "description": "Hack with local AI.",
-  "version": "0.0.43",
+  "description": "Hack local-first.",
+  "version": "0.0.47",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -16,7 +16,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage"
+    "*"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -40,6 +40,11 @@
       {
         "command": "hackl.refreshEndpoint",
         "title": "Refresh Endpoint",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.traceAnnotationRanges",
+        "title": "Trace Annotation Ranges",
         "category": "Hackl"
       },
       {
@@ -154,7 +159,7 @@
       {
         "command": "editor.action.submitComment",
         "key": "enter",
-        "when": "commentEditorFocused && !commentIsEmpty && !suggestWidgetVisible"
+        "when": "commentEditorFocused && !suggestWidgetVisible"
       },
       {
         "command": "type",
@@ -268,7 +273,7 @@
         "hackl.persistSessions": {
           "type": "boolean",
           "default": true,
-          "description": "Persist completed Hackl sessions (when annotations are requested) as JSON files under .hackl/sessions/ in the workspace root."
+          "description": "Persist completed Hackl sessions (when annotations are requested) as JSON files in VS Code extension storage."
         }
       }
     },

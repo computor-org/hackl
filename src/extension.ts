@@ -44,6 +44,8 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let basketService: BasketService | undefined;
 let annotationController: AnnotationController | undefined;
 let sessionFinishedEmitter: vscode.EventEmitter<HacklSessionRecord> | undefined;
+let extensionContext: vscode.ExtensionContext | undefined;
+let activationDebug: ReturnType<typeof createDebugLog> | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
 
 export interface HacklApi {
@@ -58,8 +60,17 @@ export interface HacklApi {
 }
 
 export function activate(context: vscode.ExtensionContext): HacklApi {
+  extensionContext = context;
+  activationDebug = createDebugLog(true);
+  activationDebug?.("extension.activate", {
+    activationEvents: context.extension.packageJSON?.activationEvents,
+    diagnosticTrace: true,
+    activeEditor: vscode.window.activeTextEditor?.document.uri.toString(),
+    visibleEditors: vscode.window.visibleTextEditors.map((editor) => editor.document.uri.toString()),
+  });
   basketService = new BasketService();
   annotationController = new AnnotationController();
+  annotationController.setDebugLog(activationDebug);
   sessionFinishedEmitter = new vscode.EventEmitter<HacklSessionRecord>();
   const basketBridge = makeBasketBridge(basketService);
 
@@ -94,6 +105,19 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       SetupPanel.refresh();
       const probe = await runProbe();
       await reportProbe(probe);
+    }),
+    vscode.commands.registerCommand("hackl.traceAnnotationRanges", async () => {
+      activationDebug = createDebugLog(true);
+      annotationController?.setDebugLog(activationDebug);
+      activationDebug?.("annotations.traceCommand", {
+        activeEditor: vscode.window.activeTextEditor?.document.uri.toString(),
+        visibleEditors: vscode.window.visibleTextEditors.map((editor) => editor.document.uri.toString()),
+        openDocuments: vscode.workspace.textDocuments.map((document) => document.uri.toString()),
+      });
+      annotationController?.refreshCommentingRanges();
+      await vscode.commands.executeCommand("workbench.action.toggleCommenting");
+      await vscode.commands.executeCommand("workbench.action.toggleCommenting");
+      vscode.window.setStatusBarMessage("Hackl: refreshed annotation ranges; see Hackl Debug output.", 4000);
     }),
     vscode.commands.registerCommand("hackl.openSetupDoc", async (which: "lmstudio" | "llamacpp" | "ollama") => {
       const file = `setup-${which}.md`;
@@ -254,10 +278,27 @@ function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatView
 
 function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): void {
   // Comment providers from other extensions often register after startup.
-  for (const delay of [500, 2000, 6000, 10000, 15000]) {
-    const timer = setTimeout(() => annotationController?.refreshCommentingRanges(), delay);
+  for (const delay of [0, 100, 250, 500, 1000, 2000, 4000, 8000, 16000, 30000]) {
+    const timer = setTimeout(() => {
+      activationDebug?.("annotations.scheduledRefresh", { delay });
+      annotationController?.refreshCommentingRanges();
+    }, delay);
     context.subscriptions.push({ dispose: () => clearTimeout(timer) });
   }
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      activationDebug?.("annotations.activeEditorChanged", { uri: editor?.document.uri.toString() });
+      annotationController?.refreshCommentingRanges();
+    }),
+    vscode.window.onDidChangeVisibleTextEditors((editors) => {
+      activationDebug?.("annotations.visibleEditorsChanged", { uris: editors.map((editor) => editor.document.uri.toString()) });
+      annotationController?.refreshCommentingRanges();
+    }),
+    vscode.workspace.onDidOpenTextDocument((document) => {
+      activationDebug?.("annotations.documentOpened", { uri: document.uri.toString(), languageId: document.languageId });
+      annotationController?.refreshCommentingRanges();
+    }),
+  );
 }
 
 async function refreshStatus(): Promise<void> {
@@ -430,7 +471,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
 }
 
 async function pruneSessionsAtStartup(): Promise<void> {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const root = extensionContext?.globalStorageUri.fsPath;
   if (!root) return;
   try {
     const { pruneSessionsOnDisk } = await import("./hacklSession");
@@ -460,7 +501,7 @@ async function emitHacklSession(input: {
   };
   sessionFinishedEmitter?.fire(session);
   if (!readHacklConfig().persistSessions) return;
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const root = extensionContext?.globalStorageUri.fsPath;
   if (!root) return;
   // Fire-and-forget: do not block the next prompt on disk I/O. Errors land in status bar.
   persistHacklSession(root, session).catch((error) => {

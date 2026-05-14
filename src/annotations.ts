@@ -1,5 +1,6 @@
 import type * as vscodeTypes from "vscode";
 import { getVscode } from "./vscodeShim";
+import type { DebugLog } from "./debugLog";
 
 export type AnnotationSeverity = "note" | "suggestion" | "warning" | "blocking";
 export type AnnotationStatus = "open" | "resolved" | "dismissed";
@@ -37,6 +38,7 @@ export class AnnotationController {
   private controller: vscodeTypes.CommentController;
   private readonly threads = new Map<string, ThreadEntry>();
   private readonly vscode: typeof vscodeTypes;
+  private debug: DebugLog | undefined;
   private batches: string[][] = [];
 
   beginBatch(): void {
@@ -82,24 +84,34 @@ export class AnnotationController {
     this.vscode = getVscode();
     this.controller = this.vscode.comments.createCommentController("hackl.annotations", "Hackl Annotations");
     this.controller.options = {
-      prompt: "Comment",
-      placeHolder: "Comment. Enter submits, Shift+Enter for newline.",
+      prompt: "Add note",
+      placeHolder: "Note. Enter submits, Shift+Enter for newline.",
     };
     this.refreshCommentingRanges();
   }
 
   refreshCommentingRanges(): void {
+    this.debug?.("annotations.refreshCommentingRanges");
     this.controller.commentingRangeProvider = this.createCommentingRangeProvider();
+  }
+
+  setDebugLog(debug: DebugLog | undefined): void {
+    this.debug = debug;
   }
 
   private createCommentingRangeProvider(): vscodeTypes.CommentingRangeProvider {
     const VscRange = this.vscode.Range;
+    const debug = this.debug;
     return {
-      provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.CommentingRanges {
-        return {
-          enableFileComments: false,
-          ranges: [new VscRange(0, 0, Math.max(0, document.lineCount - 1), 0)],
-        };
+      provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.Range[] {
+        const ranges = [new VscRange(0, 0, Math.max(0, document.lineCount - 1), 0)];
+        debug?.("annotations.provideCommentingRanges", {
+          uri: document.uri.toString(),
+          languageId: document.languageId,
+          lineCount: document.lineCount,
+          ranges: ranges.length,
+        });
+        return ranges;
       },
     };
   }
@@ -209,7 +221,7 @@ export class AnnotationController {
       aiModel: author.aiModel,
       createdAt: Date.now(),
     };
-    const body = new this.vscode.MarkdownString(wrapForUniformFont(message));
+    const body = new this.vscode.MarkdownString(wrapForUniformFont(escapeHtml(message).replace(/\n/g, "<br>")));
     body.isTrusted = false;
     body.supportHtml = true;
     const existing = Array.isArray(thread.comments) ? [...thread.comments] : [];
@@ -222,7 +234,7 @@ export class AnnotationController {
     thread.comments = existing;
     thread.label = "Hackl · note";
     thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Expanded;
-    thread.canReply = true;
+    thread.canReply = false;
     thread.contextValue = OPEN_THREAD_CONTEXT;
     thread.state = this.vscode.CommentThreadState?.Unresolved;
     this.threads.set(id, { thread, comment });
@@ -284,18 +296,24 @@ export class AnnotationController {
 }
 
 function formatBody(comment: HacklAnnotation): string {
-  const lines = [comment.message];
+  let html = escapeHtml(comment.message).replace(/\n/g, "<br>");
   if (comment.rationale) {
-    lines.push("");
-    lines.push(`_${comment.rationale}_`);
+    html += `<br><br><em>${escapeHtml(comment.rationale).replace(/\n/g, "<br>")}</em>`;
   }
-  return wrapForUniformFont(lines.join("\n"));
+  return wrapForUniformFont(html);
 }
 
 const UNIFORM_FONT_STYLE = "font-size:var(--vscode-editor-font-size);font-family:var(--vscode-font-family);line-height:1.4";
 
-function wrapForUniformFont(markdown: string): string {
-  return `<span style="${UNIFORM_FONT_STYLE}">\n\n${markdown}\n\n</span>`;
+function wrapForUniformFont(html: string): string {
+  return `<span style="${UNIFORM_FONT_STYLE}">${html}</span>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function authorName(author: AnnotationAuthor): string {

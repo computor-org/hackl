@@ -24,20 +24,20 @@ export function newHacklSessionId(): string {
 }
 
 export async function persistHacklSession(
-  workspaceRoot: string,
+  storageRoot: string,
   session: HacklSessionRecord,
 ): Promise<string | undefined> {
-  if (!workspaceRoot) return undefined;
-  const dir = path.join(workspaceRoot, ".hackl", "sessions");
+  if (!storageRoot) return undefined;
+  const dir = path.join(storageRoot, "sessions");
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${session.id}.json`);
   await fs.writeFile(file, JSON.stringify(session, null, 2), "utf8");
   return file;
 }
 
-export async function pruneSessionsOnDisk(workspaceRoot: string, retainCount: number): Promise<void> {
-  if (!workspaceRoot) return;
-  const dir = path.join(workspaceRoot, ".hackl", "sessions");
+export async function pruneSessionsOnDisk(storageRoot: string, retainCount: number): Promise<void> {
+  if (!storageRoot) return;
+  const dir = path.join(storageRoot, "sessions");
   const exists = await fs.stat(dir).then(() => true, () => false);
   if (!exists) return;
   await pruneOldSessions(dir, retainCount);

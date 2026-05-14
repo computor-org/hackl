@@ -20,9 +20,9 @@ test("annotation comment commands are not globally disabled", () => {
   }
 });
 
-test("Hackl activates immediately so editor comment ranges survive startup", () => {
+test("Hackl activates at startup so editor comment ranges survive startup", () => {
   const manifest = readManifest();
-  assert.deepEqual(manifest.activationEvents, ["onLanguage"]);
+  assert.deepEqual(manifest.activationEvents, ["*"]);
 });
 
 test("context command titles use user-facing context wording", () => {
@@ -40,7 +40,7 @@ test("comment editor enter submits and shift-enter inserts newline", () => {
   const newline = manifest.contributes.keybindings.find((item) => item.key === "shift+enter" && item.command === "type");
   assert.ok(enter);
   assert.match(enter.when, /commentEditorFocused/);
-  assert.match(enter.when, /!commentIsEmpty/);
+  assert.doesNotMatch(enter.when, /commentIsEmpty/);
   assert.ok(newline);
   assert.deepEqual(newline.args, { text: "\n" });
 });

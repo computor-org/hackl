@@ -1,10 +1,11 @@
 # Hackl
 
-Hackl - hack with local AI.
+Hack local-first.
 
-Hackl is a local-first VS Code coding assistant. It talks to a local
-OpenAI-compatible server and keeps Git as the source of truth for review and
-history.
+Hackl is a local-first VS Code coding assistant for AI-assisted code review,
+editing, and agent workflows. It defaults to local OpenAI-compatible model
+servers, keeps Git as the source of truth, and can optionally use explicit
+account-backed or remote runtimes.
 
 Hackl is built around four objects:
 
@@ -14,7 +15,7 @@ Hackl is built around four objects:
 - Git: the diff and history layer.
 
 Hackl does not manage models, download runtimes, collect telemetry, or require
-sign-in. Hosted APIs are not the product story.
+sign-in for the local-first workflow.
 
 ## Current Surface
 
@@ -28,7 +29,7 @@ sign-in. Hosted APIs are not the product story.
   Markdown sections.
 - Ask/Edit/Work/Agent modes with mode-specific tools.
 - `/review`: pre-commit review, falling back to the current file.
-- Hackl session persistence under `.hackl/sessions/` for annotation runs.
+- Hackl session persistence in VS Code extension storage for annotation runs.
 
 Not in scope:
 
@@ -121,9 +122,9 @@ or commit.
 ## Sessions
 
 When `hackl.persistSessions` is true, completed annotation runs are written to
-`.hackl/sessions/` as Hackl session JSON. Sessions store the mode, endpoint,
-model, targets, answer, and generated annotations. Old sessions are pruned on
-startup.
+VS Code extension storage as Hackl session JSON. Sessions store the mode,
+endpoint, model, targets, answer, and generated annotations. Old sessions are
+pruned on startup.
 
 ## Commands
 
@@ -148,7 +149,7 @@ startup.
 - `hackl.maxToolFileChars`: cap for one `read_file` result.
 - `hackl.enableThinking`: allow reasoning when the server supports it.
 - `hackl.debug`: write diagnostics to the Hackl Debug output channel.
-- `hackl.persistSessions`: persist annotation runs under `.hackl/sessions/`.
+- `hackl.persistSessions`: persist annotation runs in VS Code extension storage.
 
 ## Architecture
 
