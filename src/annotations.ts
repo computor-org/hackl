@@ -34,6 +34,15 @@ interface ThreadEntry {
 const OPEN_THREAD_CONTEXT = "hackl.annotation.open";
 const RESOLVED_THREAD_CONTEXT = "hackl.annotation.resolved";
 
+/**
+ * Window during which refreshCommentingRanges is a no-op after a thread was
+ * focused. Reassigning the commentingRangeProvider in this window would tear
+ * down the ReviewZoneWidget the user is typing into — so we sit on our hands
+ * for long enough that the user can finish their reply. Editor-driven
+ * refreshes resume after this elapses.
+ */
+const FOCUS_GUARD_MS = 30000;
+
 export class AnnotationController {
   private controller: vscodeTypes.CommentController;
   private readonly threads = new Map<string, ThreadEntry>();
@@ -101,14 +110,21 @@ export class AnnotationController {
    * recompute. Reassigning `commentingRangeProvider` triggers the extension
    * host's `$updateCommentingRanges` → main thread
    * `commentService.updateCommentingRanges` → `onDidUpdateCommentingRanges`
-   * → `beginComputeAndHandleEditorChange`. That re-installs listeners and
-   * brings the strip back. We always reassign with a fresh provider
-   * instance, but throttle so rapid editor flicker (chat sidebar focus
-   * pings) doesn't thrash.
+   * → `beginComputeAndHandleEditorChange` → `setComments` → which also calls
+   * `removeCommentWidgetsAndStoreCache`. That's destructive: any focused
+   * reply textarea gets disposed mid-stroke. We therefore suppress the
+   * reassignment for `FOCUS_GUARD_MS` after `focusThreadReply` runs so the
+   * user can actually type a reply without their widget being torn down.
+   * Outside that window we throttle and reassign on demand to keep the
+   * strip alive across editor focus changes.
    */
   refreshCommentingRanges(): void {
     const now = Date.now();
-    if (now - this.lastRefreshAt < 800) {
+    if (now - this.lastFocusedAt < FOCUS_GUARD_MS) {
+      this.debug?.("annotations.refreshCommentingRanges.skippedDuringFocus");
+      return;
+    }
+    if (now - this.lastRefreshAt < 1500) {
       this.debug?.("annotations.refreshCommentingRanges.throttled");
       return;
     }
@@ -118,6 +134,12 @@ export class AnnotationController {
     this.debug?.("annotations.refreshCommentingRanges.assigned");
   }
   private lastRefreshAt = 0;
+  private lastFocusedAt = 0;
+
+  /** Test seam to override the focus-guard timestamp. */
+  noteThreadFocused(at: number = Date.now()): void {
+    this.lastFocusedAt = at;
+  }
 
   setDebugLog(debug: DebugLog | undefined): void {
     this.debug = debug;
@@ -184,6 +206,11 @@ export class AnnotationController {
       this.debug?.("annotations.focusThreadReply.unknownId", { id: annotationId });
       return;
     }
+    // Mark the focus guard so refreshCommentingRanges does not reassign the
+    // provider (and tear down the ReviewZoneWidget) while the user is
+    // typing in the reply textarea. Refresh resumes once the guard
+    // window elapses.
+    this.lastFocusedAt = Date.now();
     const { thread, comment } = entry;
     const line = Math.max(0, comment.startLine - 1);
     const pos = new this.vscode.Position(line, 0);

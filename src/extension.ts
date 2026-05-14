@@ -385,14 +385,7 @@ function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatView
 
 function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): void {
   // Two startup heartbeats so the provider is registered before VS Code's
-  // commentsController initialises its per-editor listeners. After that we
-  // must NOT reassign the provider in response to editor events: that fires
-  // the main thread's onDidUpdateCommentingRanges → beginComputeAndHandleEditorChange
-  // → setComments → removeCommentWidgetsAndStoreCache, which disposes every
-  // ReviewZoneWidget and destroys focused reply textareas. Our provider
-  // returns {enableFileComments: true} for every document, so VS Code's
-  // decoration count never drops to zero and clearEditorListeners never
-  // fires; the listeners stay installed without our intervention.
+  // commentsController initialises its per-editor listeners.
   for (const delay of [0, 1500]) {
     const timer = setTimeout(() => {
       activationDebug?.("annotations.scheduledRefresh", { delay });
@@ -400,6 +393,31 @@ function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): voi
     }, delay);
     context.subscriptions.push({ dispose: () => clearTimeout(timer) });
   }
+  // Reassign the provider on editor events so the gutter strip stays alive
+  // when VS Code's per-editor commenting decoration count hits zero (which
+  // tears down listeners — see commentsController.ts clearEditorListeners).
+  // AnnotationController.refreshCommentingRanges itself suppresses the
+  // reassignment for FOCUS_GUARD_MS after focusThreadReply runs, so the
+  // refresh cannot dispose a ReviewZoneWidget the user is typing into.
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (!isEditorDocument(editor?.document)) return;
+      annotationController?.refreshCommentingRanges();
+    }),
+    vscode.window.onDidChangeVisibleTextEditors((editors) => {
+      if (!editors.some((e) => isEditorDocument(e.document))) return;
+      annotationController?.refreshCommentingRanges();
+    }),
+    vscode.workspace.onDidOpenTextDocument((document) => {
+      if (!isEditorDocument(document)) return;
+      annotationController?.refreshCommentingRanges();
+    }),
+  );
+}
+
+function isEditorDocument(document: vscode.TextDocument | undefined): boolean {
+  const scheme = document?.uri.scheme;
+  return scheme === "file" || scheme === "untitled" || scheme === "vscode-remote";
 }
 
 async function refreshStatus(): Promise<void> {
