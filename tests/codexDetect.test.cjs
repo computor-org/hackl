@@ -7,6 +7,7 @@ const os = require("node:os");
 const {
   detectCodex,
   clearCodexDetectionCache,
+  codexCommandCandidates,
   parseModelsFromTomlText,
   DEFAULT_CODEX_MODELS,
 } = require("../dist/codexDetect.js");
@@ -24,6 +25,19 @@ test("detectCodex reports missing CLI without crashing", async () => {
   const result = await detectCodex({ command: "/definitely/not/a/binary", codexHome: home, force: true });
   assert.equal(result.available, false);
   assert.equal(result.authMode, "none");
+});
+
+test("codexCommandCandidates searches common user install locations", () => {
+  const candidates = codexCommandCandidates("codex", "/home/example");
+  assert.deepEqual(candidates.slice(0, 3), [
+    "codex",
+    "/home/example/.npm-global/bin/codex",
+    "/home/example/.local/bin/codex",
+  ]);
+});
+
+test("codexCommandCandidates preserves explicit command paths", () => {
+  assert.deepEqual(codexCommandCandidates("/custom/bin/codex", "/home/example"), ["/custom/bin/codex"]);
 });
 
 test("parseModelsFromTomlText collects model= and [model_presets.X] entries", () => {

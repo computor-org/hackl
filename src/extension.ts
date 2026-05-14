@@ -508,8 +508,17 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   }
   const stored = readBackendChoice();
   const useCodex = stored?.kind === "codex" && cfg.codexEnabled;
+  let codexCommand = cfg.codexCommand;
   let target: { endpoint: string; model: string };
   if (useCodex) {
+    const codex = await detectCodex({ command: cfg.codexCommand });
+    if (!codex.available) {
+      return { content: `Codex is not available: ${codex.error ?? "command not found"}` };
+    }
+    if (codex.authMode === "none") {
+      return { content: "Codex is installed but not logged in. Run `codex login`, then try again." };
+    }
+    codexCommand = codex.command;
     target = { endpoint: "codex", model: stored!.model };
   } else {
     target = await resolveChatTarget({
@@ -559,7 +568,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     backend: buildBackend({
       choice: choiceForCall,
       enableThinking,
-      codexCommand: cfg.codexCommand,
+      codexCommand,
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
       clientVersion: extensionContext?.extension.packageJSON?.version,
     }),

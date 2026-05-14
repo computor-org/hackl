@@ -47,7 +47,7 @@ async function runDetect(command: string, codexHome: string): Promise<CodexDetec
   const models = await readModels(codexHome);
   return {
     available: true,
-    command,
+    command: version.command ?? command,
     version: version.value,
     authMode,
     models,
@@ -56,11 +56,22 @@ async function runDetect(command: string, codexHome: string): Promise<CodexDetec
 
 interface VersionProbe {
   ok: boolean;
+  command?: string;
   value?: string;
   error?: string;
 }
 
-function runCodexVersion(command: string): Promise<VersionProbe> {
+async function runCodexVersion(command: string): Promise<VersionProbe> {
+  const errors: string[] = [];
+  for (const candidate of codexCommandCandidates(command)) {
+    const probe = await runCodexVersionCandidate(candidate);
+    if (probe.ok) return probe;
+    if (probe.error) errors.push(`${candidate}: ${probe.error}`);
+  }
+  return { ok: false, error: errors.join("; ") || "codex not found" };
+}
+
+function runCodexVersionCandidate(command: string): Promise<VersionProbe> {
   return new Promise((resolve) => {
     let resolved = false;
     const finish = (probe: VersionProbe) => {
@@ -85,7 +96,7 @@ function runCodexVersion(command: string): Promise<VersionProbe> {
         return;
       }
       const text = Buffer.concat(chunks).toString("utf8").trim();
-      finish({ ok: true, value: text || "unknown" });
+      finish({ ok: true, command, value: text || "unknown" });
     });
     const timer = setTimeout(() => {
       try { child.kill(); } catch {}
@@ -93,6 +104,28 @@ function runCodexVersion(command: string): Promise<VersionProbe> {
     }, 3000);
     child.on("close", () => clearTimeout(timer));
   });
+}
+
+export function codexCommandCandidates(command: string, home = os.homedir()): string[] {
+  const trimmed = command.trim() || "codex";
+  if (trimmed.includes("/") || trimmed.includes("\\")) return [trimmed];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const candidate of [
+    trimmed,
+    path.join(home, ".npm-global", "bin", trimmed),
+    path.join(home, ".local", "bin", trimmed),
+    path.join(home, ".bun", "bin", trimmed),
+    path.join(home, ".yarn", "bin", trimmed),
+    path.join(home, "node_modules", ".bin", trimmed),
+    "/opt/homebrew/bin/" + trimmed,
+    "/usr/local/bin/" + trimmed,
+  ]) {
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    out.push(candidate);
+  }
+  return out;
 }
 
 async function readAuthMode(codexHome: string): Promise<CodexAuthMode> {
