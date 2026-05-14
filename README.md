@@ -2,17 +2,20 @@
 
 Hack local-first.
 
-Hackl is a local-first VS Code coding assistant for AI-assisted code review,
-editing, and agent workflows. It defaults to local OpenAI-compatible model
-servers, keeps Git as the source of truth, and can optionally use explicit
-account-backed or remote runtimes.
+Hackl is a local-first VS Code coding assistant for chat, editing, agent work,
+and commit-level review.
+
+It helps you work on code in the editor, attach explicit context, edit files,
+run approved checks, and review changes before they become commits. Hackl keeps
+Git as the source of truth: staged changes, commits, source ranges, and
+line-anchored annotations are the durable review objects.
 
 Hackl is built around four objects:
 
-- Context: what Hackl should talk about.
-- Ask/Edit/Work/Agent: what Hackl may do.
-- Annotations: optional structured feedback anchored to source lines.
-- Git: the diff and history layer.
+- Context: selected code, staged changes, commits, Markdown sections, or annotation notes.
+- Modes: Ask, Edit, Work, and Agent control what Hackl may do.
+- Annotations: human or AI feedback anchored to source lines.
+- Git: the diff, staging area, commit, and history layer.
 
 Hackl does not manage models, download runtimes, collect telemetry, or require
 sign-in for the local-first workflow.
@@ -28,7 +31,8 @@ sign-in for the local-first workflow.
 - Context targets for source ranges, staged changes, the last commit, and
   Markdown sections.
 - Ask/Edit/Work/Agent modes with mode-specific tools.
-- `/review`: pre-commit review, falling back to the current file.
+- Commit-level `/review` for staged changes, attached context, or the current file.
+- Human and AI annotations as line-anchored VS Code comment threads.
 - Hackl session persistence in VS Code extension storage for annotation runs.
 
 Not in scope:
@@ -108,16 +112,25 @@ annotation threads.
 Replies on annotation threads attach that source range and note back to the
 context, then reopen chat for follow-up.
 
-## Review
+## Commit-level review
+
+Hackl gives you a tight local review loop around the change you are about to
+commit.
+
+```text
+edit -> stage -> review/annotate -> fix -> amend or commit
+```
 
 `/review` reviews staged changes with any attached context. If nothing is staged
 or attached, it reviews the current file.
 
-`Hackl: Review Staged Changes` is the command-palette entry for the same
-pre-commit review loop.
+Annotations appear as VS Code comment threads. They can come from a human note,
+an AI review run, or a follow-up discussion. Replies on annotation threads attach
+the source range and note back to context, so comments can drive the next Ask,
+Edit, Work, or Agent step.
 
-Stage first, run `/review`, inspect annotations, then use Git to amend, unstage,
-or commit.
+Use `Hackl: Review Staged Changes` for the same commit-level review loop from
+the command palette.
 
 ## Sessions
 
