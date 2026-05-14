@@ -4,19 +4,23 @@ import { ChatPanel } from "./chatPanel";
 import { ApprovalRequester, ChatAnswer, ChatState, PromptProgress } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
-import { detectMaxContextTokens, requiresNonLocalEndpointApproval, resolveChatTarget } from "./localServers";
+import {
+  detectMaxContextTokens,
+  LOCAL_SERVER_CANDIDATES,
+  probeAll,
+  ProbeResult,
+  requiresNonLocalEndpointApproval,
+  resolveChatTarget,
+} from "./localServers";
 import { buildHacklMessages, ConversationMessage, PromptMode } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
 import { createDebugLog, disposeDebugLog } from "./debugLog";
-import { autoStartEnabled, hasInitialSetup, ServerManager } from "./server/manager";
-import { openWizard } from "./server/wizard";
-import { openManagePanel } from "./server/panel";
-import { registerLanguageModelProvider } from "./server/lmProvider";
+import { SetupViewProvider } from "./setup/setupView";
 
 let chatPanel: ChatPanel | undefined;
-let serverManager: ServerManager | undefined;
+let setupProvider: SetupViewProvider | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
 
@@ -31,36 +35,14 @@ interface ConfigInspection<T> {
 
 export function activate(context: vscode.ExtensionContext): void {
   const chatViewProvider = new ChatViewProvider(context, answerPrompt, currentChatState);
-  serverManager = new ServerManager(context);
+  setupProvider = new SetupViewProvider(context, runProbe, setEndpoint);
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-  statusBarItem.command = "hackl.localServer.manage";
+  statusBarItem.command = "hackl.openSetupGuide";
   context.subscriptions.push(statusBarItem);
 
-  const refreshStatus = async () => {
-    if (!serverManager || !statusBarItem) return;
-    const status = await serverManager.getStatus();
-    if (status.phase === "uninitialized") {
-      statusBarItem.text = "$(rocket) Hackl: set up";
-      statusBarItem.tooltip = "Hackl local model not configured";
-    } else if (status.phase === "ready") {
-      const tps = status.lastTokensPerSecond ? ` · ${status.lastTokensPerSecond.toFixed(1)} t/s` : "";
-      statusBarItem.text = `$(pulse) ${status.modelDisplayName ?? "Hackl"}${tps}`;
-      const ctx = status.actualCtxSize ? `, ctx ${Math.floor(status.actualCtxSize / 1024)}k` : "";
-      statusBarItem.tooltip = `Local model ready at ${status.endpoint}${ctx}`;
-    } else if (status.phase === "starting") {
-      statusBarItem.text = "$(loading~spin) Hackl starting";
-    } else if (status.phase === "error") {
-      statusBarItem.text = "$(error) Hackl error";
-    } else {
-      statusBarItem.text = "$(circle-slash) Hackl stopped";
-    }
-    statusBarItem.show();
-  };
-
   context.subscriptions.push(
-    registerLanguageModelProvider(serverManager),
-    serverManager.onStatusChanged(() => { void refreshStatus(); }),
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
+    vscode.window.registerWebviewViewProvider(SetupViewProvider.viewType, setupProvider),
     vscode.commands.registerCommand("hackl.chat", async () => {
       await vscode.commands.executeCommand("workbench.view.extension.hackl");
       chatViewProvider.show();
@@ -70,85 +52,97 @@ export function activate(context: vscode.ExtensionContext): void {
       openChatPanel(context);
       chatPanel?.focusInput();
     }),
-    vscode.commands.registerCommand("hackl.localServer.setup", () => {
-      if (serverManager) openWizard(context, serverManager);
+    vscode.commands.registerCommand("hackl.openSetupGuide", async () => {
+      await vscode.commands.executeCommand("workbench.view.extension.hackl");
+      setupProvider?.reveal();
     }),
-    vscode.commands.registerCommand("hackl.localServer.manage", () => {
-      if (!serverManager) return;
-      if (!hasInitialSetup(context)) {
-        openWizard(context, serverManager);
-      } else {
-        openManagePanel(context, serverManager);
-      }
+    vscode.commands.registerCommand("hackl.checkLocalServer", async () => {
+      const probe = await runProbe();
+      await reportProbe(probe);
     }),
-    vscode.commands.registerCommand("hackl.localServer.start", async () => {
-      try { await serverManager?.start(); } catch (err) { vscode.window.showErrorMessage(`Hackl: ${(err as Error).message}`); }
+    vscode.commands.registerCommand("hackl.refreshEndpoint", async () => {
+      detectedContextCache.clear();
+      setupProvider?.refresh();
+      const probe = await runProbe();
+      await reportProbe(probe);
     }),
-    vscode.commands.registerCommand("hackl.localServer.stop", async () => {
-      try { await serverManager?.stop(); } catch (err) { vscode.window.showErrorMessage(`Hackl: ${(err as Error).message}`); }
-    }),
-    vscode.commands.registerCommand("hackl.localServer.restart", async () => {
-      try { await serverManager?.restart(); } catch (err) { vscode.window.showErrorMessage(`Hackl: ${(err as Error).message}`); }
-    }),
-    vscode.commands.registerCommand("hackl.localServer.openLogs", () => {
-      serverManager?.logChannel.show();
+    vscode.commands.registerCommand("hackl.openSetupDoc", async (which: "lmstudio" | "llamacpp" | "ollama") => {
+      const file = `setup-${which}.md`;
+      const uri = vscode.Uri.joinPath(context.extensionUri, "docs", file);
+      await vscode.commands.executeCommand("markdown.showPreview", uri);
     }),
   );
 
-  void firstRunPrompt(context).then(() => refreshStatus());
+  void refreshStatus();
 }
 
-async function firstRunPrompt(context: vscode.ExtensionContext): Promise<void> {
-  if (!serverManager) return;
-  if (hasInitialSetup(context)) {
-    if (autoStartEnabled()) {
-      try { await serverManager.start(); } catch (err) { /* surface via status bar */ }
-    }
-    return;
-  }
-  // BYO: if the user has configured an endpoint, or any local server is already
-  // answering, don't surface the install prompt at all.
+async function refreshStatus(): Promise<void> {
+  if (!statusBarItem) return;
   const config = vscode.workspace.getConfiguration("hackl");
-  const configuredEndpoint = (config.get<string>("endpoint", "") || "").trim();
-  if (configuredEndpoint) return;
-  const target = await resolveChatTarget({ endpoint: "", endpointConfigured: false }).catch(() => undefined);
-  if (target && target.model && target.model !== "local-model") return;
+  const endpoint = (config.get<string>("endpoint", "") || "").trim();
+  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
+  const probe = await tryProbe(endpoint, endpointConfigured);
+  if (probe?.ok) {
+    statusBarItem.text = `$(pulse) ${probe.model ?? "Hackl"}`;
+    statusBarItem.tooltip = `Hackl connected to ${probe.endpoint}`;
+  } else {
+    statusBarItem.text = "$(plug) Hackl: connect";
+    statusBarItem.tooltip = "No local model server detected. Click for setup help.";
+  }
+  statusBarItem.show();
+}
 
-  const pick = await vscode.window.showInformationMessage(
-    "Hackl can install llama.cpp and run a local model tuned for your hardware. You can also point it at an existing endpoint.",
-    "Set up local model",
-    "Use my own endpoint",
-    "Not now",
+async function tryProbe(endpoint: string, endpointConfigured: boolean): Promise<ProbeResult | undefined> {
+  const candidates = endpointConfigured && endpoint
+    ? [{ name: "configured", endpoint }]
+    : LOCAL_SERVER_CANDIDATES;
+  const results = await probeAll(candidates);
+  return results.find((r) => r.ok);
+}
+
+async function runProbe(): Promise<ProbeResult[]> {
+  const config = vscode.workspace.getConfiguration("hackl");
+  const endpoint = (config.get<string>("endpoint", "") || "").trim();
+  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
+  const candidates = endpointConfigured && endpoint
+    ? [{ name: "configured", endpoint }]
+    : LOCAL_SERVER_CANDIDATES;
+  return probeAll(candidates);
+}
+
+async function reportProbe(probes: ProbeResult[]): Promise<void> {
+  const ok = probes.find((p) => p.ok);
+  if (ok) {
+    const ctx = ok.ctx ? ` · ${Math.floor(ok.ctx / 1024)}k ctx` : "";
+    vscode.window.showInformationMessage(`Hackl: ${ok.endpoint} ready (${ok.model ?? "model"})${ctx}.`);
+  } else {
+    const choice = await vscode.window.showWarningMessage(
+      "Hackl: no local model server detected on the configured or default endpoints.",
+      "Open setup guide",
+    );
+    if (choice === "Open setup guide") {
+      await vscode.commands.executeCommand("hackl.openSetupGuide");
+    }
+  }
+  await refreshStatus();
+}
+
+async function setEndpoint(endpoint: string): Promise<void> {
+  await vscode.workspace.getConfiguration("hackl").update(
+    "endpoint",
+    endpoint,
+    vscode.ConfigurationTarget.Global,
   );
-  if (pick === "Set up local model") {
-    openWizard(context, serverManager);
-  } else if (pick === "Use my own endpoint") {
-    await promptForBringYourOwnEndpoint();
-  }
+  detectedContextCache.clear();
+  await refreshStatus();
+  setupProvider?.refresh();
 }
 
-async function promptForBringYourOwnEndpoint(): Promise<void> {
-  const value = await vscode.window.showInputBox({
-    title: "Hackl: OpenAI-compatible endpoint",
-    prompt: "Base URL of an existing local server (e.g. http://localhost:1234/v1)",
-    placeHolder: "http://localhost:1234/v1",
-    validateInput: (v) => {
-      const trimmed = v.trim();
-      if (!trimmed) return "Enter a URL or cancel.";
-      try { new URL(trimmed); return null; } catch { return "Not a valid URL."; }
-    },
-  });
-  if (!value) return;
-  await vscode.workspace.getConfiguration("hackl").update("endpoint", value.trim(), vscode.ConfigurationTarget.Global);
-}
-
-export async function deactivate(): Promise<void> {
+export function deactivate(): void {
   chatPanel = undefined;
+  setupProvider = undefined;
+  statusBarItem = undefined;
   disposeDebugLog();
-  if (serverManager) {
-    try { await serverManager.waitForStopOnDispose(); } catch { /* best effort */ }
-    serverManager = undefined;
-  }
 }
 
 async function answerPrompt(
@@ -168,11 +162,9 @@ async function answerPrompt(
   if (endpointApproval) {
     return endpointApproval;
   }
-  const managed = serverManager?.managedEndpoint();
   const target = await resolveChatTarget({
     endpoint: configuredEndpoint,
     endpointConfigured,
-    managedTarget: managed,
   });
   progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
   const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
@@ -266,8 +258,7 @@ async function currentChatState(): Promise<ChatState> {
       endpointApprovalRequired: true,
     };
   }
-  const managed = serverManager?.managedEndpoint();
-  const target = await resolveChatTarget({ endpoint, endpointConfigured, managedTarget: managed });
+  const target = await resolveChatTarget({ endpoint, endpointConfigured });
   return {
     type: "state",
     enableThinking,

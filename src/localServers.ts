@@ -8,7 +8,6 @@ export interface ChatTargetSettings {
   endpointConfigured: boolean;
   fetchImpl?: typeof fetch;
   candidates?: LocalServerCandidate[];
-  managedTarget?: ChatTarget;
 }
 
 export interface ChatTarget {
@@ -33,10 +32,6 @@ export const LOCAL_SERVER_CANDIDATES: LocalServerCandidate[] = [
 export async function resolveChatTarget(settings: ChatTargetSettings): Promise<ChatTarget> {
   const configuredEndpoint = clean(settings.endpoint);
   const fetchImpl = settings.fetchImpl ?? fetch;
-
-  if (settings.managedTarget) {
-    return settings.managedTarget;
-  }
 
   if (settings.endpointConfigured && configuredEndpoint) {
     const probed = await probeServer(configuredEndpoint, fetchImpl);
@@ -154,6 +149,38 @@ function trimSlash(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+export interface ProbeResult {
+  candidate: string;
+  endpoint: string;
+  ok: boolean;
+  model?: string;
+  ctx?: number;
+  latencyMs?: number;
+  error?: string;
+}
+
+export async function probeAll(
+  candidates: LocalServerCandidate[],
+  fetchImpl: typeof fetch = fetch,
+): Promise<ProbeResult[]> {
+  return Promise.all(candidates.map(async (c) => {
+    const started = Date.now();
+    const probed = await probeServer(c.endpoint, fetchImpl);
+    if (!probed) {
+      return { candidate: c.name, endpoint: c.endpoint, ok: false, latencyMs: Date.now() - started };
+    }
+    const ctx = await detectMaxContextTokens(probed.endpoint, fetchImpl).catch(() => undefined);
+    return {
+      candidate: c.name,
+      endpoint: probed.endpoint,
+      ok: true,
+      model: probed.model,
+      ctx,
+      latencyMs: Date.now() - started,
+    };
+  }));
 }
 
 export async function detectMaxContextTokens(

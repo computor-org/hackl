@@ -6,6 +6,9 @@ Hackl is a local-first VS Code assistant for coding. It is the general
 local-AI layer for chat, edit, and agentic coding without requiring GitHub
 Copilot.
 
+> Hackl does not manage models. Hackl connects to your local OpenAI-compatible
+> server. Use LM Studio if you want easy. Use llama.cpp if you want control.
+
 ## Scope
 
 Current:
@@ -20,17 +23,10 @@ Current:
 - Prompt preprocessing/model phase status, gray reasoning display, and a
   token/context budget indicator.
 - Command palette, editor context menu, and hotkey entry points.
-- Auto-discovery of common local OpenAI-compatible endpoints.
-- Optional, opt-in managed llama.cpp lifecycle: hardware probe, five-entry
-  curated GGUF catalog with sha256 verification, setup wizard with cancel and
-  a BYO-endpoint escape, install/start/stop/swap from a webview, status bar
-  item with live tokens/s, `/props` ctx verification. `autoStart` is `false`
-  by default; Hackl stays passive until you set it up.
-- llama.cpp release archives downloaded by the installer are verified against
-  the per-asset sha256 GitHub publishes in the Releases API.
-- Registered as a VS Code Language Model provider (vendor `hackl`) so Copilot
-  Chat, Continue, and any `vscode.lm.selectChatModels()` consumer see the
-  running model.
+- Auto-discovery of common local OpenAI-compatible endpoints (llama.cpp on
+  `:8080`, LM Studio on `:1234`).
+- A small **Setup** view with tutorial recipes for LM Studio, llama.cpp, and
+  Ollama. Status bar shows current connection or "connect".
 
 Not current:
 
@@ -38,12 +34,64 @@ Not current:
 - Inline ghost-text autocomplete (intentionally out of scope; see docs).
 - Hosted API presets.
 - Auto-approved command mode.
+- **No managed server, no model downloader, no GPU probe, no installer.**
+  Hackl pre-`0.0.27` shipped these; they were removed to keep the extension
+  minimal. The `v0.0.26` vsix on the releases page is the last version that
+  managed llama.cpp itself.
 
-Direction:
+## Connect to a local model
 
-- Local chat/edit/agent assistant for policy-safe VS Code use.
-- Computor/Luna assignment chat surface with optional human tutor escalation.
-- One loaded local model by default.
+Hackl is BYO-server. Pick one of these paths — Hackl ships docs and a setup
+view that links to each:
+
+| Path | Difficulty | When to use it |
+|------|------------|----------------|
+| [LM Studio](https://github.com/computor-org/hackl/blob/main/docs/setup-lmstudio.md) | easy | GUI download + start server with one click |
+| [llama.cpp](https://github.com/computor-org/hackl/blob/main/docs/setup-llamacpp.md) | expert | scriptable, reproducible, pure OSS |
+| [Ollama](https://github.com/computor-org/hackl/blob/main/docs/setup-ollama.md) | alternative | already part of your stack |
+
+Once your server is running, set `hackl.endpoint` to its base URL (or let
+auto-discovery find `:8080` / `:1234`). Run **Hackl: Check Local Server**
+from the command palette to verify.
+
+## Settings
+
+- `hackl.endpoint` — OpenAI-compatible base URL. Empty means auto-discover.
+- `hackl.setupProfile` — `auto` / `lmstudio` / `llamacpp` / `ollama`.
+  Help-text only; foregrounds the matching recipe in the Setup view. Never
+  starts a process.
+- `hackl.maxContextTokens` — override for the prompt-budget meter. When
+  unset, Hackl auto-detects via `/props` (llama.cpp) or `/api/v0/models`
+  (LM Studio) and falls back to 32768.
+- `hackl.maxToolFileChars` — cap for one `read_file` tool result.
+- `hackl.enableThinking` — allow model thinking/reasoning when the server
+  supports it.
+- `hackl.debug` — write diagnostics to the Hackl Debug output channel.
+
+If `hackl.endpoint` points outside localhost/loopback, Hackl asks before
+sending any prompt.
+
+## Commands
+
+- **Hackl: Open Chat** / **Open Chat in Editor**
+- **Hackl: Open Setup Guide** — opens the Setup view.
+- **Hackl: Check Local Server** — probes configured + default endpoints,
+  reports endpoint, model, context.
+- **Hackl: Refresh Endpoint** — clears the detected-context cache and
+  re-probes after you start a server externally.
+
+## File context
+
+By default, Hackl does not send open-file contents. The prompt contains
+file paths, cursor position, selection ranges, and selected text capped at
+4000 characters. The model can request a small file range with:
+
+```text
+HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}
+```
+
+`hackl.maxToolFileChars` caps one file-read result. File tools reject binary
+files, oversized files, and symlinks that resolve outside the workspace.
 
 ## Development
 
@@ -57,73 +105,11 @@ npm run test:extension
 npm run package:vsix
 ```
 
-Hackl auto-discovers llama.cpp on `http://localhost:8080/v1` and LM Studio on
-`http://localhost:1234/v1`. Configure `hackl.endpoint` in VS Code settings to
-override discovery. Hackl uses the loaded model reported by `/v1/models`. If
-`hackl.endpoint` points outside localhost/loopback, Hackl asks before sending
-the prompt or selected context.
-
-## Local model setup
-
-Hackl is BYO-first. If `hackl.endpoint` is set, or any OpenAI-compatible
-server is already answering on `localhost:8080` / `:1234`, the install path
-stays out of your way. The first-run prompt offers three explicit choices:
-**Set up local model**, **Use my own endpoint**, **Not now**.
-
-Run **Hackl: Set up local model** when you want the managed path. The wizard
-probes your hardware and recommends one of five curated models:
-
-| Model                              | Size    | sha256 verified | Best fit                          |
-|------------------------------------|---------|-----------------|-----------------------------------|
-| Qwen3.5 4B (Instruct)              | 2.7 GB  | yes             | 6–8 GB VRAM                       |
-| Gemma 4 E4B (Instruct)             | 4.6 GB  | yes             | 8–10 GB VRAM                      |
-| Qwen3.5 9B (Instruct)              | 5.5 GB  | yes             | 12–16 GB VRAM                     |
-| Gemma 4 26B-A4B (MoE, UD-Q4_K_XL)  | 15.8 GB | yes             | 24 GB VRAM or unified RAM         |
-| Qwen3.6 35B-A3B (MoE, UD-Q4_K_XL)  | 20.8 GB | yes             | 32 GB VRAM, or 16 GB with CPU-MoE |
-
-KV cache runs at `q8_0`, flash attention `auto` (CUDA/Metal/Vulkan), MoE
-expert offload kicks in on tight VRAM. The wizard previews the exact
-`llama-server` flags before installing.
-
-**Supply-chain hardening.** Every GGUF in the catalog is pinned to a sha256
-captured from HuggingFace's `x-linked-etag` (LFS sha256). Downloads abort and
-delete the partial file on mismatch. llama.cpp release archives are verified
-against the per-asset sha256 GitHub publishes in the Releases API `digest`
-field. If a release ever omits a digest, Hackl warns in the wizard and
-proceeds without verification — there is no silent fallback. The catalog is
-capped at five entries on purpose; if you need a different model, use the
-BYO endpoint path or point `hackl.endpoint` at a separately-run server.
-
-Settings:
-
-- `hackl.localServer.autoStart` (default `false`) — flip on after a
-  successful setup if you want the server to come up with VS Code.
-  Conservative by default so the extension stays passive.
-- `hackl.localServer.port` (default `8080`) — preferred port; Hackl scans up
-  to `port+19` if busy.
-
-Models live under `${globalStorage}/models/<id>/` and the llama.cpp binary
-under `${globalStorage}/llamacpp/<release-tag>/`. Use **Hackl: Manage local
-model** for start/stop/restart/swap and live logs.
-
-By default, Hackl does not send open-file contents. The prompt contains file
-paths, cursor position, selection ranges, and selected text capped at 4000
-characters. The model can request a small file range with:
-
-```text
-HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}
-```
-
-`hackl.maxToolFileChars` caps one file-read result. File tools reject binary
-files, oversized files, and symlinks that resolve outside the workspace.
-`hackl.maxContextTokens` drives the visible prompt budget meter. Debug logging
-is off by default and can be enabled with `hackl.debug`.
-
-See `docs/architecture.md` for the backend/UI boundary and future Computor/Luna
-integration notes.
-
 Run a live OpenAI-compatible smoke test with:
 
 ```bash
 npm run smoke:openai -- http://localhost:1234/v1
 ```
+
+See `docs/architecture.md` for the backend/UI boundary and future
+Computor/Luna integration notes.

@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -19,13 +19,12 @@
     "onStartupFinished",
     "onCommand:hackl.chat",
     "onCommand:hackl.chatEditor",
-    "onCommand:hackl.localServer.setup",
-    "onCommand:hackl.localServer.manage",
-    "onCommand:hackl.localServer.start",
-    "onCommand:hackl.localServer.stop",
-    "onCommand:hackl.localServer.restart",
-    "onCommand:hackl.localServer.openLogs",
-    "onView:hackl.chatView"
+    "onCommand:hackl.openSetupGuide",
+    "onCommand:hackl.checkLocalServer",
+    "onCommand:hackl.refreshEndpoint",
+    "onCommand:hackl.openSetupDoc",
+    "onView:hackl.chatView",
+    "onView:hackl.setupView"
   ],
   "main": "./dist/extension.js",
   "bin": {
@@ -46,33 +45,18 @@
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "hackl.localServer.setup",
-        "title": "Set up local model",
+        "command": "hackl.openSetupGuide",
+        "title": "Open Setup Guide",
         "category": "Hackl"
       },
       {
-        "command": "hackl.localServer.manage",
-        "title": "Manage local model",
+        "command": "hackl.checkLocalServer",
+        "title": "Check Local Server",
         "category": "Hackl"
       },
       {
-        "command": "hackl.localServer.start",
-        "title": "Start local server",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.localServer.stop",
-        "title": "Stop local server",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.localServer.restart",
-        "title": "Restart local server",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.localServer.openLogs",
-        "title": "Show local model logs",
+        "command": "hackl.refreshEndpoint",
+        "title": "Refresh Endpoint",
         "category": "Hackl"
       }
     ],
@@ -93,6 +77,13 @@
           "name": "Chat",
           "icon": "media/hackl.svg",
           "contextualTitle": "Hackl Chat"
+        },
+        {
+          "id": "hackl.setupView",
+          "type": "webview",
+          "name": "Setup",
+          "icon": "media/hackl.svg",
+          "contextualTitle": "Hackl Setup"
         }
       ]
     },
@@ -144,57 +135,45 @@
           "default": false,
           "description": "Allow model thinking/reasoning when the local OpenAI-compatible server supports this switch."
         },
+        "hackl.setupProfile": {
+          "type": "string",
+          "enum": ["auto", "lmstudio", "llamacpp", "ollama"],
+          "default": "auto",
+          "description": "Preferred backend for setup-guide ordering only. Hackl never starts a server; this just decides which recipe is foregrounded in the Setup view."
+        },
         "hackl.debug": {
           "type": "boolean",
           "default": false,
           "description": "Write Hackl prompt and tool-loop diagnostics to the Hackl Debug output channel and the VS Code Extension Host debug console."
-        },
-        "hackl.localServer.autoStart": {
-          "type": "boolean",
-          "default": false,
-          "description": "When a local model has been configured, start the llama.cpp server automatically on activation and stop it on deactivation. Off by default so the extension stays passive; flip on after first successful setup if you want it to come up with VS Code."
-        },
-        "hackl.localServer.port": {
-          "type": "number",
-          "default": 8080,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "Preferred port for the managed llama.cpp server. If busy, Hackl scans up to port+19."
         }
       }
     },
-    "languageModelChatProviders": [
-      {
-        "vendor": "hackl",
-        "displayName": "Hackl Local"
-      }
-    ],
     "walkthroughs": [
       {
-        "id": "hackl.localModel",
-        "title": "Set up a local model with Hackl",
-        "description": "Hackl installs llama.cpp, downloads a curated GGUF, and tunes the server for your hardware. No keys, no cloud.",
+        "id": "hackl.connect",
+        "title": "Connect Hackl to a local model",
+        "description": "Hackl talks to your local OpenAI-compatible server. Pick a path, start it yourself, point Hackl at it.",
         "steps": [
           {
-            "id": "hackl.walkthrough.setup",
-            "title": "Detect hardware and pick a model",
-            "description": "Open the setup wizard. Hackl probes your GPU, RAM, and platform, then recommends one of five curated models.\n\n[Open setup](command:hackl.localServer.setup)",
-            "media": { "markdown": "media/walkthrough-setup.md" },
-            "completionEvents": ["onCommand:hackl.localServer.setup"]
+            "id": "hackl.walkthrough.pickServer",
+            "title": "Pick a server",
+            "description": "LM Studio is the easy path. llama.cpp is the expert path. Ollama works too.\n\n[Open setup guide](command:hackl.openSetupGuide)",
+            "media": { "markdown": "media/setup-tutorial.md" },
+            "completionEvents": ["onCommand:hackl.openSetupGuide"]
+          },
+          {
+            "id": "hackl.walkthrough.setEndpoint",
+            "title": "Set the endpoint",
+            "description": "Once your server is running, point Hackl at it.\n\n[Edit settings](command:workbench.action.openSettings?%22hackl.endpoint%22) · [Check connection](command:hackl.checkLocalServer)",
+            "media": { "markdown": "media/setup-tutorial.md" },
+            "completionEvents": ["onCommand:hackl.checkLocalServer"]
           },
           {
             "id": "hackl.walkthrough.chat",
-            "title": "Start chatting locally",
-            "description": "Open the Hackl sidebar and ask about your code. Everything stays on your machine.\n\n[Open chat](command:hackl.chat)",
-            "media": { "markdown": "media/walkthrough-setup.md" },
+            "title": "Open chat",
+            "description": "Start chatting locally.\n\n[Open chat](command:hackl.chat)",
+            "media": { "markdown": "media/setup-tutorial.md" },
             "completionEvents": ["onCommand:hackl.chat"]
-          },
-          {
-            "id": "hackl.walkthrough.manage",
-            "title": "Manage the server later",
-            "description": "Start, stop, or swap models any time from the manage panel.\n\n[Open manage panel](command:hackl.localServer.manage)",
-            "media": { "markdown": "media/walkthrough-setup.md" },
-            "completionEvents": ["onCommand:hackl.localServer.manage"]
           }
         ]
       }
