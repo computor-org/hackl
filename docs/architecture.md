@@ -15,6 +15,10 @@ VS Code assistant that grows from chat into edit mode and agent mode without
 requiring the GitHub Copilot extension or a hosted service. Inline FIM
 autocomplete was explored and intentionally dropped — see "Model Policy".
 
+Hackl is designed as a production tool with a visible learning ladder: users can
+work directly, but the same Ask -> Edit -> Work -> Agent -> Review progression
+can be surfaced by Computor for teaching.
+
 ## Backend Boundary
 
 Hackl supports only OpenAI-compatible local or self-hosted endpoints:
@@ -101,6 +105,34 @@ Future integration choices stay open:
 
 The invariant is that Computor/Luna integration should depend on backend and
 prompt contracts, not on a specific Hackl chat surface.
+
+## Learning-Through-Use Pattern
+
+Hackl should remain a capable production coding assistant. It must not become a
+toy tutor or a separate training sandbox.
+
+The product pattern is closer to Syntorial: a tool that teaches a domain by
+making the learner use a real instrument. Syntorial teaches synthesizer sound
+design through a working synthesizer and staged exercises; Hackl should teach
+AI-assisted coding through a working coding assistant and staged capability
+levels.
+
+For Hackl, the stages are:
+
+- Ask: understand code before changing it.
+- Edit: make bounded, inspectable changes.
+- Work: coordinate multi-file changes.
+- Agent: delegate bounded checks and tool use.
+- Review: inspect staged changes, annotations, and commit intent.
+
+Computor/Luna can later turn these stages into curriculum, assignments,
+rubrics, and progress tracking. Hackl must expose the underlying workflow events:
+selected context, mode used, tool requests, edits, checks, annotations, replies,
+review state, and commit/staged context.
+
+The invariant is that Hackl teaches the workflow by being the workflow. Expert
+users can move directly to Work or Agent mode, while juniors can be guided
+through the same stages explicitly.
 
 ## Model Policy
 
@@ -189,3 +221,5 @@ the same checks and upload the generated VSIX to the GitHub release.
   `https://code.visualstudio.com/api/extension-guides/ai/language-model-chat-provider`
 - VS Code extension publishing and `vsce`:
   `https://code.visualstudio.com/api/working-with-extensions/publishing-extension`
+- Syntorial:
+  `https://en.wikipedia.org/wiki/Syntorial`

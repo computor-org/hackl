@@ -10,6 +10,10 @@ run approved checks, and review changes before they become commits. Hackl keeps
 Git as the source of truth: staged changes, commits, source ranges, and
 line-anchored annotations are the durable review objects.
 
+Hackl is useful as a normal coding assistant, but its modes also expose a
+learning path for responsible AI-assisted coding: understand first, edit
+boundedly, work across files, delegate checks, and review before commit.
+
 Hackl is built around four objects:
 
 - Context: selected code, staged changes, commits, Markdown sections, or annotation notes.
