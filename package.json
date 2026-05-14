@@ -142,11 +142,6 @@
         "category": "Hackl"
       },
       {
-        "command": "hackl.submitFocusedCommentOnEnter",
-        "title": "Submit Annotation",
-        "category": "Hackl"
-      },
-      {
         "command": "hackl.dismissFocusedEmptyComment",
         "title": "Dismiss Empty Annotation",
         "category": "Hackl"
@@ -191,9 +186,9 @@
         "mac": "cmd+alt+z"
       },
       {
-        "command": "hackl.submitFocusedCommentOnEnter",
+        "command": "editor.action.submitComment",
         "key": "enter",
-        "when": "commentEditorFocused && !suggestWidgetVisible && !inlineSuggestionVisible"
+        "when": "commentEditorFocused && !commentIsEmpty && !suggestWidgetVisible && !inlineSuggestionVisible"
       },
       {
         "command": "type",
@@ -225,10 +220,6 @@
         },
         {
           "command": "hackl.revealTarget",
-          "when": "false"
-        },
-        {
-          "command": "hackl.submitFocusedCommentOnEnter",
           "when": "false"
         },
         {

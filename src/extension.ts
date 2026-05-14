@@ -292,21 +292,6 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
         2000,
       );
     }),
-    vscode.commands.registerCommand("hackl.submitFocusedCommentOnEnter", async () => {
-      // VS Code's `editor.action.submitComment` calls
-      // CommentReplyWidget.submitComment(), which fires the default action
-      // contributed under `comments/commentThread/context`. For our controller
-      // that is `hackl.replyToAnnotationThread`. We just delegate. If VS Code
-      // ever changes the command id, we still want some keystroke to insert a
-      // newline rather than silently swallowing Enter — so we fall back to a
-      // plain newline insertion when the submit command throws.
-      try {
-        await vscode.commands.executeCommand("editor.action.submitComment");
-      } catch (error) {
-        activationDebug?.("annotations.submitOnEnter.failed", { error: String(error) });
-        await vscode.commands.executeCommand("type", { text: "\n" });
-      }
-    }),
     vscode.commands.registerCommand("hackl.dismissFocusedEmptyComment", async () => {
       // Escape on an empty draft reply: ask VS Code to hide/dispose the
       // widget. `workbench.action.hideComment` is the bound Escape command on

@@ -43,12 +43,12 @@ test("annotation note command stays out of the editor context menu", () => {
 
 test("comment editor enter submits, shift-enter inserts newline, escape dismisses empty draft", () => {
   const manifest = readManifest();
-  const enter = manifest.contributes.keybindings.find((item) => item.key === "enter" && item.command === "hackl.submitFocusedCommentOnEnter");
+  const enter = manifest.contributes.keybindings.find((item) => item.key === "enter" && item.command === "editor.action.submitComment");
   const newline = manifest.contributes.keybindings.find((item) => item.key === "shift+enter" && item.command === "type");
   const escape = manifest.contributes.keybindings.find((item) => item.key === "escape" && item.command === "hackl.dismissFocusedEmptyComment");
-  assert.ok(enter, "Enter must dispatch hackl.submitFocusedCommentOnEnter");
+  assert.ok(enter, "Enter must dispatch VS Code's native comment submit command");
   assert.match(enter.when, /commentEditorFocused/);
-  assert.doesNotMatch(enter.when, /commentIsEmpty/);
+  assert.match(enter.when, /!commentIsEmpty/);
   assert.ok(newline, "Shift+Enter must insert a newline");
   assert.deepEqual(newline.args, { text: "\n" });
   assert.ok(escape, "Escape must dispatch hackl.dismissFocusedEmptyComment");
