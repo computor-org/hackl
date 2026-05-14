@@ -146,6 +146,7 @@ export class AnnotationController {
     thread.state = this.vscode.CommentThreadState?.Unresolved;
     const body = new this.vscode.MarkdownString(formatBody(comment));
     body.isTrusted = false;
+    body.supportHtml = true;
     const authorName = comment.authorType === "ai"
       ? `Hackl · ${comment.aiModel ?? "ai"}`
       : "You";
@@ -197,8 +198,9 @@ export class AnnotationController {
       aiModel: author.aiModel,
       createdAt: Date.now(),
     };
-    const body = new this.vscode.MarkdownString(message);
+    const body = new this.vscode.MarkdownString(wrapForUniformFont(message));
     body.isTrusted = false;
+    body.supportHtml = true;
     const existing = Array.isArray(thread.comments) ? [...thread.comments] : [];
     existing.push({
       body,
@@ -276,7 +278,13 @@ function formatBody(comment: HacklAnnotation): string {
     lines.push("");
     lines.push(`_${comment.rationale}_`);
   }
-  return lines.join("\n");
+  return wrapForUniformFont(lines.join("\n"));
+}
+
+const UNIFORM_FONT_STYLE = "font-size:var(--vscode-editor-font-size);font-family:var(--vscode-font-family);line-height:1.4";
+
+function wrapForUniformFont(markdown: string): string {
+  return `<span style="${UNIFORM_FONT_STYLE}">\n\n${markdown}\n\n</span>`;
 }
 
 function authorName(author: AnnotationAuthor): string {
