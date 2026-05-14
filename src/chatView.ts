@@ -7,20 +7,10 @@ import {
   ChatSession,
   ChatState,
   PromptHandler,
+  isAllowedWebviewCommand,
 } from "./chatSession";
 
-const ALLOWED_WEBVIEW_COMMANDS = new Set([
-  "hackl.addSelectionToContext",
-  "hackl.addMarkdownSectionToContext",
-  "hackl.addStagedChangesToContext",
-  "hackl.addLastCommitToContext",
-  "hackl.clearContext",
-  "hackl.openSetupGuide",
-]);
-
-export function isAllowedWebviewCommand(command: string): boolean {
-  return ALLOWED_WEBVIEW_COMMANDS.has(command);
-}
+export { isAllowedWebviewCommand };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = "hackl.chatView";

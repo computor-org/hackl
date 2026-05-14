@@ -6,10 +6,8 @@ import {
   BasketBridge,
   ChatAnswer,
   ChatState,
-  HacklRequestOptions,
-  PromptProgress,
+  PromptHandlerArgs,
 } from "./chatSession";
-import type { ConversationMessage } from "./prompt";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
 import {
@@ -163,6 +161,13 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     }),
     vscode.commands.registerCommand("hackl.clearReviewComments", () => {
       reviewController?.clear();
+    }),
+    vscode.commands.registerCommand("hackl.discardLastAnnotations", () => {
+      const n = reviewController?.discardLastBatch() ?? 0;
+      vscode.window.setStatusBarMessage(
+        n > 0 ? `Hackl: discarded ${n} annotation${n === 1 ? "" : "s"}` : "Hackl: no recent annotations to discard",
+        2000,
+      );
     }),
     vscode.commands.registerCommand("hackl.revealTarget", async (id: string) => {
       const target = basketService!.list().find((t) => t.id === id);
@@ -350,16 +355,10 @@ export function deactivate(): void {
   disposeDebugLog();
 }
 
-async function answerPrompt(
-  prompt: string,
-  history: ConversationMessage[] = [],
-  mode: PromptMode = "ask",
-  progress?: (event: PromptProgress) => void,
-  requestApproval?: ApprovalRequester,
-  signal?: AbortSignal,
-  targets: HacklTarget[] = [],
-  options: HacklRequestOptions = {},
-): Promise<ChatAnswer> {
+async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
+  const { prompt, history = [], mode = "ask", progress, requestApproval, signal } = args;
+  const targets: HacklTarget[] = args.targets ?? [];
+  const options = args.options ?? {};
   const createAnnotations = Boolean(options.createAnnotations);
   const startedAt = Date.now();
   progress?.({ type: "phase", text: "Preprocessing prompt..." });
@@ -439,13 +438,29 @@ async function answerPrompt(
   let createdComments: HacklReviewComment[] = [];
   if (createAnnotations && reviewController) {
     const parsed = parseReviewCommentsFromAnswer(answer.content, defaultUriForReview(targets), { aiModel: target.model });
-    const withTargetIds = parsed.map((c) => ({ ...c, targetId: findTargetIdForComment(c, targets) }));
+    const withTargetIds = parsed.comments.map((c) => ({ ...c, targetId: findTargetIdForComment(c, targets) }));
+    reviewController.beginBatch();
     createdComments = withTargetIds.map((c) => reviewController!.add(c));
+    reviewController.recordBatch(createdComments.map((c) => c.id));
     if (createdComments.length > 0) {
       result.reviewComments = createdComments;
-      vscode.window.setStatusBarMessage(`Hackl: ${createdComments.length} annotation${createdComments.length === 1 ? "" : "s"}`, 3000);
+      const dropSuffix = parsed.dropped.length > 0 ? ` · ${parsed.dropped.length} dropped` : "";
+      vscode.window.setStatusBarMessage(
+        `Hackl: ${createdComments.length} annotation${createdComments.length === 1 ? "" : "s"}${dropSuffix}`,
+        3000,
+      );
+    } else if (parsed.blocks === 0) {
+      vscode.window.setStatusBarMessage("Hackl: no hackl-review block in answer — showing raw answer.", 4000);
+    } else if (parsed.parseErrors > 0) {
+      vscode.window.setStatusBarMessage(
+        `Hackl: ${parsed.parseErrors} annotation block${parsed.parseErrors === 1 ? "" : "s"} were invalid JSON — showing raw answer.`,
+        5000,
+      );
     } else {
-      vscode.window.setStatusBarMessage("Hackl: no annotations parsed — showing raw answer.", 4000);
+      vscode.window.setStatusBarMessage(
+        `Hackl: 0 annotations kept (${parsed.dropped.length} dropped) — showing raw answer.`,
+        5000,
+      );
     }
   }
   if (createAnnotations) {

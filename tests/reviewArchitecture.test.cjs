@@ -49,9 +49,9 @@ test("parseReviewCommentsFromAnswer tags comments as AI with model", () => {
     "```",
   ].join("\n");
   const parsed = parseReviewCommentsFromAnswer(answer, undefined, { aiModel: "qwen3" });
-  assert.equal(parsed.length, 1);
-  assert.equal(parsed[0].authorType, "ai");
-  assert.equal(parsed[0].aiModel, "qwen3");
+  assert.equal(parsed.comments.length, 1);
+  assert.equal(parsed.comments[0].authorType, "ai");
+  assert.equal(parsed.comments[0].aiModel, "qwen3");
 });
 
 test("persistHacklSession writes a JSON file under .hackl/sessions/", async () => {

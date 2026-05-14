@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.30",
+  "version": "0.0.31",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -29,6 +29,7 @@
     "onCommand:hackl.addLastCommitToContext",
     "onCommand:hackl.clearContext",
     "onCommand:hackl.clearReviewComments",
+    "onCommand:hackl.discardLastAnnotations",
     "onCommand:hackl.reviewStagedChanges",
     "onCommand:hackl.revealTarget",
     "onView:hackl.chatView"
@@ -109,6 +110,11 @@
       {
         "command": "hackl.clearReviewComments",
         "title": "Clear Annotations",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.discardLastAnnotations",
+        "title": "Discard Last Annotations Batch",
         "category": "Hackl"
       },
       {

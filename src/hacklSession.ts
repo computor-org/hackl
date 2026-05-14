@@ -28,11 +28,33 @@ export function newHacklSessionId(): string {
 export async function persistHacklSession(
   workspaceRoot: string,
   session: HacklSessionRecord,
+  retainCount = 200,
 ): Promise<string | undefined> {
   if (!workspaceRoot) return undefined;
   const dir = path.join(workspaceRoot, ".hackl", "sessions");
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${session.id}.json`);
   await fs.writeFile(file, JSON.stringify(session, null, 2), "utf8");
+  await pruneOldSessions(dir, retainCount);
   return file;
+}
+
+async function pruneOldSessions(dir: string, retainCount: number): Promise<void> {
+  if (retainCount <= 0) return;
+  const entries = await fs.readdir(dir).catch(() => [] as string[]);
+  const files = entries.filter((f) => f.startsWith("hs-") && f.endsWith(".json"));
+  if (files.length <= retainCount) return;
+  const stats = await Promise.all(
+    files.map(async (f) => {
+      const full = path.join(dir, f);
+      const st = await fs.stat(full).catch(() => undefined);
+      return st ? { full, mtime: st.mtimeMs } : undefined;
+    }),
+  );
+  const sorted = stats
+    .filter((s): s is { full: string; mtime: number } => Boolean(s))
+    .sort((a, b) => b.mtime - a.mtime);
+  for (const old of sorted.slice(retainCount)) {
+    await fs.unlink(old.full).catch(() => undefined);
+  }
 }

@@ -139,9 +139,31 @@ test("parseReviewCommentsFromAnswer extracts JSON from fenced blocks", () => {
     "```",
   ].join("\n");
   const parsed = parseReviewCommentsFromAnswer(answer, "file:///fallback.ts");
-  assert.equal(parsed.length, 2);
-  assert.equal(parsed[0].uri, "file:///x.ts");
-  assert.equal(parsed[0].severity, "warning");
-  assert.equal(parsed[1].uri, "file:///fallback.ts");
-  assert.equal(parsed[1].endLine, 4);
+  assert.equal(parsed.comments.length, 2);
+  assert.equal(parsed.blocks, 1);
+  assert.equal(parsed.parseErrors, 0);
+  assert.equal(parsed.comments[0].uri, "file:///x.ts");
+  assert.equal(parsed.comments[0].severity, "warning");
+  assert.equal(parsed.comments[1].uri, "file:///fallback.ts");
+  assert.equal(parsed.comments[1].endLine, 4);
+});
+
+test("parseReviewCommentsFromAnswer reports dropped entries and parse errors", () => {
+  const answer = [
+    "```hackl-review",
+    "[{ not valid json",
+    "```",
+    "```hackl-review",
+    JSON.stringify([
+      { uri: "file:///a.ts", message: "", startLine: 1, endLine: 1 },
+      { uri: "file:///a.ts", message: "ok", startLine: 5, endLine: 4 },
+      { message: "no uri", startLine: 1, endLine: 1 },
+    ]),
+    "```",
+  ].join("\n");
+  const parsed = parseReviewCommentsFromAnswer(answer);
+  assert.equal(parsed.parseErrors, 1);
+  assert.equal(parsed.blocks, 2);
+  assert.equal(parsed.comments.length, 0);
+  assert.equal(parsed.dropped.length, 4);
 });

@@ -29,6 +29,29 @@ export class ReviewCommentController {
   private controller: vscodeTypes.CommentController;
   private readonly threads = new Map<string, ThreadEntry>();
   private readonly vscode: typeof vscodeTypes;
+  private lastBatchIds: string[] = [];
+
+  beginBatch(): void {
+    this.lastBatchIds = [];
+  }
+
+  recordBatch(ids: string[]): void {
+    this.lastBatchIds = ids;
+  }
+
+  discardLastBatch(): number {
+    let n = 0;
+    for (const id of this.lastBatchIds) {
+      const entry = this.threads.get(id);
+      if (entry) {
+        entry.thread.dispose();
+        this.threads.delete(id);
+        n += 1;
+      }
+    }
+    this.lastBatchIds = [];
+    return n;
+  }
 
   constructor() {
     this.vscode = require("vscode") as typeof vscodeTypes;
@@ -75,10 +98,13 @@ export class ReviewCommentController {
     thread.canReply = true;
     const body = new this.vscode.MarkdownString(formatBody(comment));
     body.isTrusted = false;
+    const authorName = comment.authorType === "ai"
+      ? `Hackl · ${comment.aiModel ?? "ai"}`
+      : "You";
     const vscodeComment: vscodeTypes.Comment = {
       body,
       mode: this.vscode.CommentMode.Preview,
-      author: { name: `Hackl (${comment.severity})` },
+      author: { name: authorName },
       contextValue: `hackl:${comment.id}`,
     };
     thread.comments = [vscodeComment];
@@ -168,41 +194,64 @@ function formatBody(comment: HacklReviewComment): string {
 
 const REVIEW_COMMENT_BLOCK_RE = /```(?:hackl-review|review)\s+([\s\S]*?)```/g;
 
+export interface ParsedReviewComments {
+  comments: Array<Omit<HacklReviewComment, "id" | "status" | "createdAt">>;
+  blocks: number;
+  parseErrors: number;
+  dropped: Array<{ reason: string; raw?: string }>;
+}
+
 export function parseReviewCommentsFromAnswer(
   answer: string,
   defaultUri?: string,
   origin?: { aiModel?: string },
-): Array<Omit<HacklReviewComment, "id" | "status" | "createdAt">> {
-  const results: Array<Omit<HacklReviewComment, "id" | "status" | "createdAt">> = [];
+): ParsedReviewComments {
+  const comments: ParsedReviewComments["comments"] = [];
+  const dropped: ParsedReviewComments["dropped"] = [];
+  let blocks = 0;
+  let parseErrors = 0;
   let match: RegExpExecArray | null;
   while ((match = REVIEW_COMMENT_BLOCK_RE.exec(answer)) !== null) {
+    blocks += 1;
+    let json: unknown;
     try {
-      const json = JSON.parse(match[1]);
-      const items = Array.isArray(json) ? json : [json];
-      for (const item of items) {
-        const uri = typeof item.uri === "string" ? item.uri : defaultUri;
-        if (!uri) continue;
-        const startLine = Number(item.startLine ?? item.start_line ?? item.line);
-        const endLine = Number(item.endLine ?? item.end_line ?? startLine);
-        const severity = normalizeSeverity(item.severity);
-        const message = String(item.message ?? "").trim();
-        if (!message || !Number.isFinite(startLine) || !Number.isFinite(endLine)) continue;
-        results.push({
-          uri,
-          startLine,
-          endLine,
-          severity,
-          message,
-          rationale: typeof item.rationale === "string" ? item.rationale : undefined,
-          authorType: "ai",
-          aiModel: origin?.aiModel,
-        });
-      }
+      json = JSON.parse(match[1]);
     } catch {
-      // ignore malformed blocks
+      parseErrors += 1;
+      dropped.push({ reason: "invalid-json", raw: match[1].slice(0, 200) });
+      continue;
+    }
+    const items = Array.isArray(json) ? json : [json];
+    for (const raw of items) {
+      const item = raw as Record<string, unknown>;
+      const uri = typeof item.uri === "string" ? item.uri : defaultUri;
+      if (!uri) { dropped.push({ reason: "missing-uri" }); continue; }
+      const startLine = Number(item.startLine ?? item.start_line ?? item.line);
+      const endLine = Number(item.endLine ?? item.end_line ?? startLine);
+      const severity = normalizeSeverity(item.severity);
+      const message = String(item.message ?? "").trim();
+      if (!message) { dropped.push({ reason: "empty-message" }); continue; }
+      if (!Number.isFinite(startLine) || !Number.isFinite(endLine)) {
+        dropped.push({ reason: "bad-lines" });
+        continue;
+      }
+      if (startLine < 1 || endLine < startLine) {
+        dropped.push({ reason: "bad-range" });
+        continue;
+      }
+      comments.push({
+        uri,
+        startLine,
+        endLine,
+        severity,
+        message,
+        rationale: typeof item.rationale === "string" ? item.rationale : undefined,
+        authorType: "ai",
+        aiModel: origin?.aiModel,
+      });
     }
   }
-  return results;
+  return { comments, blocks, parseErrors, dropped };
 }
 
 function normalizeSeverity(value: unknown): ReviewSeverity {

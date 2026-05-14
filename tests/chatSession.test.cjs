@@ -5,7 +5,7 @@ const { ChatSession } = require("../dist/chatSession");
 test("ChatSession sends prompt with previous history and records the answer", async () => {
   const calls = [];
   const posted = [];
-  const session = new ChatSession(async (prompt, history, mode) => {
+  const session = new ChatSession(async ({ prompt, history, mode }) => {
     calls.push({ prompt, history, mode });
     return "answer";
   });
@@ -79,7 +79,7 @@ test("ChatSession reports errors without keeping failed user prompts", async () 
 
 test("ChatSession forwards progress, metrics, and reasoning", async () => {
   const posted = [];
-  const session = new ChatSession(async (_prompt, _history, _mode, progress) => {
+  const session = new ChatSession(async ({ progress }) => {
     progress({ type: "phase", text: "Preprocessing 9 ms", inputTokens: 100, maxContextTokens: 1000 });
     progress({ type: "delta", channel: "reasoning", text: "checking" });
     return { content: "answer", reasoning: "checking" };
@@ -101,7 +101,7 @@ test("ChatSession forwards progress, metrics, and reasoning", async () => {
 
 test("ChatSession resolves inline approval responses", async () => {
   const posted = [];
-  const session = new ChatSession(async (_prompt, _history, _mode, _progress, requestApproval) => {
+  const session = new ChatSession(async ({ requestApproval }) => {
     const approved = await requestApproval({ title: "Run command?", detail: "npm test", approveLabel: "Run", denyLabel: "Deny" });
     return approved ? "approved" : "denied";
   });

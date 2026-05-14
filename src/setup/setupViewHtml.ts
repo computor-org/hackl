@@ -38,7 +38,7 @@ export function renderSetupHtml(webview: vscode.Webview): string {
     <details id="lmstudio" class="card">
       <summary><strong>LM Studio</strong> · easy</summary>
       <ol>
-        <li>Install <a href="#" data-link="https://lmstudio.ai/">LM Studio</a> and open it once.</li>
+        <li>Install LM Studio (<button class="linklike" type="button" data-link="https://lmstudio.ai/">lmstudio.ai</button>) and open it once.</li>
         <li>Search a GGUF matching your tier (see table above).</li>
         <li>Load the model and try a quick chat in LM Studio's UI.</li>
         <li>Open <em>Developer</em> → start the local server.</li>
@@ -124,6 +124,8 @@ const STYLES = `
   button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: transparent; }
   button.primary:hover { background: var(--vscode-button-hoverBackground); }
   a { color: var(--vscode-textLink-foreground); }
+  button.linklike { background: none; border: none; padding: 0; color: var(--vscode-textLink-foreground); text-decoration: underline; cursor: pointer; font: inherit; }
+  button.linklike:hover { color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground)); }
   .hint { font-size: 11px; color: var(--vscode-descriptionForeground); }
   .footer { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 18px; }
   .tiers { display: block; margin: 8px 0 14px; font-size: 12px; }
@@ -147,7 +149,7 @@ const SCRIPT = `
   for (const btn of document.querySelectorAll('button[data-doc]')) {
     btn.addEventListener('click', () => vscode.postMessage({ type: 'openDoc', doc: btn.dataset.doc }));
   }
-  for (const a of document.querySelectorAll('a[data-link]')) {
+  for (const a of document.querySelectorAll('[data-link]')) {
     a.addEventListener('click', (e) => { e.preventDefault(); vscode.postMessage({ type: 'openLink', href: a.dataset.link }); });
   }
   function focusProfile(profile) {

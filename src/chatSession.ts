@@ -2,6 +2,20 @@ import type { ConversationMessage, PromptMode } from "./prompt";
 import type { BasketSnapshot, HacklTarget } from "./basket";
 import type { HacklReviewComment } from "./reviewComments";
 
+export const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
+  "hackl.addSelectionToContext",
+  "hackl.addMarkdownSectionToContext",
+  "hackl.addStagedChangesToContext",
+  "hackl.addLastCommitToContext",
+  "hackl.clearContext",
+  "hackl.openSetupGuide",
+  "hackl.discardLastAnnotations",
+]);
+
+export function isAllowedWebviewCommand(command: string): boolean {
+  return ALLOWED_WEBVIEW_COMMANDS.has(command);
+}
+
 export interface ChatIncomingMessage {
   type: string;
   prompt?: string;
@@ -62,16 +76,18 @@ export interface ChatState {
 
 export type ApprovalRequester = (request: Omit<ApprovalRequest, "type" | "id">) => Promise<boolean>;
 
-export type PromptHandler = (
-  prompt: string,
-  history: ConversationMessage[],
-  mode: PromptMode,
-  progress: (event: PromptProgress) => void,
-  requestApproval: ApprovalRequester,
-  signal?: AbortSignal,
-  targets?: HacklTarget[],
-  options?: HacklRequestOptions,
-) => Promise<ChatAnswer | string>;
+export interface PromptHandlerArgs {
+  prompt: string;
+  history: ConversationMessage[];
+  mode: PromptMode;
+  progress: (event: PromptProgress) => void;
+  requestApproval: ApprovalRequester;
+  signal?: AbortSignal;
+  targets?: HacklTarget[];
+  options?: HacklRequestOptions;
+}
+
+export type PromptHandler = (args: PromptHandlerArgs) => Promise<ChatAnswer | string>;
 
 export interface BasketBridge {
   snapshot(): BasketSnapshot;
@@ -182,16 +198,16 @@ export class ChatSession {
         }
       };
       const requestApproval = (request: Omit<ApprovalRequest, "type" | "id">) => this.requestApproval(request, post);
-      const rawAnswer = await this.onPrompt(
+      const rawAnswer = await this.onPrompt({
         prompt,
-        previousHistory,
+        history: previousHistory,
         mode,
         progress,
         requestApproval,
-        controller.signal,
+        signal: controller.signal,
         targets,
         options,
-      );
+      });
       if (controller.signal.aborted) {
         this.history.pop();
         return;
