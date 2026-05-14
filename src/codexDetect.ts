@@ -15,9 +15,12 @@ export interface CodexDetection {
 }
 
 export const DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
-  "gpt-5-codex",
-  "gpt-5.1-codex",
   "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+  "gpt-5.2",
 ];
 
 let cached: { key: string; result: Promise<CodexDetection> } | undefined;
@@ -166,18 +169,16 @@ async function readModelsFromConfig(configFile: string): Promise<string[]> {
   return parseModelsFromTomlText(text);
 }
 
-// Best-effort TOML scan: collect `model = "..."` and `[model_presets.<id>]` entries
-// without pulling in a TOML parser. Quoted-string only.
+// Best-effort TOML scan: collect only the top-level Codex model. Profile
+// models may point at OpenRouter, local providers, or aliases such as `qwen`;
+// Hackl cannot use those unless it also applies the matching Codex profile.
 export function parseModelsFromTomlText(text: string): string[] {
-  const out: string[] = [];
-  const modelLine = /^\s*model\s*=\s*"([^"\n]+)"/gm;
-  let match: RegExpExecArray | null;
-  while ((match = modelLine.exec(text)) !== null) {
-    out.push(match[1]);
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("[")) return [];
+    const match = /^model\s*=\s*"([^"\n]+)"/.exec(line);
+    if (match) return [match[1]];
   }
-  const presetLine = /^\s*\[model_presets\.([^\]\s]+)\]/gm;
-  while ((match = presetLine.exec(text)) !== null) {
-    out.push(match[1]);
-  }
-  return out;
+  return [];
 }

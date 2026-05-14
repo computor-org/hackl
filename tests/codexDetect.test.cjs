@@ -40,19 +40,22 @@ test("codexCommandCandidates preserves explicit command paths", () => {
   assert.deepEqual(codexCommandCandidates("/custom/bin/codex", "/home/example"), ["/custom/bin/codex"]);
 });
 
-test("parseModelsFromTomlText collects model= and [model_presets.X] entries", () => {
-  const text = `model = "gpt-5-codex"\n[profiles.work]\nmodel = "gpt-5.5"\n[model_presets.fast]\nfoo = 1\n[model_presets.deep]\n`;
+test("parseModelsFromTomlText collects only the top-level Codex model", () => {
+  const text = `model = "gpt-5.5"\n[profiles.work]\nmodel = "qwen"\n[profiles.openrouter]\nmodel = "qwen/qwen3.6-plus-preview:free"\n`;
   const result = parseModelsFromTomlText(text);
-  assert.ok(result.includes("gpt-5-codex"));
-  assert.ok(result.includes("gpt-5.5"));
-  assert.ok(result.includes("fast"));
-  assert.ok(result.includes("deep"));
+  assert.deepEqual(result, ["gpt-5.5"]);
 });
 
-test("DEFAULT_CODEX_MODELS includes a stable set", () => {
-  for (const m of ["gpt-5-codex", "gpt-5.1-codex", "gpt-5.5"]) {
+test("parseModelsFromTomlText ignores profile-only provider models", () => {
+  const text = `[profiles.local]\nmodel = "qwen"\n[profiles.openrouter]\nmodel = "qwen/qwen3.6-plus-preview:free"\n`;
+  assert.deepEqual(parseModelsFromTomlText(text), []);
+});
+
+test("DEFAULT_CODEX_MODELS matches the Codex selector model set", () => {
+  for (const m of ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2"]) {
     assert.ok(DEFAULT_CODEX_MODELS.includes(m), `missing default ${m}`);
   }
+  assert.equal(DEFAULT_CODEX_MODELS.includes("qwen"), false);
 });
 
 test("auth.json parsing maps chatgpt/apikey/none", async () => {
