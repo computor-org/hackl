@@ -34,15 +34,6 @@ interface ThreadEntry {
 const OPEN_THREAD_CONTEXT = "hackl.annotation.open";
 const RESOLVED_THREAD_CONTEXT = "hackl.annotation.resolved";
 
-/**
- * Window during which refreshCommentingRanges is a no-op after a thread was
- * focused. Reassigning the commentingRangeProvider in this window would tear
- * down the ReviewZoneWidget the user is typing into — so we sit on our hands
- * for long enough that the user can finish their reply. Editor-driven
- * refreshes resume after this elapses.
- */
-const FOCUS_GUARD_MS = 30000;
-
 export class AnnotationController {
   private controller: vscodeTypes.CommentController;
   private readonly threads = new Map<string, ThreadEntry>();
@@ -101,44 +92,22 @@ export class AnnotationController {
   }
 
   /**
-   * Force VS Code to re-evaluate commenting ranges for the active editor.
+   * Install the commenting range provider once.
    *
-   * VS Code's CommentsController clears its per-editor listeners as soon as
-   * the commenting decoration count reaches zero (see commentsController.ts
-   * → clearEditorListeners). Once cleared, model-change events no longer
-   * recompute, so the gutter strip stays gone until something forces a
-   * recompute. Reassigning `commentingRangeProvider` triggers the extension
-   * host's `$updateCommentingRanges` → main thread
-   * `commentService.updateCommentingRanges` → `onDidUpdateCommentingRanges`
-   * → `beginComputeAndHandleEditorChange` → `setComments` → which also calls
-   * `removeCommentWidgetsAndStoreCache`. That's destructive: any focused
-   * reply textarea gets disposed mid-stroke. We therefore suppress the
-   * reassignment for `FOCUS_GUARD_MS` after `focusThreadReply` runs so the
-   * user can actually type a reply without their widget being torn down.
-   * Outside that window we throttle and reassign on demand to keep the
-   * strip alive across editor focus changes.
+   * Reassigning `commentingRangeProvider` makes VS Code recompute comments by
+   * disposing all mounted ReviewZoneWidgets. That steals focus from the native
+   * gutter-plus "Start discussion" editor, so this method is intentionally
+   * idempotent. The provider itself returns a wide range with file comments
+   * enabled so the gutter strip remains armed without provider churn.
    */
   refreshCommentingRanges(): void {
-    const now = Date.now();
-    if (now - this.lastFocusedAt < FOCUS_GUARD_MS) {
-      this.debug?.("annotations.refreshCommentingRanges.skippedDuringFocus");
+    if (this.commentingProvider) {
+      this.debug?.("annotations.refreshCommentingRanges.alreadyInstalled");
       return;
     }
-    if (now - this.lastRefreshAt < 1500) {
-      this.debug?.("annotations.refreshCommentingRanges.throttled");
-      return;
-    }
-    this.lastRefreshAt = now;
     this.commentingProvider = this.createCommentingRangeProvider();
     this.controller.commentingRangeProvider = this.commentingProvider;
     this.debug?.("annotations.refreshCommentingRanges.assigned");
-  }
-  private lastRefreshAt = 0;
-  private lastFocusedAt = 0;
-
-  /** Test seam to override the focus-guard timestamp. */
-  noteThreadFocused(at: number = Date.now()): void {
-    this.lastFocusedAt = at;
   }
 
   setDebugLog(debug: DebugLog | undefined): void {
@@ -206,11 +175,6 @@ export class AnnotationController {
       this.debug?.("annotations.focusThreadReply.unknownId", { id: annotationId });
       return;
     }
-    // Mark the focus guard so refreshCommentingRanges does not reassign the
-    // provider (and tear down the ReviewZoneWidget) while the user is
-    // typing in the reply textarea. Refresh resumes once the guard
-    // window elapses.
-    this.lastFocusedAt = Date.now();
     const { thread, comment } = entry;
     const line = Math.max(0, comment.startLine - 1);
     const pos = new this.vscode.Position(line, 0);

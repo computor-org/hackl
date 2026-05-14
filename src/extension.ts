@@ -128,7 +128,6 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
   context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
-  scheduleAnnotationRangeRefreshes(context);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
@@ -219,7 +218,6 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       );
     }),
     vscode.commands.registerCommand("hackl.addAnnotationNote", async () => {
-      annotationController?.noteThreadFocused();
       await vscode.commands.executeCommand("workbench.action.addComment");
     }),
     vscode.commands.registerCommand("hackl.deleteAnnotationThread", (thread: vscode.CommentThread) => {
@@ -385,43 +383,6 @@ function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatView
   basket.add(target);
   view.show();
   vscode.window.setStatusBarMessage(`Hackl: added ${describeTarget(target)}`, 2000);
-}
-
-function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): void {
-  // Two startup heartbeats so the provider is registered before VS Code's
-  // commentsController initialises its per-editor listeners.
-  for (const delay of [0, 1500]) {
-    const timer = setTimeout(() => {
-      activationDebug?.("annotations.scheduledRefresh", { delay });
-      annotationController?.refreshCommentingRanges();
-    }, delay);
-    context.subscriptions.push({ dispose: () => clearTimeout(timer) });
-  }
-  // Reassign the provider on editor events so the gutter strip stays alive
-  // when VS Code's per-editor commenting decoration count hits zero (which
-  // tears down listeners — see commentsController.ts clearEditorListeners).
-  // AnnotationController.refreshCommentingRanges itself suppresses the
-  // reassignment for FOCUS_GUARD_MS after focusThreadReply runs, so the
-  // refresh cannot dispose a ReviewZoneWidget the user is typing into.
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
-      if (!isEditorDocument(editor?.document)) return;
-      annotationController?.refreshCommentingRanges();
-    }),
-    vscode.window.onDidChangeVisibleTextEditors((editors) => {
-      if (!editors.some((e) => isEditorDocument(e.document))) return;
-      annotationController?.refreshCommentingRanges();
-    }),
-    vscode.workspace.onDidOpenTextDocument((document) => {
-      if (!isEditorDocument(document)) return;
-      annotationController?.refreshCommentingRanges();
-    }),
-  );
-}
-
-function isEditorDocument(document: vscode.TextDocument | undefined): boolean {
-  const scheme = document?.uri.scheme;
-  return scheme === "file" || scheme === "untitled" || scheme === "vscode-remote";
 }
 
 async function refreshStatus(): Promise<void> {

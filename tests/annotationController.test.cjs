@@ -125,60 +125,34 @@ test("AnnotationController never returns zero decorations for non-text schemes",
   });
 });
 
-test("AnnotationController.refreshCommentingRanges installs a fresh provider to force re-evaluation", () => {
+test("AnnotationController.refreshCommentingRanges keeps the provider stable", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
     const controller = new AnnotationController();
     const first = controller.controller.commentingRangeProvider;
     assert.equal(typeof first.provideCommentingRanges, "function");
-    // Throttle is 150 ms; jump time forward so the second refresh is honoured.
-    const realDateNow = Date.now;
-    let t = realDateNow();
-    Date.now = () => t;
-    try {
-      t += 2000;
-      controller.refreshCommentingRanges();
-      assert.notEqual(
-        controller.controller.commentingRangeProvider,
-        first,
-        "refresh must replace the provider so VS Code fires $updateCommentingRanges and re-installs editor listeners",
-      );
-    } finally {
-      Date.now = realDateNow;
-    }
+    controller.refreshCommentingRanges();
+    assert.equal(
+      controller.controller.commentingRangeProvider,
+      first,
+      "refresh must not churn the provider because VS Code disposes focused comment widgets on reassignment",
+    );
   });
 });
 
-test("AnnotationController.refreshCommentingRanges is suppressed for FOCUS_GUARD_MS after focusing a thread", () => {
+test("AnnotationController.refreshCommentingRanges does not churn after comment focus", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
     const controller = new AnnotationController();
-    const realDateNow = Date.now;
-    let t = realDateNow();
-    Date.now = () => t;
-    try {
-      controller.noteThreadFocused(t);
-      const before = controller.controller.commentingRangeProvider;
-      // Inside the focus guard window the provider must not be churned —
-      // reassigning would tear down the ReviewZoneWidget the user is typing
-      // into.
-      t += 5000;
-      controller.refreshCommentingRanges();
-      assert.equal(controller.controller.commentingRangeProvider, before, "refresh inside the focus guard window must be a no-op");
-      // Once the window elapses the editor-driven refresh must run again so
-      // the gutter strip can be re-armed.
-      t += 40000;
-      controller.refreshCommentingRanges();
-      assert.notEqual(controller.controller.commentingRangeProvider, before, "refresh after the focus guard must reassign the provider");
-    } finally {
-      Date.now = realDateNow;
-    }
+    const before = controller.controller.commentingRangeProvider;
+    controller.refreshCommentingRanges();
+    assert.equal(controller.controller.commentingRangeProvider, before);
   });
 });
 
-test("AnnotationController.refreshCommentingRanges throttles rapid calls", () => {
+test("AnnotationController.refreshCommentingRanges is idempotent", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
@@ -189,7 +163,7 @@ test("AnnotationController.refreshCommentingRanges throttles rapid calls", () =>
     assert.equal(
       controller.controller.commentingRangeProvider,
       afterFirst,
-      "calls within the throttle window must not churn the provider",
+      "repeated calls must not churn the provider",
     );
   });
 });
