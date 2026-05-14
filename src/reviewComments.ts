@@ -1,10 +1,13 @@
 import type * as vscodeTypes from "vscode";
+import { getVscode } from "./vscodeShim";
 
 export type ReviewSeverity = "note" | "suggestion" | "warning" | "blocking";
 export type ReviewStatus = "open" | "resolved" | "dismissed";
 
 export interface HacklReviewComment {
   id: string;
+  // Creation-time hint only. Re-resolve from basket via resolveTargetIdFor when needed;
+  // do not trust this field after the basket has changed.
   targetId?: string;
   uri: string;
   startLine: number;
@@ -54,7 +57,7 @@ export class ReviewCommentController {
   }
 
   constructor() {
-    this.vscode = require("vscode") as typeof vscodeTypes;
+    this.vscode = getVscode();
     this.controller = this.vscode.comments.createCommentController("hackl.review", "Hackl Review");
     const VscRange = this.vscode.Range;
     this.controller.commentingRangeProvider = {

@@ -21,6 +21,8 @@ export const CHAT_CLIENT_SCRIPT = `
   const modeButton = document.getElementById("mode-button");
   const modeMenu = document.getElementById("mode-menu");
   const modeLabel = document.getElementById("mode-label");
+  // html: false is the XSS contract for every innerHTML = md.render(...) sink below.
+  // Do not enable html or switch sinks to direct string assignment.
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
   let statusEntry;
   let assistantDraft;
@@ -119,8 +121,17 @@ export const CHAT_CLIENT_SCRIPT = `
       annotationsToggle.title = annotationsOn
         ? "Annotations ON — model will also emit anchored comments"
         : "Also produce line-anchored comments (requires a text-file target in the basket)";
+      updateComboStrip();
       focusPrompt();
     });
+  }
+
+  function updateComboStrip() {
+    const strip = document.getElementById("combo-strip");
+    if (!strip) return;
+    const tier = { ask: "read", edit: "read+edit", work: "read+edit+search", agent: "read+edit+search+cmd" }[selectedMode] || selectedMode;
+    const annot = annotationsOn ? " · anchored comments" : "";
+    strip.textContent = selectedMode + " (" + tier + ")" + annot;
   }
 
   const annotationsDiscard = document.getElementById("annotations-discard");
@@ -167,6 +178,7 @@ export const CHAT_CLIENT_SCRIPT = `
       });
       modeMenu.hidden = true;
       modeButton.setAttribute("aria-expanded", "false");
+      updateComboStrip();
       focusPrompt();
     });
     document.addEventListener("click", (event) => {
@@ -451,6 +463,8 @@ export const CHAT_CLIENT_SCRIPT = `
   function focusPrompt() {
     requestAnimationFrame(() => prompt.focus());
   }
+
+  updateComboStrip();
 
   function applyState(message) {
     if (reasoningToggle && typeof message.enableThinking === "boolean") {

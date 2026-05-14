@@ -267,6 +267,15 @@ h1 {
   opacity: 0.85;
 }
 
+.combo-strip {
+  font-size: 10.5px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.combo-strip:empty { display: none; }
+
 .meter:empty {
   display: none;
 }

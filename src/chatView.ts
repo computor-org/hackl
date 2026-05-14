@@ -79,6 +79,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return post(this.view.webview, response);
     });
   }
+
+  notifyStatus(text: string): void {
+    if (!this.view) return;
+    void post(this.view.webview, { type: "status", text });
+  }
 }
 
 async function post(webview: vscode.Webview, message: ChatOutgoingMessage): Promise<boolean> {

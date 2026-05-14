@@ -9,6 +9,19 @@ const { BasketService } = require("../dist/basket.js");
 const { buildHacklMessages } = require("../dist/prompt.js");
 const { parseReviewCommentsFromAnswer } = require("../dist/reviewComments.js");
 const { newHacklSessionId, persistHacklSession } = require("../dist/hacklSession.js");
+const { resolveTargetIdFor } = require("../dist/targetResolve.js");
+
+test("resolveTargetIdFor prefers an enclosing range, falls back to same uri", () => {
+  const targets = [
+    { id: "t-a", kind: "source-range", uri: "file:///x.ts", startLine: 1, endLine: 5 },
+    { id: "t-b", kind: "source-range", uri: "file:///x.ts", startLine: 10, endLine: 20 },
+    { id: "t-c", kind: "source-range", uri: "file:///y.ts", startLine: 1, endLine: 100 },
+  ];
+  assert.equal(resolveTargetIdFor({ uri: "file:///x.ts", startLine: 12, endLine: 18 }, targets), "t-b");
+  assert.equal(resolveTargetIdFor({ uri: "file:///x.ts", startLine: 30, endLine: 32 }, targets), "t-a");
+  assert.equal(resolveTargetIdFor({ uri: "file:///z.ts", startLine: 1, endLine: 1 }, targets), undefined);
+});
+
 
 test("BasketService carries a generic reviewContext and fires only on change", () => {
   const basket = new BasketService();

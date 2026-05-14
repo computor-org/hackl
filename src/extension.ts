@@ -30,13 +30,14 @@ import {
   HacklTarget,
   ReviewContext,
   createMarkdownSectionTarget,
-  createReviewNoteTarget,
   createSourceRangeTarget,
   describeTarget,
 } from "./basket";
 import { HacklReviewComment, ReviewCommentController, parseReviewCommentsFromAnswer } from "./reviewComments";
+import { resolveTargetIdFor } from "./targetResolve";
 import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
 import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./hacklSession";
+import { handleReviewReply, handleDeleteReviewThread } from "./reviewCommands";
 
 let chatPanel: ChatPanel | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -113,10 +114,16 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       await vscode.commands.executeCommand("markdown.showPreview", uri);
     }),
     vscode.commands.registerCommand("hackl.replyToReviewThread", async (reply: vscode.CommentReply) => {
-      await handleReviewReply(reply);
+      if (!basketService || !reviewController) return;
+      await handleReviewReply(reply, basketService, reviewController);
+      await vscode.commands.executeCommand("hackl.chat");
+      chatViewProvider.notifyStatus(
+        `Reply attached to basket from ${vscode.workspace.asRelativePath(reply.thread.uri, false)}:${(reply.thread.range?.start.line ?? 0) + 1}`,
+      );
     }),
     vscode.commands.registerCommand("hackl.deleteReviewThread", (thread: vscode.CommentThread) => {
-      handleDeleteReviewThread(thread);
+      if (!basketService || !reviewController) return;
+      handleDeleteReviewThread(thread, basketService, reviewController);
     }),
     vscode.commands.registerCommand("hackl.addSelectionToContext", async () => {
       const editor = vscode.window.activeTextEditor;
@@ -232,51 +239,6 @@ function makeBasketBridge(basket: BasketService): BasketBridge {
     clear: () => basket.clear(),
     reveal: (id: string) => void vscode.commands.executeCommand("hackl.revealTarget", id),
   };
-}
-
-async function handleReviewReply(reply: vscode.CommentReply): Promise<void> {
-  if (!basketService || !reviewController) return;
-  const text = (reply.text ?? "").trim();
-  if (!text) return;
-  const thread = reply.thread;
-  const range = thread.range;
-  if (!range) return;
-  const document = await vscode.workspace.openTextDocument(thread.uri);
-  const startLineIdx = Math.max(0, Math.min(range.start.line, document.lineCount - 1));
-  const endLineIdx = Math.max(startLineIdx, Math.min(range.end.line, document.lineCount - 1));
-  const endLineText = document.lineAt(endLineIdx).text;
-  const code = document.getText(new vscode.Range(startLineIdx, 0, endLineIdx, endLineText.length));
-  const startLine = startLineIdx + 1;
-  const endLine = endLineIdx + 1;
-  const threadKey = `${thread.uri.toString()}#${startLine}-${endLine}`;
-  const target = createReviewNoteTarget({
-    uri: thread.uri.toString(),
-    languageId: document.languageId,
-    relativePath: vscode.workspace.asRelativePath(thread.uri, false),
-    startLine,
-    endLine,
-    endCharacter: endLineText.length + 1,
-    code,
-    note: text,
-    threadKey,
-  });
-  basketService.add(target);
-  reviewController.registerHumanComment(thread, text);
-}
-
-function handleDeleteReviewThread(thread: vscode.CommentThread): void {
-  if (!basketService || !reviewController) return;
-  const range = thread.range;
-  const key = range
-    ? `${thread.uri.toString()}#${range.start.line + 1}-${range.end.line + 1}`
-    : undefined;
-  if (key) {
-    for (const target of basketService.list()) {
-      const meta = target.metadata as { threadKey?: string } | undefined;
-      if (meta?.threadKey === key) basketService.remove(target.id);
-    }
-  }
-  reviewController.disposeThread(thread);
 }
 
 function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatViewProvider): void {
@@ -438,7 +400,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   let createdComments: HacklReviewComment[] = [];
   if (createAnnotations && reviewController) {
     const parsed = parseReviewCommentsFromAnswer(answer.content, defaultUriForReview(targets), { aiModel: target.model });
-    const withTargetIds = parsed.comments.map((c) => ({ ...c, targetId: findTargetIdForComment(c, targets) }));
+    const withTargetIds = parsed.comments.map((c) => ({ ...c, targetId: resolveTargetIdFor(c, targets) }));
     reviewController.beginBatch();
     createdComments = withTargetIds.map((c) => reviewController!.add(c));
     reviewController.recordBatch(createdComments.map((c) => c.id));
@@ -476,25 +438,6 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     });
   }
   return result;
-}
-
-function findTargetIdForComment(
-  comment: { uri: string; startLine: number; endLine: number },
-  targets: HacklTarget[],
-): string | undefined {
-  for (const t of targets) {
-    if (t.kind === "source-range" || t.kind === "markdown-section") {
-      if (t.uri === comment.uri && t.startLine <= comment.startLine && t.endLine >= comment.endLine) {
-        return t.id;
-      }
-    }
-  }
-  for (const t of targets) {
-    if ((t.kind === "source-range" || t.kind === "markdown-section") && t.uri === comment.uri) {
-      return t.id;
-    }
-  }
-  return undefined;
 }
 
 async function emitHacklSession(input: {
