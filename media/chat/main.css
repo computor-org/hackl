@@ -162,7 +162,7 @@ body {
 
 .basket-remove .codicon { font-size: 10px; }
 
-.review-list {
+.annotation-list {
   margin: 6px 0 0;
   padding: 0;
   list-style: none;
@@ -171,7 +171,7 @@ body {
   gap: 4px;
 }
 
-.review-item {
+.annotation-item {
   padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid var(--hackl-border);
@@ -179,7 +179,7 @@ body {
   font-size: 11.5px;
 }
 
-.review-item-head {
+.annotation-item-head {
   display: flex;
   gap: 6px;
   align-items: center;
@@ -191,10 +191,10 @@ body {
   text-transform: uppercase;
 }
 
-.review-sev-note { color: var(--vscode-descriptionForeground); }
-.review-sev-suggestion { color: var(--hackl-accent); }
-.review-sev-warning { color: var(--vscode-editorWarning-foreground, #cca700); }
-.review-sev-blocking { color: var(--vscode-errorForeground); }
+.annotation-sev-note { color: var(--vscode-descriptionForeground); }
+.annotation-sev-suggestion { color: var(--hackl-accent); }
+.annotation-sev-warning { color: var(--vscode-editorWarning-foreground, #cca700); }
+.annotation-sev-blocking { color: var(--vscode-errorForeground); }
 
 
 .topbar {

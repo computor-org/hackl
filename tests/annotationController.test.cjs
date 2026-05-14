@@ -47,18 +47,18 @@ function withVscode(vscode, callback) {
 }
 
 function freshControllerModule() {
-  const p = require.resolve("../dist/reviewComments.js");
+  const p = require.resolve("../dist/annotations.js");
   delete require.cache[p];
   const shim = require.resolve("../dist/vscodeShim.js");
   delete require.cache[shim];
   return require(p);
 }
 
-test("ReviewCommentController.discardLastBatch removes only the most recent batch", () => {
+test("AnnotationController.discardLastBatch removes only the most recent batch", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
-    const { ReviewCommentController } = freshControllerModule();
-    const controller = new ReviewCommentController();
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
 
     controller.beginBatch();
     const a = controller.add({ uri: "file:///a.ts", startLine: 1, endLine: 1, severity: "note", message: "a", authorType: "ai" });
@@ -80,14 +80,14 @@ test("ReviewCommentController.discardLastBatch removes only the most recent batc
   });
 });
 
-test("ReviewCommentController.add dedupes by location + message + severity + authorType", () => {
+test("AnnotationController.add dedupes by location + message + severity + authorType", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
-    const { ReviewCommentController } = freshControllerModule();
-    const controller = new ReviewCommentController();
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
     const a = controller.add({ uri: "file:///x.ts", startLine: 5, endLine: 7, severity: "warning", message: "same", authorType: "ai" });
     const b = controller.add({ uri: "file:///x.ts", startLine: 5, endLine: 7, severity: "warning", message: "same", authorType: "ai" });
-    assert.equal(a.id, b.id, "duplicate add should return existing comment");
+    assert.equal(a.id, b.id, "duplicate add should return existing annotation");
     assert.equal(controller.list().length, 1);
     const c = controller.add({ uri: "file:///x.ts", startLine: 5, endLine: 7, severity: "warning", message: "different", authorType: "ai" });
     assert.notEqual(a.id, c.id);

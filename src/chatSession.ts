@@ -1,6 +1,6 @@
 import type { ConversationMessage, PromptMode } from "./prompt";
 import type { BasketSnapshot, HacklTarget } from "./basket";
-import type { HacklReviewComment } from "./reviewComments";
+import type { HacklAnnotation } from "./annotations";
 
 export const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
   "hackl.addSelectionToContext",
@@ -32,7 +32,7 @@ export interface HacklRequestOptions {
 }
 
 export type ChatOutgoingMessage =
-  | { type: "answer"; text: string; reasoning?: string; reviewComments?: HacklReviewComment[] }
+  | { type: "answer"; text: string; reasoning?: string; annotations?: HacklAnnotation[] }
   | ApprovalRequest
   | { type: "assistantDelta"; channel: "answer" | "reasoning"; text: string }
   | { type: "error" | "status"; text: string }
@@ -42,6 +42,7 @@ export type ChatOutgoingMessage =
   | { type: "basket"; targets: HacklTarget[] }
   | { type: "userPrompt"; text: string }
   | { type: "setPromptText"; text: string }
+  | { type: "setCreateAnnotations"; value: boolean }
   | ChatState
   | { type: "focusInput" };
 
@@ -59,7 +60,7 @@ export interface ApprovalRequest {
 export interface ChatAnswer {
   content: string;
   reasoning?: string;
-  reviewComments?: HacklReviewComment[];
+  annotations?: HacklAnnotation[];
 }
 
 export type PromptProgress =
@@ -216,8 +217,8 @@ export class ChatSession {
       const answer = normalizeAnswer(rawAnswer);
       this.history.push({ role: "assistant", content: answer.content });
       const out: ChatOutgoingMessage = { type: "answer", text: answer.content, reasoning: answer.reasoning };
-      if (answer.reviewComments && answer.reviewComments.length > 0) {
-        (out as { reviewComments?: HacklReviewComment[] }).reviewComments = answer.reviewComments;
+      if (answer.annotations && answer.annotations.length > 0) {
+        (out as { annotations?: HacklAnnotation[] }).annotations = answer.annotations;
       }
       await post(out);
     } catch (error) {

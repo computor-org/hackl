@@ -5,9 +5,10 @@ The durable foundation is independent of the current chat surface:
 
 - `ChatBackend` owns the OpenAI-compatible `/chat/completions` contract.
 - `resolveChatTarget` owns endpoint discovery and loaded-model resolution.
-- `buildHacklMessages` owns prompt assembly from editor metadata and transcript.
+- `buildHacklMessages` owns prompt assembly from editor metadata, basket
+  targets, annotation options, and transcript.
 - `completeWithTools` owns the Qwen-friendly tool loop.
-- `ChatPanel` is the current UI shell only.
+- `ChatViewProvider` is the current UI shell only.
 
 Hackl's broader product role is the missing local Copilot layer: a policy-safe
 VS Code assistant that grows from chat into edit mode and agent mode without
@@ -29,13 +30,14 @@ requires an alias, Hackl uses the first alias advertised by the gateway error.
 No hosted-provider adapters, API presets, custom history layer, or auto-approved
 command mode belong in this phase.
 
-## Context And Tools
+## Basket, Context, And Tools
 
 Hackl now keeps the default prompt small. A normal chat turn includes:
 
 - active/open file paths;
 - active cursor line and column;
 - selection range and selected text capped at 4000 characters;
+- explicit basket targets when present;
 - recent chat transcript;
 - a compact `HACKL_TOOL` contract.
 
@@ -52,6 +54,18 @@ Hackl has four modes:
 - Edit: `read_file` plus exact `replace_text` edits.
 - Work: search, read, and edit without shell commands.
 - Agent: search, read, edit, and approved structured commands.
+
+Modes control capability only. Annotation generation is a separate request
+option. When enabled, Hackl asks for a `hackl-annotations` JSON block, parses it
+into VS Code comment threads, and persists the finished Hackl session under
+`.hackl/sessions/` when configured.
+
+Current basket target kinds are:
+
+- `source-range`
+- `staged-changes`
+- `commit`
+- `markdown-section`
 
 Tool paths are constrained to real workspace paths after symlink resolution.
 File reads and searches skip binary files and files over the tool size limit.
@@ -116,9 +130,6 @@ VS Code does not let extensions contribute directly to the Secondary Sidebar by
 default, so the view must work as a normal contributed view and remain movable
 by the user.
 
-Keep an editor-tab webview command as a secondary long-session surface. Both
-surfaces should share the same chat session and renderer behavior.
-
 The renderer should stay small and local:
 
 - no external network resources;
@@ -130,7 +141,9 @@ The renderer should stay small and local:
 - gray reasoning display from `<think>` or reasoning deltas;
 - estimated input-token/context-window meter;
 - clear busy/error states, Enter-to-send, and transcript clearing;
-- future room for context chips, `@luna`, and `@tutor`.
+- compact basket controls;
+- annotation toggle and discard-last-annotations control;
+- future room for `@luna` and `@tutor`.
 
 Native VS Code chat remains a candidate once the product needs deeper built-in
 chat affordances. It is an optional bridge, not the default UI, because Hackl

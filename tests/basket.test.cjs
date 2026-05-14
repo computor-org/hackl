@@ -3,7 +3,7 @@ const test = require("node:test");
 
 const { BasketService, truncate, describeTarget } = require("../dist/basket.js");
 const { buildHacklMessages } = require("../dist/prompt.js");
-const { parseReviewCommentsFromAnswer } = require("../dist/reviewComments.js");
+const { parseAnnotationsFromAnswer } = require("../dist/annotations.js");
 
 function makeSourceTarget(overrides = {}) {
   return {
@@ -92,6 +92,8 @@ test("buildHacklMessages handles staged-diff target", () => {
   const messages = buildHacklMessages("review", "[no editor context]", [], "ask", { targets: [staged] });
   const body = messages[messages.length - 1].content;
   assert.match(body, /staged-diff files=2/);
+  assert.match(body, /workspace=\/r/);
+  assert.match(body, /a\.ts uri=file:\/\/\/r\/a\.ts/);
 });
 
 test("buildHacklMessages appends annotation output instructions when createAnnotations is true", () => {
@@ -100,36 +102,36 @@ test("buildHacklMessages appends annotation output instructions when createAnnot
   });
   const body = messages[messages.length - 1].content;
   assert.match(body, /annotations requested/);
-  assert.match(body, /hackl-review/);
+  assert.match(body, /hackl-annotations/);
   assert.match(messages[0].content, /Local code helper/);
 });
 
-test("parseReviewCommentsFromAnswer extracts JSON from fenced blocks", () => {
+test("parseAnnotationsFromAnswer extracts JSON from fenced blocks", () => {
   const answer = [
     "Looks fine.",
-    "```hackl-review",
+    "```hackl-annotations",
     JSON.stringify([
       { uri: "file:///x.ts", startLine: 10, endLine: 12, severity: "warning", message: "bounds" },
       { startLine: 4, severity: "note", message: "fallback uri" },
     ]),
     "```",
   ].join("\n");
-  const parsed = parseReviewCommentsFromAnswer(answer, "file:///fallback.ts");
-  assert.equal(parsed.comments.length, 2);
+  const parsed = parseAnnotationsFromAnswer(answer, "file:///fallback.ts");
+  assert.equal(parsed.annotations.length, 2);
   assert.equal(parsed.blocks, 1);
   assert.equal(parsed.parseErrors, 0);
-  assert.equal(parsed.comments[0].uri, "file:///x.ts");
-  assert.equal(parsed.comments[0].severity, "warning");
-  assert.equal(parsed.comments[1].uri, "file:///fallback.ts");
-  assert.equal(parsed.comments[1].endLine, 4);
+  assert.equal(parsed.annotations[0].uri, "file:///x.ts");
+  assert.equal(parsed.annotations[0].severity, "warning");
+  assert.equal(parsed.annotations[1].uri, "file:///fallback.ts");
+  assert.equal(parsed.annotations[1].endLine, 4);
 });
 
-test("parseReviewCommentsFromAnswer reports dropped entries and parse errors", () => {
+test("parseAnnotationsFromAnswer reports dropped entries and parse errors", () => {
   const answer = [
-    "```hackl-review",
+    "```hackl-annotations",
     "[{ not valid json",
     "```",
-    "```hackl-review",
+    "```hackl-annotations",
     JSON.stringify([
       { uri: "file:///a.ts", message: "", startLine: 1, endLine: 1 },
       { uri: "file:///a.ts", message: "ok", startLine: 5, endLine: 4 },
@@ -137,9 +139,9 @@ test("parseReviewCommentsFromAnswer reports dropped entries and parse errors", (
     ]),
     "```",
   ].join("\n");
-  const parsed = parseReviewCommentsFromAnswer(answer);
+  const parsed = parseAnnotationsFromAnswer(answer);
   assert.equal(parsed.parseErrors, 1);
   assert.equal(parsed.blocks, 2);
-  assert.equal(parsed.comments.length, 0);
+  assert.equal(parsed.annotations.length, 0);
   assert.equal(parsed.dropped.length, 4);
 });

@@ -2,96 +2,174 @@
 
 Hackl - hack with local AI.
 
-Hackl is a local-first VS Code assistant for coding. It is the general
-local-AI layer for chat, edit, and agentic coding without requiring GitHub
-Copilot.
+Hackl is a local-first VS Code coding assistant. It talks to a local
+OpenAI-compatible server and keeps Git as the source of truth for review and
+history.
 
-> Hackl does not manage models. Hackl connects to your local OpenAI-compatible
-> server. Use LM Studio if you want easy. Use llama.cpp if you want control.
+Hackl is built around four objects:
 
-## Scope
+- Basket: what Hackl should talk about.
+- Ask/Edit/Work/Agent: what Hackl may do.
+- Annotations: optional structured feedback anchored to source lines.
+- Git: the diff and history layer.
 
-Current:
+Hackl does not manage models, download runtimes, collect telemetry, or require
+sign-in. Hosted APIs are not the product story.
 
-- Right-side chat view.
-- Optional editor chat panel.
-- Markdown and local LaTeX math rendering.
-- Minimal editor context: open file paths, active selection range, and cursor
-  position. Selected text is included up to a small cap.
-- Ask/Edit/Work/Agent modes with bounded `read_file`, `search_files`,
-  `replace_text`, and approved `run_command` tools by mode.
-- Prompt preprocessing/model phase status, gray reasoning display, and a
-  token/context budget indicator.
-- Command palette, editor context menu, and hotkey entry points.
-- Auto-discovery of common local OpenAI-compatible endpoints (llama.cpp on
-  `:8080`, LM Studio on `:1234`).
-- A small **Setup** view with tutorial recipes for LM Studio, llama.cpp, and
-  Ollama. Status bar shows current connection or "connect".
+## Current Surface
 
-Not current:
+- VS Code Secondary Sidebar chat view.
+- Setup panel with LM Studio, llama.cpp, and Ollama recipes.
+- Auto-discovery for LM Studio on `:1234` and llama.cpp on `:8080`.
+- Local Markdown, code, and LaTeX math rendering in chat.
+- Active editor metadata, cursor position, selection range, and capped selected
+  text in the prompt.
+- Context basket targets for source ranges, staged changes, the last commit,
+  and Markdown sections.
+- Ask/Edit/Work/Agent modes with mode-specific tools.
+- Optional annotation generation independent of mode.
+- Staged review command that runs Ask with annotations over staged changes.
+- Hackl session persistence under `.hackl/sessions/` for annotation runs.
 
-- Custom diffs.
-- Inline ghost-text autocomplete (intentionally out of scope; see docs).
-- Hosted API presets.
-- Auto-approved command mode.
-- **No managed server, no model downloader, no GPU probe, no installer.**
-  Hackl pre-`0.0.27` shipped these; they were removed to keep the extension
-  minimal. The `v0.0.26` vsix on the releases page is the last version that
-  managed llama.cpp itself.
+Not in scope:
 
-## Connect to a local model
+- Inline autocomplete.
+- Custom diff/history UI.
+- Model downloader or runtime manager.
+- CLI.
+- Editor-tab chat panel.
+- RAG index.
+- Hosted provider presets.
+- File mutation outside Edit/Work/Agent mode.
 
-Hackl is BYO-server. Pick one of these paths — Hackl ships docs and a setup
-view that links to each:
+## Connect A Model
 
-| Path | Difficulty | When to use it |
-|------|------------|----------------|
-| [LM Studio](https://github.com/computor-org/hackl/blob/main/docs/setup-lmstudio.md) | easy | GUI download + start server with one click |
-| [llama.cpp](https://github.com/computor-org/hackl/blob/main/docs/setup-llamacpp.md) | expert | scriptable, reproducible, pure OSS |
-| [Ollama](https://github.com/computor-org/hackl/blob/main/docs/setup-ollama.md) | alternative | already part of your stack |
+Start an OpenAI-compatible server yourself, then point Hackl at it.
 
-Once your server is running, set `hackl.endpoint` to its base URL (or let
-auto-discovery find `:8080` / `:1234`). Run **Hackl: Check Local Server**
-from the command palette to verify.
+| Path | Use when |
+|------|----------|
+| [LM Studio](https://github.com/computor-org/hackl/blob/main/docs/setup-lmstudio.md) | You want a GUI and a one-click local server. |
+| [llama.cpp](https://github.com/computor-org/hackl/blob/main/docs/setup-llamacpp.md) | You want a scriptable OSS runtime. |
+| [Ollama](https://github.com/computor-org/hackl/blob/main/docs/setup-ollama.md) | Ollama is already in your stack. |
 
-## Settings
+Set `hackl.endpoint` to the server base URL, for example
+`http://localhost:1234/v1`, or leave it empty for local auto-discovery. Run
+`Hackl: Check Local Server` to verify endpoint, model, and context window.
 
-- `hackl.endpoint` — OpenAI-compatible base URL. Empty means auto-discover.
-- `hackl.setupProfile` — `auto` / `lmstudio` / `llamacpp` / `ollama`.
-  Help-text only; foregrounds the matching recipe in the Setup view. Never
-  starts a process.
-- `hackl.maxContextTokens` — override for the prompt-budget meter. When
-  unset, Hackl auto-detects via `/props` (llama.cpp) or `/api/v0/models`
-  (LM Studio) and falls back to 32768.
-- `hackl.maxToolFileChars` — cap for one `read_file` tool result.
-- `hackl.enableThinking` — allow model thinking/reasoning when the server
-  supports it.
-- `hackl.debug` — write diagnostics to the Hackl Debug output channel.
+If `hackl.endpoint` is not localhost or loopback, Hackl asks before sending a
+prompt or selected context.
 
-If `hackl.endpoint` points outside localhost/loopback, Hackl asks before
-sending any prompt.
+## Basket
 
-## Commands
+The basket is the explicit context for a chat turn. Hackl can include these
+target kinds:
 
-- **Hackl: Open Chat** / **Open Chat in Editor**
-- **Hackl: Open Setup Guide** — opens the Setup view.
-- **Hackl: Check Local Server** — probes configured + default endpoints,
-  reports endpoint, model, context.
-- **Hackl: Refresh Endpoint** — clears the detected-context cache and
-  re-probes after you start a server externally.
+- `source-range`: selected code from an editor.
+- `staged-changes`: current Git index diff.
+- `commit`: last commit diff.
+- `markdown-section`: the Markdown section under the cursor.
 
-## File context
+Add targets from the chat toolbar, editor context menu, command palette, or SCM
+title action. Basket labels are clickable and reveal the target in the editor.
+Clearing chat does not clear Git history; Git remains the durable review layer.
 
-By default, Hackl does not send open-file contents. The prompt contains
-file paths, cursor position, selection ranges, and selected text capped at
-4000 characters. The model can request a small file range with:
+By default, Hackl does not send whole open files. It sends metadata and selected
+text up to a cap. When the model needs file bodies, it must request bounded
+tool reads:
 
 ```text
 HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}
 ```
 
-`hackl.maxToolFileChars` caps one file-read result. File tools reject binary
-files, oversized files, and symlinks that resolve outside the workspace.
+## Modes
+
+Modes control capability, not output format.
+
+| Mode | Tools |
+|------|-------|
+| Ask | Read-only, bounded `read_file`. |
+| Edit | Read files and apply exact `replace_text` edits. |
+| Work | Edit plus `search_files` for multi-step code changes. |
+| Agent | Work plus approved `run_command` checks. |
+
+Edit, Work, and Agent produce normal file edits. Review them with `git diff`.
+
+## Annotations
+
+Annotations are optional structured feedback. They are not a mode. Turn on the
+annotations toggle when the basket contains a source or Markdown target.
+
+When annotations are enabled, Hackl asks the model for a fenced
+`hackl-annotations` JSON block. Valid entries become VS Code comment threads
+anchored to file lines. Invalid JSON, missing URIs, bad ranges, dropped entries,
+and missing annotation blocks are reported instead of silently ignored.
+
+Use `Hackl: Discard Last Annotations Batch` or `Ctrl+Alt+Z` to remove the most
+recent AI annotation batch. Use `Hackl: Clear Annotations` to clear all current
+annotation threads.
+
+Replies on annotation threads attach that source range and note back to the
+basket, then reopen chat for follow-up.
+
+## Staged Review
+
+`Hackl: Review Staged Changes (Ask + Annotations)` is the Git review loop:
+
+1. Read staged changes from Git.
+2. Clear the basket.
+3. Add the staged diff target.
+4. Open chat with the review prompt prefilled.
+5. Enable annotations for line-anchored findings.
+
+Stage first, run the command, send the prompt, inspect annotations, then use
+Git to amend, unstage, or commit.
+
+## Sessions
+
+When `hackl.persistSessions` is true, completed annotation runs are written to
+`.hackl/sessions/` as Hackl session JSON. Sessions store the mode, endpoint,
+model, targets, answer, and generated annotations. Old sessions are pruned on
+startup.
+
+## Commands
+
+- `Hackl: Open Chat`
+- `Hackl: Open Setup Guide`
+- `Hackl: Check Local Server`
+- `Hackl: Refresh Endpoint`
+- `Hackl: Add Selection to Context`
+- `Hackl: Add Markdown Section to Context`
+- `Hackl: Add Staged Changes to Context`
+- `Hackl: Add Last Commit to Context`
+- `Hackl: Clear Context Basket`
+- `Hackl: Clear Annotations`
+- `Hackl: Discard Last Annotations Batch`
+- `Hackl: Review Staged Changes (Ask + Annotations)`
+
+## Settings
+
+- `hackl.endpoint`: OpenAI-compatible base URL. Empty means auto-discover.
+- `hackl.setupProfile`: setup recipe ordering only.
+- `hackl.maxContextTokens`: context-window override for the budget meter.
+- `hackl.maxToolFileChars`: cap for one `read_file` result.
+- `hackl.enableThinking`: allow reasoning when the server supports it.
+- `hackl.debug`: write diagnostics to the Hackl Debug output channel.
+- `hackl.persistSessions`: persist annotation runs under `.hackl/sessions/`.
+
+## Architecture
+
+Hackl keeps boundaries small:
+
+- `basket.ts`: target model and basket state.
+- `prompt.ts`: Ask/Edit/Work/Agent prompt assembly.
+- `annotations.ts`: annotation parsing and VS Code comment threads.
+- `gitTargets.ts`: staged and commit targets.
+- `chatSession.ts`: webview session protocol.
+- `toolLoop.ts` and `workspaceTools.ts`: bounded model tools.
+- `extension.ts`: VS Code command wiring.
+
+The public extension API exposes basket operations and session events. It does
+not expose a review-specific mode or context API.
 
 ## Development
 
@@ -105,11 +183,10 @@ npm run test:extension
 npm run package:vsix
 ```
 
-Run a live OpenAI-compatible smoke test with:
+Live model smoke test:
 
 ```bash
 npm run smoke:openai -- http://localhost:1234/v1
 ```
 
-See `docs/architecture.md` for the backend/UI boundary and future
-Computor/Luna integration notes.
+See `docs/architecture.md` for deeper backend/UI notes.

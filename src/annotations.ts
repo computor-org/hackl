@@ -1,10 +1,10 @@
 import type * as vscodeTypes from "vscode";
 import { getVscode } from "./vscodeShim";
 
-export type ReviewSeverity = "note" | "suggestion" | "warning" | "blocking";
-export type ReviewStatus = "open" | "resolved" | "dismissed";
+export type AnnotationSeverity = "note" | "suggestion" | "warning" | "blocking";
+export type AnnotationStatus = "open" | "resolved" | "dismissed";
 
-export interface HacklReviewComment {
+export interface HacklAnnotation {
   id: string;
   // Creation-time hint only. Re-resolve from basket via resolveTargetIdFor when needed;
   // do not trust this field after the basket has changed.
@@ -12,10 +12,10 @@ export interface HacklReviewComment {
   uri: string;
   startLine: number;
   endLine: number;
-  severity: ReviewSeverity;
+  severity: AnnotationSeverity;
   message: string;
   rationale?: string;
-  status: ReviewStatus;
+  status: AnnotationStatus;
   authorType: "human" | "ai";
   aiModel?: string;
   createdAt: number;
@@ -25,10 +25,10 @@ let counter = 0;
 
 interface ThreadEntry {
   thread: vscodeTypes.CommentThread;
-  comment: HacklReviewComment;
+  comment: HacklAnnotation;
 }
 
-export class ReviewCommentController {
+export class AnnotationController {
   private controller: vscodeTypes.CommentController;
   private readonly threads = new Map<string, ThreadEntry>();
   private readonly vscode: typeof vscodeTypes;
@@ -64,7 +64,7 @@ export class ReviewCommentController {
     return `${uri}#${startLine}-${endLine}`;
   }
 
-  findByLocation(uri: string, startLine: number, endLine: number): HacklReviewComment | undefined {
+  findByLocation(uri: string, startLine: number, endLine: number): HacklAnnotation | undefined {
     for (const entry of this.threads.values()) {
       if (entry.comment.uri === uri && entry.comment.startLine === startLine && entry.comment.endLine === endLine) {
         return entry.comment;
@@ -75,7 +75,7 @@ export class ReviewCommentController {
 
   constructor() {
     this.vscode = getVscode();
-    this.controller = this.vscode.comments.createCommentController("hackl.review", "Hackl Review");
+    this.controller = this.vscode.comments.createCommentController("hackl.annotations", "Hackl Annotations");
     const VscRange = this.vscode.Range;
     this.controller.commentingRangeProvider = {
       provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.Range[] {
@@ -84,18 +84,18 @@ export class ReviewCommentController {
     };
   }
 
-  list(): HacklReviewComment[] {
+  list(): HacklAnnotation[] {
     return Array.from(this.threads.values()).map((entry) => entry.comment);
   }
 
-  add(input: Omit<HacklReviewComment, "id" | "status" | "createdAt"> & { status?: ReviewStatus; createdAt?: number }): HacklReviewComment {
+  add(input: Omit<HacklAnnotation, "id" | "status" | "createdAt"> & { status?: AnnotationStatus; createdAt?: number }): HacklAnnotation {
     const dup = this.findByLocation(input.uri, input.startLine, input.endLine);
     if (dup && dup.message === input.message && dup.severity === input.severity && dup.authorType === input.authorType) {
       return dup;
     }
     counter += 1;
     const id = `rev-${Date.now().toString(36)}-${counter.toString(36)}`;
-    const comment: HacklReviewComment = {
+    const comment: HacklAnnotation = {
       id,
       targetId: input.targetId,
       status: input.status ?? "open",
@@ -136,12 +136,12 @@ export class ReviewCommentController {
     return comment;
   }
 
-  registerHumanComment(thread: vscodeTypes.CommentThread, message: string): HacklReviewComment {
+  registerHumanComment(thread: vscodeTypes.CommentThread, message: string): HacklAnnotation {
     counter += 1;
     const id = `rev-${Date.now().toString(36)}-${counter.toString(36)}`;
     const startLine = (thread.range?.start.line ?? 0) + 1;
     const endLine = (thread.range?.end.line ?? 0) + 1;
-    const comment: HacklReviewComment = {
+    const comment: HacklAnnotation = {
       id,
       status: "open",
       uri: thread.uri.toString(),
@@ -207,7 +207,7 @@ export class ReviewCommentController {
   }
 }
 
-function formatBody(comment: HacklReviewComment): string {
+function formatBody(comment: HacklAnnotation): string {
   const lines = [comment.message];
   if (comment.rationale) {
     lines.push("");
@@ -216,26 +216,26 @@ function formatBody(comment: HacklReviewComment): string {
   return lines.join("\n");
 }
 
-const REVIEW_COMMENT_BLOCK_RE = /```(?:hackl-review|review)\s*([\s\S]*?)```/g;
+const ANNOTATION_BLOCK_RE = /```(?:hackl-annotations|hackl-review|review)\s*([\s\S]*?)```/g;
 
-export interface ParsedReviewComments {
-  comments: Array<Omit<HacklReviewComment, "id" | "status" | "createdAt">>;
+export interface ParsedAnnotations {
+  annotations: Array<Omit<HacklAnnotation, "id" | "status" | "createdAt">>;
   blocks: number;
   parseErrors: number;
   dropped: Array<{ reason: string; raw?: string }>;
 }
 
-export function parseReviewCommentsFromAnswer(
+export function parseAnnotationsFromAnswer(
   answer: string,
   defaultUri?: string,
   origin?: { aiModel?: string },
-): ParsedReviewComments {
-  const comments: ParsedReviewComments["comments"] = [];
-  const dropped: ParsedReviewComments["dropped"] = [];
+): ParsedAnnotations {
+  const annotations: ParsedAnnotations["annotations"] = [];
+  const dropped: ParsedAnnotations["dropped"] = [];
   let blocks = 0;
   let parseErrors = 0;
   let match: RegExpExecArray | null;
-  while ((match = REVIEW_COMMENT_BLOCK_RE.exec(answer)) !== null) {
+  while ((match = ANNOTATION_BLOCK_RE.exec(answer)) !== null) {
     blocks += 1;
     let json: unknown;
     try {
@@ -263,7 +263,7 @@ export function parseReviewCommentsFromAnswer(
         dropped.push({ reason: "bad-range" });
         continue;
       }
-      comments.push({
+      annotations.push({
         uri,
         startLine,
         endLine,
@@ -275,10 +275,10 @@ export function parseReviewCommentsFromAnswer(
       });
     }
   }
-  return { comments, blocks, parseErrors, dropped };
+  return { annotations, blocks, parseErrors, dropped };
 }
 
-function normalizeSeverity(value: unknown): ReviewSeverity {
+function normalizeSeverity(value: unknown): AnnotationSeverity {
   const text = typeof value === "string" ? value.toLowerCase() : "";
   if (text === "blocking" || text === "warning" || text === "suggestion" || text === "note") return text;
   return "note";

@@ -1,6 +1,8 @@
 import type { ChatMessage } from "./chatClient";
 import type { HacklTarget } from "./basket";
 import { ASK_TOOL_INSTRUCTIONS, EDIT_TOOL_INSTRUCTIONS, WORK_TOOL_INSTRUCTIONS, AGENT_TOOL_INSTRUCTIONS } from "./tools";
+import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export type ConversationMessage = Pick<ChatMessage, "role" | "content">;
 export type PromptMode = "ask" | "edit" | "work" | "agent";
@@ -13,9 +15,9 @@ const ASK_SYSTEM_PROMPT = [
 ].join("\n");
 
 const ANNOTATION_OUTPUT_INSTRUCTIONS = [
-  "annotations requested: in addition to your chat answer, emit one fenced block ```hackl-review containing a JSON array of comments.",
-  "Each comment: { uri (copy from a target), startLine (1-based int), endLine (1-based int), severity (note|suggestion|warning|blocking), message, rationale? }.",
-  "Anchor each comment to one target's uri and lines. Prefer actionable, non-duplicate comments. If you have nothing concrete to anchor, emit an empty array.",
+  "annotations requested: in addition to your chat answer, emit one fenced block ```hackl-annotations containing a JSON array.",
+  "Each annotation: { uri (copy from a source/Markdown target or staged/commit fileUris entry), startLine (1-based int), endLine (1-based int), severity (note|suggestion|warning|blocking), message, rationale? }.",
+  "Anchor each annotation to one target's uri and lines. Prefer actionable, non-duplicate annotations. If you have nothing concrete to anchor, emit an empty array.",
 ].join("\n");
 
 const EDIT_SYSTEM_PROMPT = [
@@ -89,7 +91,7 @@ function formatTarget(target: HacklTarget): string {
       const fence = "```" + (target.languageId || "");
       const trunc = target.truncated ? "\n...(truncated)" : "";
       const note = (target.metadata as { note?: string } | undefined)?.note;
-      const noteBlock = note ? `\n  reviewer note: ${note}` : "";
+      const noteBlock = note ? `\n  annotation note: ${note}` : "";
       return `${head}${noteBlock}\n${fence}\n${target.text}${trunc}\n\`\`\``;
     }
     case "markdown-section": {
@@ -99,16 +101,31 @@ function formatTarget(target: HacklTarget): string {
       return `${head}\n\`\`\`markdown\n${target.text}${trunc}\n\`\`\``;
     }
     case "staged-changes": {
-      const head = `- id=${target.id} staged-diff files=${target.files.length}`;
+      const files = formatWorkspaceFiles(target.workspaceRoot, target.files);
+      const head = `- id=${target.id} staged-diff files=${target.files.length} workspace=${target.workspaceRoot}${files}`;
       const trunc = target.diffTruncated ? "\n...(diff truncated)" : "";
       return `${head}\n\`\`\`diff\n${target.diff}${trunc}\n\`\`\``;
     }
     case "commit": {
-      const head = `- id=${target.id} commit ${target.sha.slice(0, 12)} "${target.subject}" files=${target.files.length}`;
+      const files = formatWorkspaceFiles(target.workspaceRoot, target.files);
+      const head = `- id=${target.id} commit ${target.sha.slice(0, 12)} "${target.subject}" files=${target.files.length} workspace=${target.workspaceRoot}${files}`;
       const trunc = target.diffTruncated ? "\n...(diff truncated)" : "";
       return `${head}\n\`\`\`diff\n${target.diff}${trunc}\n\`\`\``;
     }
   }
+}
+
+function formatWorkspaceFiles(workspaceRoot: string, files: string[]): string {
+  if (files.length === 0) return "";
+  const formatted = files
+    .slice(0, 20)
+    .map((file) => {
+      const fullPath = path.resolve(workspaceRoot, file);
+      return `${file} uri=${pathToFileURL(fullPath).toString()}`;
+    })
+    .join(", ");
+  const suffix = files.length > 20 ? ", ..." : "";
+  return ` fileUris=[${formatted}${suffix}]`;
 }
 
 function systemPrompt(mode: PromptMode): string {

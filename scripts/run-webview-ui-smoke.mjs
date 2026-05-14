@@ -75,6 +75,23 @@ try {
   assert.match(await page.locator("#send-label").innerText(), /\+ annotations/);
   await page.locator("#annotations-toggle").click();
 
+  // Staged diffs are also annotatable.
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "basket", targets: [{ id: "staged-1", kind: "staged-changes", workspaceRoot: "/tmp/repo", files: ["x.ts"] }] },
+    }));
+  });
+  await page.waitForFunction(() => !document.getElementById("annotations-toggle").classList.contains("hidden-unavailable"));
+  assert.equal(await page.locator("#annotations-toggle").isVisible(), true);
+
+  // Staged review can turn annotations on directly.
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "setCreateAnnotations", value: true } }));
+  });
+  await page.waitForFunction(() => document.getElementById("send-label").textContent.includes("annotations"));
+  assert.match(await page.locator("#send-label").innerText(), /\+ annotations/);
+  await page.locator("#annotations-toggle").click();
+
   // setPromptText populates the textarea
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", { data: { type: "setPromptText", text: "preset" } }));

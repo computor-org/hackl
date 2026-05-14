@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { HacklTarget } from "./basket";
-import type { HacklReviewComment } from "./reviewComments";
+import type { HacklAnnotation } from "./annotations";
 import type { PromptMode } from "./prompt";
 
 export interface HacklSessionRecord {
@@ -13,7 +13,7 @@ export interface HacklSessionRecord {
   gitHead?: string;
   targets: HacklTarget[];
   answer?: string;
-  comments: HacklReviewComment[];
+  annotations: HacklAnnotation[];
 }
 
 let counter = 0;

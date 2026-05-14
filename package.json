@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.34",
+  "version": "0.0.35",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -43,15 +43,15 @@
         "category": "Hackl"
       },
       {
-        "command": "hackl.replyToReviewThread",
-        "title": "Submit Review Comment",
+        "command": "hackl.replyToAnnotationThread",
+        "title": "Submit Annotation Reply",
         "category": "Hackl",
         "icon": "$(check)",
         "enablement": "false"
       },
       {
-        "command": "hackl.deleteReviewThread",
-        "title": "Delete Review Thread",
+        "command": "hackl.deleteAnnotationThread",
+        "title": "Delete Annotation Thread",
         "category": "Hackl",
         "icon": "$(trash)",
         "enablement": "false"
@@ -83,7 +83,7 @@
         "category": "Hackl"
       },
       {
-        "command": "hackl.clearReviewComments",
+        "command": "hackl.clearAnnotations",
         "title": "Clear Annotations",
         "category": "Hackl"
       },
@@ -158,16 +158,16 @@
       ],
       "comments/commentThread/context": [
         {
-          "command": "hackl.replyToReviewThread",
+          "command": "hackl.replyToAnnotationThread",
           "group": "inline@1",
-          "when": "commentController == hackl.review"
+          "when": "commentController == hackl.annotations"
         }
       ],
       "comments/commentThread/title": [
         {
-          "command": "hackl.deleteReviewThread",
+          "command": "hackl.deleteAnnotationThread",
           "group": "inline@1",
-          "when": "commentController == hackl.review"
+          "when": "commentController == hackl.annotations"
         }
       ],
       "scm/title": [

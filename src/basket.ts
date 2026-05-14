@@ -276,7 +276,7 @@ export function createStagedChangesTarget(args: {
   };
 }
 
-export function createReviewNoteTarget(args: {
+export function createAnnotationNoteTarget(args: {
   uri: string;
   languageId: string;
   relativePath: string;

@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { BasketService } = require("../dist/basket.js");
-const { parseReviewCommentsFromAnswer } = require("../dist/reviewComments.js");
+const { parseAnnotationsFromAnswer } = require("../dist/annotations.js");
 const { newHacklSessionId, persistHacklSession } = require("../dist/hacklSession.js");
 const { resolveTargetIdFor } = require("../dist/targetResolve.js");
 
@@ -22,16 +22,16 @@ test("resolveTargetIdFor prefers an enclosing range, falls back to same uri", ()
 });
 
 
-test("parseReviewCommentsFromAnswer tags comments as AI with model", () => {
+test("parseAnnotationsFromAnswer tags annotations as AI with model", () => {
   const answer = [
-    "```hackl-review",
+    "```hackl-annotations",
     JSON.stringify([{ uri: "file:///a.ts", startLine: 1, endLine: 2, severity: "note", message: "m" }]),
     "```",
   ].join("\n");
-  const parsed = parseReviewCommentsFromAnswer(answer, undefined, { aiModel: "qwen3" });
-  assert.equal(parsed.comments.length, 1);
-  assert.equal(parsed.comments[0].authorType, "ai");
-  assert.equal(parsed.comments[0].aiModel, "qwen3");
+  const parsed = parseAnnotationsFromAnswer(answer, undefined, { aiModel: "qwen3" });
+  assert.equal(parsed.annotations.length, 1);
+  assert.equal(parsed.annotations[0].authorType, "ai");
+  assert.equal(parsed.annotations[0].aiModel, "qwen3");
 });
 
 test("persistHacklSession writes a JSON file under .hackl/sessions/", async () => {
@@ -45,7 +45,7 @@ test("persistHacklSession writes a JSON file under .hackl/sessions/", async () =
       model: "test",
       targets: [],
       answer: "done",
-      comments: [],
+      annotations: [],
     };
     const file = await persistHacklSession(root, session);
     assert.ok(file && fssync.existsSync(file));

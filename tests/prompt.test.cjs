@@ -69,3 +69,77 @@ test("buildHacklMessages enables command instructions in agent mode", () => {
   assert.match(agent[0].content, /run_command/);
   assert.doesNotMatch(agent[0].content, /skips approval prompts/);
 });
+
+test("buildHacklMessages formats source and markdown target variants", () => {
+  const messages = buildHacklMessages("use targets", "ctx", [], "ask", {
+    targets: [
+      {
+        id: "src-note",
+        addedAt: 1,
+        kind: "source-range",
+        uri: "file:///repo/a.ts",
+        languageId: "",
+        relativePath: "a.ts",
+        startLine: 2,
+        startCharacter: 1,
+        endLine: 3,
+        endCharacter: 1,
+        text: "let x = 1;",
+        truncated: true,
+        metadata: { note: "check this" },
+      },
+      {
+        id: "md-empty-heading",
+        addedAt: 1,
+        kind: "markdown-section",
+        uri: "file:///repo/README.md",
+        relativePath: "README.md",
+        startLine: 1,
+        endLine: 2,
+        headingPath: [],
+        text: "# Title",
+        truncated: true,
+      },
+    ],
+  });
+  const body = messages.at(-1).content;
+  assert.match(body, /annotation note: check this/);
+  assert.match(body, /\.\.\.\(truncated\)/);
+  assert.match(body, /md README\.md:1-2 uri=file:\/\/\/repo\/README\.md/);
+});
+
+test("buildHacklMessages formats commit target file URI limits", () => {
+  const files = Array.from({ length: 21 }, (_, index) => `src/${index}.ts`);
+  const messages = buildHacklMessages("review", "ctx", [], "ask", {
+    targets: [
+      {
+        id: "commit-1",
+        addedAt: 1,
+        kind: "commit",
+        workspaceRoot: "/repo",
+        sha: "1234567890abcdef",
+        subject: "fix",
+        files,
+        diff: "diff",
+        diffTruncated: true,
+      },
+      {
+        id: "commit-empty",
+        addedAt: 1,
+        kind: "commit",
+        workspaceRoot: "/repo",
+        sha: "abcdef123456",
+        subject: "empty",
+        files: [],
+        diff: "",
+        diffTruncated: false,
+      },
+    ],
+  });
+  const body = messages.at(-1).content;
+  assert.match(body, /commit 1234567890ab "fix" files=21 workspace=\/repo/);
+  assert.match(body, /src\/0\.ts uri=file:\/\/\/repo\/src\/0\.ts/);
+  assert.match(body, /fileUris=\[[\s\S]*, \.\.\.\]/);
+  assert.match(body, /\.\.\.\(diff truncated\)/);
+  assert.match(body, /commit abcdef123456 "empty" files=0 workspace=\/repo\n```diff/);
+});

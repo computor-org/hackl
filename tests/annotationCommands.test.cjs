@@ -27,7 +27,7 @@ function withVscode(vscode, callback) {
   return Promise.resolve(callback()).finally(() => { Module._load = original; });
 }
 
-test("handleReviewReply adds a basket target and registers a human comment", async () => {
+test("handleAnnotationReply adds a basket target and registers a human annotation", async () => {
   const vsc = makeVscodeStub();
   let addedTarget;
   let humanText;
@@ -36,7 +36,7 @@ test("handleReviewReply adds a basket target and registers a human comment", asy
     list: () => [],
     remove: () => undefined,
   };
-  const reviewController = {
+  const annotationController = {
     registerHumanComment: (_t, text) => { humanText = text; return { id: "rev-1" }; },
     disposeThread: () => undefined,
   };
@@ -46,10 +46,10 @@ test("handleReviewReply adds a basket target and registers a human comment", asy
   };
   const reply = { thread, text: " please clarify  " };
   await withVscode(vsc, async () => {
-    delete require.cache[require.resolve("../dist/reviewCommands.js")];
+    delete require.cache[require.resolve("../dist/annotationCommands.js")];
     delete require.cache[require.resolve("../dist/basket.js")];
-    const { handleReviewReply } = require("../dist/reviewCommands.js");
-    await handleReviewReply(reply, basket, reviewController);
+    const { handleAnnotationReply } = require("../dist/annotationCommands.js");
+    await handleAnnotationReply(reply, basket, annotationController);
   });
   assert.ok(addedTarget, "expected basket.add to be called");
   assert.equal(addedTarget.kind, "source-range");
@@ -57,13 +57,13 @@ test("handleReviewReply adds a basket target and registers a human comment", asy
   assert.equal(humanText, "please clarify");
 });
 
-test("handleReviewReply ignores empty replies", async () => {
+test("handleAnnotationReply ignores empty replies", async () => {
   const vsc = makeVscodeStub();
   let called = false;
   await withVscode(vsc, async () => {
-    delete require.cache[require.resolve("../dist/reviewCommands.js")];
-    const { handleReviewReply } = require("../dist/reviewCommands.js");
-    await handleReviewReply(
+    delete require.cache[require.resolve("../dist/annotationCommands.js")];
+    const { handleAnnotationReply } = require("../dist/annotationCommands.js");
+    await handleAnnotationReply(
       { thread: { uri: { toString: () => "x" }, range: { start: {line:0}, end: {line:0} } }, text: "   " },
       { add: () => { called = true; }, list: () => [], remove: () => undefined },
       { registerHumanComment: () => { called = true; }, disposeThread: () => undefined },

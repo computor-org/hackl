@@ -85,6 +85,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     void post(this.view.webview, { type: "setPromptText", text });
   }
 
+  setCreateAnnotations(value: boolean): void {
+    if (!this.view) return;
+    void post(this.view.webview, { type: "setCreateAnnotations", value });
+  }
+
   notifyStatus(text: string): void {
     if (this.view) {
       void post(this.view.webview, { type: "status", text });

@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
-import { BasketService, createReviewNoteTarget } from "./basket";
-import { ReviewCommentController } from "./reviewComments";
+import { BasketService, createAnnotationNoteTarget } from "./basket";
+import { AnnotationController } from "./annotations";
 
-export async function handleReviewReply(
+export async function handleAnnotationReply(
   reply: vscode.CommentReply,
   basketService: BasketService,
-  reviewController: ReviewCommentController,
+  annotationController: AnnotationController,
 ): Promise<void> {
   const text = (reply.text ?? "").trim();
   if (!text) return;
@@ -20,7 +20,7 @@ export async function handleReviewReply(
   const startLine = startLineIdx + 1;
   const endLine = endLineIdx + 1;
   const threadKey = `${thread.uri.toString()}#${startLine}-${endLine}`;
-  const target = createReviewNoteTarget({
+  const target = createAnnotationNoteTarget({
     uri: thread.uri.toString(),
     languageId: document.languageId,
     relativePath: vscode.workspace.asRelativePath(thread.uri, false),
@@ -32,13 +32,13 @@ export async function handleReviewReply(
     threadKey,
   });
   basketService.add(target);
-  reviewController.registerHumanComment(thread, text);
+  annotationController.registerHumanComment(thread, text);
 }
 
-export function handleDeleteReviewThread(
+export function handleDeleteAnnotationThread(
   thread: vscode.CommentThread,
   basketService: BasketService,
-  reviewController: ReviewCommentController,
+  annotationController: AnnotationController,
 ): void {
   const range = thread.range;
   const key = range
@@ -50,5 +50,5 @@ export function handleDeleteReviewThread(
       if (meta?.threadKey === key) basketService.remove(target.id);
     }
   }
-  reviewController.disposeThread(thread);
+  annotationController.disposeThread(thread);
 }

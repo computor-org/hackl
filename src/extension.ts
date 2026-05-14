@@ -31,16 +31,16 @@ import {
   createSourceRangeTarget,
   describeTarget,
 } from "./basket";
-import { HacklReviewComment, ReviewCommentController, parseReviewCommentsFromAnswer } from "./reviewComments";
+import { HacklAnnotation, AnnotationController, parseAnnotationsFromAnswer } from "./annotations";
 import { resolveTargetIdFor } from "./targetResolve";
 import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
 import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./hacklSession";
-import { handleReviewReply, handleDeleteReviewThread } from "./reviewCommands";
+import { handleAnnotationReply, handleDeleteAnnotationThread } from "./annotationCommands";
 import { readHacklConfig, hasUserConfigured } from "./config";
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let basketService: BasketService | undefined;
-let reviewController: ReviewCommentController | undefined;
+let annotationController: AnnotationController | undefined;
 let sessionFinishedEmitter: vscode.EventEmitter<HacklSessionRecord> | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
 
@@ -57,14 +57,14 @@ export interface HacklApi {
 
 export function activate(context: vscode.ExtensionContext): HacklApi {
   basketService = new BasketService();
-  reviewController = new ReviewCommentController();
+  annotationController = new AnnotationController();
   sessionFinishedEmitter = new vscode.EventEmitter<HacklSessionRecord>();
   const basketBridge = makeBasketBridge(basketService);
 
   const chatViewProvider = new ChatViewProvider(context, answerPrompt, currentChatState, basketBridge);
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
-  context.subscriptions.push(statusBarItem, basketService, reviewController, sessionFinishedEmitter);
+  context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
@@ -91,17 +91,17 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       const uri = vscode.Uri.joinPath(context.extensionUri, "docs", file);
       await vscode.commands.executeCommand("markdown.showPreview", uri);
     }),
-    vscode.commands.registerCommand("hackl.replyToReviewThread", async (reply: vscode.CommentReply) => {
-      if (!basketService || !reviewController) return;
-      await handleReviewReply(reply, basketService, reviewController);
+    vscode.commands.registerCommand("hackl.replyToAnnotationThread", async (reply: vscode.CommentReply) => {
+      if (!basketService || !annotationController) return;
+      await handleAnnotationReply(reply, basketService, annotationController);
       await vscode.commands.executeCommand("hackl.chat");
       chatViewProvider.notifyStatus(
         `Reply attached to basket from ${vscode.workspace.asRelativePath(reply.thread.uri, false)}:${(reply.thread.range?.start.line ?? 0) + 1}`,
       );
     }),
-    vscode.commands.registerCommand("hackl.deleteReviewThread", (thread: vscode.CommentThread) => {
-      if (!basketService || !reviewController) return;
-      handleDeleteReviewThread(thread, basketService, reviewController);
+    vscode.commands.registerCommand("hackl.deleteAnnotationThread", (thread: vscode.CommentThread) => {
+      if (!basketService || !annotationController) return;
+      handleDeleteAnnotationThread(thread, basketService, annotationController);
     }),
     vscode.commands.registerCommand("hackl.addSelectionToContext", async () => {
       const editor = vscode.window.activeTextEditor;
@@ -144,11 +144,11 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       }
       addAndReveal(basketService!, result, chatViewProvider);
     }),
-    vscode.commands.registerCommand("hackl.clearReviewComments", () => {
-      reviewController?.clear();
+    vscode.commands.registerCommand("hackl.clearAnnotations", () => {
+      annotationController?.clear();
     }),
     vscode.commands.registerCommand("hackl.discardLastAnnotations", () => {
-      const n = reviewController?.discardLastBatch() ?? 0;
+      const n = annotationController?.discardLastBatch() ?? 0;
       vscode.window.setStatusBarMessage(
         n > 0 ? `Hackl: discarded ${n} annotation${n === 1 ? "" : "s"}` : "Hackl: no recent annotations to discard",
         2000,
@@ -182,6 +182,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       chatViewProvider.setPromptText(
         "Review the staged changes for correctness, regressions, missing tests, and risky assumptions.",
       );
+      chatViewProvider.setCreateAnnotations(true);
       chatViewProvider.notifyStatus("Annotations toggle is enabled — press Send to run the review.");
     }),
   );
@@ -279,7 +280,7 @@ async function setEndpoint(endpoint: string): Promise<void> {
 export function deactivate(): void {
   statusBarItem = undefined;
   basketService = undefined;
-  reviewController = undefined;
+  annotationController = undefined;
   disposeDebugLog();
 }
 
@@ -355,22 +356,22 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
 
   const result: ChatAnswer = { content: answer.content, reasoning: answer.reasoning };
-  let createdComments: HacklReviewComment[] = [];
-  if (createAnnotations && reviewController) {
-    const parsed = parseReviewCommentsFromAnswer(answer.content, defaultUriForReview(targets), { aiModel: target.model });
-    const withTargetIds = parsed.comments.map((c) => ({ ...c, targetId: resolveTargetIdFor(c, targets) }));
-    reviewController.beginBatch();
-    createdComments = withTargetIds.map((c) => reviewController!.add(c));
-    reviewController.recordBatch(createdComments.map((c) => c.id));
-    if (createdComments.length > 0) {
-      result.reviewComments = createdComments;
+  let createdAnnotations: HacklAnnotation[] = [];
+  if (createAnnotations && annotationController) {
+    const parsed = parseAnnotationsFromAnswer(answer.content, defaultUriForAnnotations(targets), { aiModel: target.model });
+    const withTargetIds = parsed.annotations.map((c) => ({ ...c, targetId: resolveTargetIdFor(c, targets) }));
+    annotationController.beginBatch();
+    createdAnnotations = withTargetIds.map((c) => annotationController!.add(c));
+    annotationController.recordBatch(createdAnnotations.map((c) => c.id));
+    if (createdAnnotations.length > 0) {
+      result.annotations = createdAnnotations;
       const dropSuffix = parsed.dropped.length > 0 ? ` · ${parsed.dropped.length} dropped` : "";
       vscode.window.setStatusBarMessage(
-        `Hackl: ${createdComments.length} annotation${createdComments.length === 1 ? "" : "s"}${dropSuffix}`,
+        `Hackl: ${createdAnnotations.length} annotation${createdAnnotations.length === 1 ? "" : "s"}${dropSuffix}`,
         3000,
       );
     } else if (parsed.blocks === 0) {
-      vscode.window.setStatusBarMessage("Hackl: no hackl-review block in answer — showing raw answer.", 4000);
+      vscode.window.setStatusBarMessage("Hackl: no hackl-annotations block in answer — showing raw answer.", 4000);
     } else if (parsed.parseErrors > 0) {
       vscode.window.setStatusBarMessage(
         `Hackl: ${parsed.parseErrors} annotation block${parsed.parseErrors === 1 ? "" : "s"} were invalid JSON — showing raw answer.`,
@@ -390,7 +391,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       model: target.model,
       targets,
       answer: answer.content,
-      comments: createdComments,
+      annotations: createdAnnotations,
     });
   }
   return result;
@@ -413,7 +414,7 @@ async function emitHacklSession(input: {
   model: string;
   targets: HacklTarget[];
   answer: string;
-  comments: HacklReviewComment[];
+  annotations: HacklAnnotation[];
 }): Promise<void> {
   const session: HacklSessionRecord = {
     id: newHacklSessionId(),
@@ -423,7 +424,7 @@ async function emitHacklSession(input: {
     model: input.model,
     targets: input.targets,
     answer: input.answer,
-    comments: input.comments,
+    annotations: input.annotations,
   };
   sessionFinishedEmitter?.fire(session);
   if (!readHacklConfig().persistSessions) return;
@@ -438,7 +439,7 @@ async function emitHacklSession(input: {
   });
 }
 
-function defaultUriForReview(targets: HacklTarget[]): string | undefined {
+function defaultUriForAnnotations(targets: HacklTarget[]): string | undefined {
   for (const target of targets) {
     if (target.kind === "source-range" || target.kind === "markdown-section") return target.uri;
   }
@@ -499,4 +500,3 @@ async function getDetectedMaxContext(endpoint: string): Promise<number | undefin
   detectedContextCache.set(endpoint, detected);
   return detected;
 }
-

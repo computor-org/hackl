@@ -115,12 +115,7 @@
   if (annotationsToggle) {
     annotationsToggle.addEventListener("click", () => {
       if (annotationsToggle.disabled) return;
-      annotationsOn = !annotationsOn;
-      annotationsToggle.setAttribute("aria-pressed", String(annotationsOn));
-      annotationsToggle.title = annotationsOn
-        ? "Annotations ON — model will also emit anchored comments"
-        : "Also produce line-anchored comments (requires a text-file target in the basket)";
-      updateComboStrip();
+      setAnnotations(!annotationsOn);
       focusPrompt();
     });
   }
@@ -133,7 +128,7 @@
     }
     if (send) {
       const tier = { ask: "read", edit: "read+edit", work: "read+edit+search", agent: "read+edit+search+cmd" }[selectedMode] || selectedMode;
-      send.title = "Send · " + selectedMode + " (" + tier + ")" + (annotationsOn ? " + anchored comments" : "");
+      send.title = "Send · " + selectedMode + " (" + tier + ")" + (annotationsOn ? " + annotations" : "");
     }
   }
 
@@ -241,6 +236,9 @@
       prompt.focus();
       autoResize();
     }
+    if (message.type === "setCreateAnnotations") {
+      setAnnotations(Boolean(message.value));
+    }
     if (message.type === "focusInput") {
       requestAnimationFrame(() => {
         prompt.focus();
@@ -253,8 +251,8 @@
     if (message.type === "answer") {
       clearStatus();
       finishAssistant(message.text, message.reasoning || "");
-      if (Array.isArray(message.reviewComments) && message.reviewComments.length > 0) {
-        appendReviewComments(message.reviewComments);
+      if (Array.isArray(message.annotations) && message.annotations.length > 0) {
+        appendAnnotations(message.annotations);
         const discard = document.getElementById("annotations-discard");
         if (discard) discard.hidden = false;
       }
@@ -285,7 +283,7 @@
 
   function updateAnnotationsAvailable(targets) {
     if (!annotationsToggle) return;
-    const anchorable = targets.some((t) => t.kind === "source-range" || t.kind === "markdown-section");
+    const anchorable = targets.some(canAnnotateTarget);
     annotationsToggle.disabled = !anchorable;
     annotationsToggle.classList.toggle("hidden-unavailable", !anchorable);
     if (!anchorable && annotationsOn) {
@@ -294,8 +292,25 @@
       updateComboStrip();
     }
     annotationsToggle.title = annotationsOn
-      ? "Annotations ON — model will also emit anchored comments"
-      : "Also produce line-anchored comments";
+      ? "Annotations ON - model will also emit line annotations"
+      : "Also produce line annotations";
+  }
+
+  function canAnnotateTarget(target) {
+    return target.kind === "source-range"
+      || target.kind === "markdown-section"
+      || target.kind === "staged-changes"
+      || target.kind === "commit";
+  }
+
+  function setAnnotations(value) {
+    if (!annotationsToggle || annotationsToggle.disabled) return;
+    annotationsOn = Boolean(value);
+    annotationsToggle.setAttribute("aria-pressed", String(annotationsOn));
+    annotationsToggle.title = annotationsOn
+      ? "Annotations ON - model will also emit line annotations"
+      : "Also produce line annotations";
+    updateComboStrip();
   }
 
   function renderBasket(targets) {
@@ -343,8 +358,6 @@
     if (kind === "markdown-section") return "md";
     if (kind === "staged-changes") return "staged";
     if (kind === "commit") return "commit";
-    if (kind === "diff-range") return "diff";
-    if (kind === "diagnostic") return "diag";
     return kind;
   }
 
@@ -356,30 +369,28 @@
     }
     if (target.kind === "staged-changes") return "staged diff: " + (target.files ? target.files.length : 0) + " files";
     if (target.kind === "commit") return "commit " + String(target.sha || "").slice(0, 7) + " " + (target.subject || "");
-    if (target.kind === "diff-range") return "diff " + target.base + ".." + target.head;
-    if (target.kind === "diagnostic") return target.relativePath + ":" + target.startLine;
     return target.kind;
   }
 
-  function appendReviewComments(comments) {
+  function appendAnnotations(annotations) {
     const list = document.createElement("ul");
-    list.className = "review-list";
-    for (const comment of comments) {
+    list.className = "annotation-list";
+    for (const annotation of annotations) {
       const item = document.createElement("li");
-      item.className = "review-item";
+      item.className = "annotation-item";
       const head = document.createElement("div");
-      head.className = "review-item-head review-sev-" + comment.severity;
-      head.textContent = comment.severity + " · " + uriBasename(comment.uri) + ":" + comment.startLine;
+      head.className = "annotation-item-head annotation-sev-" + annotation.severity;
+      head.textContent = annotation.severity + " · " + uriBasename(annotation.uri) + ":" + annotation.startLine;
       const body = document.createElement("div");
-      body.textContent = comment.message;
+      body.textContent = annotation.message;
       item.appendChild(head);
       item.appendChild(body);
-      if (comment.rationale) {
+      if (annotation.rationale) {
         const rationale = document.createElement("div");
         rationale.style.color = "var(--vscode-descriptionForeground)";
         rationale.style.marginTop = "2px";
         rationale.style.fontSize = "11px";
-        rationale.textContent = comment.rationale;
+        rationale.textContent = annotation.rationale;
         item.appendChild(rationale);
       }
       list.appendChild(item);
@@ -388,7 +399,7 @@
     wrap.className = "entry assistant";
     const label = document.createElement("div");
     label.className = "role";
-    label.textContent = "Hackl · review";
+    label.textContent = "Hackl · annotations";
     wrap.appendChild(label);
     wrap.appendChild(list);
     thread.appendChild(wrap);
