@@ -112,7 +112,8 @@ detector/template added surface area without proportionate value.
    where the server exposes them.
 5. Assignment-aware Luna prompt mode and Computor context bridge.
 6. Selection/file edit commands that produce normal workspace edits.
-7. Agent mode with plan, tests, diff, and optional commit.
+7. Agent mode with approved structured commands, tests, diff, and optional
+   commit.
 8. `@tutor` escalation into Computor human support threads.
 9. Optional native VS Code chat participant or language model provider.
 

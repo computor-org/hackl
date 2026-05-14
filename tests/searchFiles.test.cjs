@@ -1,13 +1,17 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const Module = require("node:module");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 
 test("search_files finds file names and text matches in work mode", async () => {
+  const project = makeProject();
   const files = [
-    documentStub("/tmp/project/src/chatSession.ts", "export class ChatSession {}\n"),
-    documentStub("/tmp/project/src/prompt.ts", "const mode = 'work';\n"),
+    documentStub(path.join(project, "src/chatSession.ts"), "export class ChatSession {}\n"),
+    documentStub(path.join(project, "src/prompt.ts"), "const mode = 'work';\n"),
   ];
-  const vscode = vscodeStub(files);
+  const vscode = vscodeStub(project, files);
 
   await withVscodeStub(vscode, async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
@@ -21,11 +25,12 @@ test("search_files finds file names and text matches in work mode", async () => 
 });
 
 test("search_files with empty query lists files matched by glob", async () => {
+  const project = makeProject();
   const files = [
-    documentStub("/tmp/project/src/chatSession.ts", "export class ChatSession {}\n"),
-    documentStub("/tmp/project/README.md", "# Readme\n"),
+    documentStub(path.join(project, "src/chatSession.ts"), "export class ChatSession {}\n"),
+    documentStub(path.join(project, "README.md"), "# Readme\n"),
   ];
-  const vscode = vscodeStub(files);
+  const vscode = vscodeStub(project, files);
 
   await withVscodeStub(vscode, async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
@@ -39,7 +44,8 @@ test("search_files with empty query lists files matched by glob", async () => {
 });
 
 test("search_files is rejected outside work mode", async () => {
-  await withVscodeStub(vscodeStub([]), async () => {
+  const project = makeProject();
+  await withVscodeStub(vscodeStub(project, []), async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
     const runTool = createWorkspaceToolRunner({ maxFileChars: 1000 });
 
@@ -69,12 +75,22 @@ async function withVscodeStub(vscode, callback) {
   }
 }
 
-function vscodeStub(documents) {
+function makeProject() {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "hackl-search-"));
+  fs.mkdirSync(path.join(project, "src"));
+  return project;
+}
+
+function vscodeStub(root, documents) {
+  for (const document of documents) {
+    fs.mkdirSync(path.dirname(document.fileName), { recursive: true });
+    fs.writeFileSync(document.fileName, document.text);
+  }
   return {
     workspace: {
-      workspaceFolders: [{ uri: { fsPath: "/tmp/project" } }],
+      workspaceFolders: [{ uri: { fsPath: root } }],
       textDocuments: documents,
-      asRelativePath: (uri) => uri.fsPath.replace("/tmp/project/", ""),
+      asRelativePath: (uri) => path.relative(root, uri.fsPath),
       findFiles: async () => documents.map((document) => document.uri),
       openTextDocument: async (uri) => documents.find((document) => document.uri.fsPath === uri.fsPath),
     },
@@ -85,6 +101,7 @@ function documentStub(fileName, text) {
   const lines = text.split("\n");
   return {
     fileName,
+    text,
     lineCount: lines.length,
     uri: { scheme: "file", fsPath: fileName },
     lineAt: (index) => ({ text: lines[index] || "" }),

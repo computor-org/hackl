@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
 import type * as vscodeTypes from "vscode";
 import { classifyCommand, commandLine } from "./commandPolicy";
 import type { ReadFileRequest, ReplaceTextRequest, RunCommandRequest, SearchFilesRequest, ToolRequest, ToolResult } from "./tools";
@@ -11,7 +12,6 @@ export interface WorkspaceToolOptions {
   allowEdits?: boolean;
   allowSearch?: boolean;
   allowCommands?: boolean;
-  commandApproval?: "ask" | "auto";
   requestApproval?: (request: ApprovalPrompt) => Promise<boolean>;
   spawnImpl?: typeof spawn;
   signal?: AbortSignal;
@@ -33,6 +33,8 @@ export interface WorkspaceToolHost {
 }
 
 const approvedNoGitRoots = new Set<string>();
+const MAX_TOOL_FILE_BYTES = 1_000_000;
+const BINARY_SAMPLE_BYTES = 8192;
 
 export function createWorkspaceToolRunner(options: WorkspaceToolOptions): (request: ToolRequest) => Promise<ToolResult> {
   let noGitApproved = false;
@@ -49,7 +51,7 @@ export function createWorkspaceToolRunner(options: WorkspaceToolOptions): (reque
     }
     if (request.name === "replace_text") {
       if (!options.allowEdits) {
-        return { ok: false, content: "replace_text is only available in Edit, Work, Agent, or YOLO mode." };
+        return { ok: false, content: "replace_text is only available in Edit, Work, or Agent mode." };
       }
       const approval = await requireGitApproval(workspace, options, noGitApproved);
       if (!approval.ok) return { ok: false, content: approval.content };
@@ -58,7 +60,7 @@ export function createWorkspaceToolRunner(options: WorkspaceToolOptions): (reque
     }
     if (request.name === "run_command") {
       if (!options.allowCommands) {
-        return { ok: false, content: "run_command is only available in Agent or YOLO mode." };
+        return { ok: false, content: "run_command is only available in Agent mode." };
       }
       const result = await runCommand(request, workspace, options, noGitApproved);
       if (result.gitApproved) {
@@ -110,7 +112,7 @@ async function runCommand(
   if (!gitApproval.ok) {
     return { ok: false, content: gitApproval.content, gitApproved: gitApproval.approved };
   }
-  if (policy.decision === "ask" && options.commandApproval !== "auto") {
+  if (policy.decision === "ask") {
     const approved = await options.requestApproval?.({
       title: "Run command?",
       detail: `${commandLine(request)}\n\n${policy.reason}`,
@@ -224,12 +226,14 @@ async function vscodeReadFile(
   request: ReadFileRequest,
   maxFileChars: number,
 ): Promise<ToolResult> {
-  const uri = resolveVsCodeUri(vscode, request.path);
+  const uri = await resolveVsCodeUri(vscode, request.path);
   if (!uri) {
     return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
   }
 
   try {
+    const guard = await validateVsCodeTextFile(uri.fsPath);
+    if (!guard.ok) return guard;
     const document = await vscode.workspace.openTextDocument(uri);
     const start = Math.max(1, request.start_line ?? 1);
     const end = Math.min(document.lineCount, Math.max(start, request.end_line ?? Math.min(start + 119, document.lineCount)));
@@ -269,12 +273,14 @@ async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFile
 }
 
 async function vscodeReplaceText(vscode: typeof vscodeTypes, request: ReplaceTextRequest): Promise<ToolResult> {
-  const uri = resolveVsCodeUri(vscode, request.path);
+  const uri = await resolveVsCodeUri(vscode, request.path);
   if (!uri) {
     return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
   }
 
   try {
+    const guard = await validateVsCodeTextFile(uri.fsPath);
+    if (!guard.ok) return guard;
     const document = await vscode.workspace.openTextDocument(uri);
     const range = uniqueVsCodeTextRange(vscode, document, request.old_text);
     if (!range) {
@@ -294,10 +300,10 @@ async function vscodeReplaceText(vscode: typeof vscodeTypes, request: ReplaceTex
   }
 }
 
-function resolveVsCodeUri(vscode: typeof vscodeTypes, requestPath: string): vscodeTypes.Uri | undefined {
+async function resolveVsCodeUri(vscode: typeof vscodeTypes, requestPath: string): Promise<vscodeTypes.Uri | undefined> {
   const openDocument = findVsCodeOpenDocument(vscode, requestPath);
   if (openDocument) {
-    return openDocument.uri;
+    return safeVsCodeFileUri(vscode, openDocument.uri);
   }
 
   const folders = vscode.workspace.workspaceFolders ?? [];
@@ -306,7 +312,24 @@ function resolveVsCodeUri(vscode: typeof vscodeTypes, requestPath: string): vsco
       ? path.normalize(requestPath)
       : path.normalize(path.join(folder.uri.fsPath, requestPath));
     if (isWithin(folder.uri.fsPath, candidate)) {
-      return vscode.Uri.file(candidate);
+      return safeVsCodeFileUri(vscode, vscode.Uri.file(candidate));
+    }
+  }
+  return undefined;
+}
+
+async function safeVsCodeFileUri(vscode: typeof vscodeTypes, uri: vscodeTypes.Uri): Promise<vscodeTypes.Uri | undefined> {
+  if (uri.scheme !== "file") {
+    return undefined;
+  }
+  const realCandidate = await realpath(uri.fsPath);
+  if (!realCandidate) {
+    return undefined;
+  }
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const realRoot = await realpath(folder.uri.fsPath);
+    if (realRoot && isWithin(realRoot, realCandidate)) {
+      return vscode.Uri.file(realCandidate);
     }
   }
   return undefined;
@@ -332,6 +355,8 @@ async function addVsCodeTextMatches(
   results: string[],
   limit: number,
 ): Promise<void> {
+  const guard = await validateVsCodeTextFile(uri.fsPath);
+  if (!guard.ok) return;
   const document = await vscode.workspace.openTextDocument(uri);
   for (let index = 0; index < document.lineCount; index++) {
     const line = document.lineAt(index).text;
@@ -399,4 +424,41 @@ function looksLikeEmojiSearch(query: string): boolean {
 
 function containsEmoji(text: string): boolean {
   return /[\p{Extended_Pictographic}\uFE0F]/u.test(text);
+}
+
+async function realpath(filePath: string): Promise<string | undefined> {
+  try {
+    return await fsp.realpath(filePath);
+  } catch {
+    return undefined;
+  }
+}
+
+async function validateVsCodeTextFile(filePath: string): Promise<ToolResult> {
+  const stat = await fsp.stat(filePath);
+  if (!stat.isFile()) {
+    return { ok: false, content: "Path is not a regular file." };
+  }
+  if (stat.size > MAX_TOOL_FILE_BYTES) {
+    return { ok: false, content: `File is too large for Hackl tools (${stat.size} bytes, max ${MAX_TOOL_FILE_BYTES}).` };
+  }
+  const handle = await fsp.open(filePath, "r");
+  try {
+    const length = Math.min(stat.size, BINARY_SAMPLE_BYTES);
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, 0);
+    if (looksBinary(buffer.subarray(0, bytesRead))) {
+      return { ok: false, content: "Binary files are not available to Hackl tools." };
+    }
+    return { ok: true, content: "" };
+  } finally {
+    await handle.close();
+  }
+}
+
+function looksBinary(sample: Buffer): boolean {
+  if (sample.includes(0)) {
+    return true;
+  }
+  return sample.toString("utf8").includes("\uFFFD");
 }

@@ -2,7 +2,7 @@ import type { ChatMessage } from "./chatClient";
 import { ASK_TOOL_INSTRUCTIONS, EDIT_TOOL_INSTRUCTIONS, WORK_TOOL_INSTRUCTIONS, AGENT_TOOL_INSTRUCTIONS } from "./tools";
 
 export type ConversationMessage = Pick<ChatMessage, "role" | "content">;
-export type PromptMode = "ask" | "edit" | "work" | "agent" | "yolo";
+export type PromptMode = "ask" | "edit" | "work" | "agent";
 
 const ASK_SYSTEM_PROMPT = [
   "Hackl. Local code helper. Terse. No edits. No long think.",
@@ -30,13 +30,6 @@ const AGENT_SYSTEM_PROMPT = [
   AGENT_TOOL_INSTRUCTIONS,
 ].join("\n");
 
-const YOLO_SYSTEM_PROMPT = [
-  "Hackl. Local coding agent in YOLO mode. Terse. Inspect, edit, verify, and stop. No long think.",
-  "YOLO skips approval prompts, but safety blocks still apply. Destructive commands are unavailable.",
-  "If selection shown, 'this/that/it' = the selection.",
-  AGENT_TOOL_INSTRUCTIONS,
-].join("\n");
-
 const MAX_HISTORY_MESSAGES = 8;
 
 export function buildHacklMessages(
@@ -56,9 +49,6 @@ export function buildHacklMessages(
 }
 
 function systemPrompt(mode: PromptMode): string {
-  if (mode === "yolo") {
-    return YOLO_SYSTEM_PROMPT;
-  }
   if (mode === "agent") {
     return AGENT_SYSTEM_PROMPT;
   }

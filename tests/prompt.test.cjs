@@ -62,12 +62,10 @@ test("buildHacklMessages enables work instructions in work mode", () => {
   assert.match(messages[0].content, /No shell commands/);
 });
 
-test("buildHacklMessages enables command instructions in agent and yolo modes", () => {
+test("buildHacklMessages enables command instructions in agent mode", () => {
   const agent = buildHacklMessages("verify this", "ctx", [], "agent");
-  const yolo = buildHacklMessages("verify this", "ctx", [], "yolo");
 
   assert.match(agent[0].content, /Local coding agent/);
   assert.match(agent[0].content, /run_command/);
-  assert.match(yolo[0].content, /YOLO skips approval prompts/);
-  assert.match(yolo[0].content, /run_command/);
+  assert.doesNotMatch(agent[0].content, /skips approval prompts/);
 });

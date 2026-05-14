@@ -12,7 +12,6 @@ import { createWorkspaceToolRunner } from "./workspaceTools";
 import { createDebugLog, disposeDebugLog } from "./debugLog";
 
 let chatPanel: ChatPanel | undefined;
-let extensionContext: vscode.ExtensionContext | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
 
 interface ConfigInspection<T> {
@@ -25,7 +24,6 @@ interface ConfigInspection<T> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  extensionContext = context;
   const chatViewProvider = new ChatViewProvider(context, answerPrompt);
 
   context.subscriptions.push(
@@ -63,7 +61,7 @@ async function answerPrompt(
     endpointConfigured: hasUserConfigured(config.inspect<string>("endpoint")),
   });
   const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
-  const debug = createDebugLog(config.get<boolean>("debug", true));
+  const debug = createDebugLog(config.get<boolean>("debug", false));
   const configuredMaxContext = hasUserConfigured(config.inspect<number>("maxContextTokens"))
     ? config.get<number>("maxContextTokens", 32768)
     : undefined;
@@ -79,9 +77,6 @@ async function answerPrompt(
     maxToolFileChars,
     enableThinking,
   });
-  if (mode === "yolo") {
-    await confirmYoloMode(requestApproval);
-  }
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
   const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history, mode);
   const inputTokens = estimateChatTokens(messages);
@@ -100,10 +95,9 @@ async function answerPrompt(
     messages,
     runTool: createWorkspaceToolRunner({
       maxFileChars: maxToolFileChars,
-      allowEdits: mode === "edit" || mode === "work" || mode === "agent" || mode === "yolo",
-      allowSearch: mode === "work" || mode === "agent" || mode === "yolo",
-      allowCommands: mode === "agent" || mode === "yolo",
-      commandApproval: mode === "yolo" ? "auto" : "ask",
+      allowEdits: mode === "edit" || mode === "work" || mode === "agent",
+      allowSearch: mode === "work" || mode === "agent",
+      allowCommands: mode === "agent",
       requestApproval,
       signal,
     }),
@@ -119,27 +113,10 @@ async function answerPrompt(
 }
 
 function toolCallLimit(mode: PromptMode): number {
-  if (mode === "agent" || mode === "yolo") return 48;
+  if (mode === "agent") return 48;
   if (mode === "work") return 24;
   if (mode === "edit") return 12;
   return 4;
-}
-
-async function confirmYoloMode(requestApproval: ApprovalRequester | undefined): Promise<void> {
-  const context = extensionContext;
-  if (!context || context.globalState.get<boolean>("hackl.yoloAccepted", false)) {
-    return;
-  }
-  const approved = await requestApproval?.({
-    title: "Enable YOLO mode?",
-    detail: "YOLO skips command approval prompts, but Hackl will still block destructive commands and paths outside the workspace.",
-    approveLabel: "Enable YOLO",
-    denyLabel: "Cancel",
-  });
-  if (!approved) {
-    throw new Error("YOLO mode was not enabled.");
-  }
-  await context.globalState.update("hackl.yoloAccepted", true);
 }
 
 function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): boolean {

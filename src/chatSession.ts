@@ -156,7 +156,7 @@ export class ChatSession {
 }
 
 function normalizeMode(mode: PromptMode | undefined): PromptMode {
-  if (mode === "agent" || mode === "yolo") {
+  if (mode === "agent") {
     return mode;
   }
   if (mode === "work") {

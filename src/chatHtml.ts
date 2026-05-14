@@ -61,7 +61,6 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
               <button class="mode-option" type="button" role="option" data-value="edit" aria-selected="false">Edit</button>
               <button class="mode-option" type="button" role="option" data-value="work" aria-selected="false">Work</button>
               <button class="mode-option" type="button" role="option" data-value="agent" aria-selected="false">Agent</button>
-              <button class="mode-option" type="button" role="option" data-value="yolo" aria-selected="false">YOLO</button>
             </div>
           </div>
           <button id="reasoning-toggle" class="tool-button" type="button" title="Toggle reasoning" aria-label="Toggle reasoning" aria-pressed="false">
@@ -1064,7 +1063,7 @@ const clientScript = `
   }
 
   function normalizeMode(mode) {
-    return ["edit", "work", "agent", "yolo"].includes(mode) ? mode : "ask";
+    return ["edit", "work", "agent"].includes(mode) ? mode : "ask";
   }
 
   function drainQueue() {

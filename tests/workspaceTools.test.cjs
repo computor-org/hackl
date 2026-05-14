@@ -1,11 +1,15 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const Module = require("node:module");
 const test = require("node:test");
 
 test("replace_text applies one exact workspace edit and saves", async () => {
+  const project = makeProject("const x = 1;\n");
   const applied = [];
-  const document = documentStub("/tmp/project/src/a.ts", "const x = 1;\n");
-  const vscode = vscodeStub(document, applied);
+  const document = documentStub(path.join(project, "src/a.ts"), "const x = 1;\n");
+  const vscode = vscodeStub(project, document, applied);
 
   await withVscodeStub(vscode, async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
@@ -24,9 +28,10 @@ test("replace_text applies one exact workspace edit and saves", async () => {
 });
 
 test("replace_text rejects missing or repeated old text", async () => {
+  const project = makeProject("x\nx\n");
   const applied = [];
-  const document = documentStub("/tmp/project/src/a.ts", "x\nx\n");
-  const vscode = vscodeStub(document, applied);
+  const document = documentStub(path.join(project, "src/a.ts"), "x\nx\n");
+  const vscode = vscodeStub(project, document, applied);
   await withVscodeStub(vscode, async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
     const runTool = createWorkspaceToolRunner({ maxFileChars: 1000, allowEdits: true, requestApproval: async () => true });
@@ -43,14 +48,15 @@ test("replace_text rejects missing or repeated old text", async () => {
 });
 
 test("replace_text is rejected unless edit mode enables writes", async () => {
-  const document = documentStub("/tmp/project/src/a.ts", "const x = 1;\n");
-  const vscode = vscodeStub(document, []);
+  const project = makeProject("const x = 1;\n");
+  const document = documentStub(path.join(project, "src/a.ts"), "const x = 1;\n");
+  const vscode = vscodeStub(project, document, []);
   await withVscodeStub(vscode, async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
     const runTool = createWorkspaceToolRunner({ maxFileChars: 1000 });
     assert.deepEqual(
       await runTool({ name: "replace_text", path: "src/a.ts", old_text: "1", new_text: "2" }),
-      { ok: false, content: "replace_text is only available in Edit, Work, Agent, or YOLO mode." },
+      { ok: false, content: "replace_text is only available in Edit, Work, or Agent mode." },
     );
     assert.equal(document.text, "const x = 1;\n");
   });
@@ -77,7 +83,15 @@ async function withVscodeStub(vscode, callback) {
   }
 }
 
-function vscodeStub(document, applied) {
+function makeProject(text) {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "hackl-vscode-"));
+  fs.mkdirSync(path.join(project, ".git"));
+  fs.mkdirSync(path.join(project, "src"));
+  fs.writeFileSync(path.join(project, "src/a.ts"), text);
+  return project;
+}
+
+function vscodeStub(root, document, applied) {
   class Range {
     constructor(start, end) { this.start = start; this.end = end; }
   }
@@ -89,9 +103,9 @@ function vscodeStub(document, applied) {
     Range,
     WorkspaceEdit,
     workspace: {
-      workspaceFolders: [{ uri: { fsPath: "/tmp/project" } }],
+      workspaceFolders: [{ uri: { fsPath: root } }],
       textDocuments: [document],
-      asRelativePath: (uri) => uri.fsPath.replace("/tmp/project/", ""),
+      asRelativePath: (uri) => path.relative(root, uri.fsPath),
       openTextDocument: async () => document,
       applyEdit: async (edit) => {
         const replacement = edit.replacement;

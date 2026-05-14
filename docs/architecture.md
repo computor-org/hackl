@@ -26,8 +26,8 @@ Users configure `hackl.endpoint` only. Hackl does not expose model selection.
 It probes `/v1/models` and uses the loaded model id. If a multi-model gateway
 requires an alias, Hackl uses the first alias advertised by the gateway error.
 
-No hosted-provider adapters, API presets, file mutation, terminal execution, or
-custom history layer belong in this phase.
+No hosted-provider adapters, API presets, custom history layer, or auto-approved
+command mode belong in this phase.
 
 ## Context And Tools
 
@@ -35,7 +35,7 @@ Hackl now keeps the default prompt small. A normal chat turn includes:
 
 - active/open file paths;
 - active cursor line and column;
-- selection range only, not selected text;
+- selection range and selected text capped at 4000 characters;
 - recent chat transcript;
 - a compact `HACKL_TOOL` contract.
 
@@ -46,14 +46,19 @@ must request:
 HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}
 ```
 
-Hackl executes only bounded workspace file reads in this phase. Tool results
-are returned as `HACKL_TOOL_RESULT` user messages for the current turn and are
-not stored in the durable transcript. This keeps follow-up prompts small and
-makes cache reuse more plausible because the stable prompt prefix changes less.
+Hackl has four modes:
 
-This is the first step toward agent mode. The same loop can later add
-workspace search, diagnostics, edit planning, patch application, test runs, and
-Git diff review while keeping all mutations visible in normal files.
+- Ask: bounded `read_file` only.
+- Edit: `read_file` plus exact `replace_text` edits.
+- Work: search, read, and edit without shell commands.
+- Agent: search, read, edit, and approved structured commands.
+
+Tool paths are constrained to real workspace paths after symlink resolution.
+File reads and searches skip binary files and files over the tool size limit.
+Tool results are returned as `HACKL_TOOL_RESULT` user messages for the current
+turn and are not stored in the durable transcript. This keeps follow-up prompts
+small and makes cache reuse more plausible because the stable prompt prefix
+changes less.
 
 Portable KV-cache or slot-affinity control is not part of the OpenAI-compatible
 contract. The near-term cache strategy is therefore:

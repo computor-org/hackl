@@ -60,6 +60,41 @@ test("work mode finds emoji lines from the regex-style queries real models use",
   assert.equal(answer.content, "found emoji lines");
 });
 
+test("file tools reject symlinks escaping the workspace", async () => {
+  const sandbox = makeSandbox();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "hackl-outside-"));
+  fs.writeFileSync(path.join(outside, "secret.txt"), "secret\n");
+  fs.symlinkSync(path.join(outside, "secret.txt"), path.join(sandbox, "linked.txt"));
+  const runTool = createWorkspaceToolRunner({
+    maxFileChars: 1000,
+    allowSearch: true,
+    workspace: createNodeWorkspaceHost(sandbox),
+  });
+
+  assert.deepEqual(
+    await runTool({ name: "read_file", path: "linked.txt" }),
+    { ok: false, content: "Path is outside the current workspace or cannot be resolved." },
+  );
+});
+
+test("file tools reject binary and oversized files", async () => {
+  const sandbox = makeSandbox();
+  fs.writeFileSync(path.join(sandbox, "binary.bin"), Buffer.from([0, 1, 2, 3]));
+  fs.writeFileSync(path.join(sandbox, "large.txt"), Buffer.alloc(1_000_001, "a"));
+  const runTool = createWorkspaceToolRunner({
+    maxFileChars: 1000,
+    workspace: createNodeWorkspaceHost(sandbox),
+  });
+
+  assert.deepEqual(
+    await runTool({ name: "read_file", path: "binary.bin" }),
+    { ok: false, content: "Binary files are not available to Hackl tools." },
+  );
+  const large = await runTool({ name: "read_file", path: "large.txt" });
+  assert.equal(large.ok, false);
+  assert.match(large.content, /File is too large/);
+});
+
 test("agent mode can run an approved safe command in the sandbox", async () => {
   const sandbox = makeSandbox();
   const approvals = [];
@@ -75,21 +110,6 @@ test("agent mode can run an approved safe command in the sandbox", async () => {
   assert.deepEqual(spawns.map((call) => [call.cmd, call.args]), [["node", ["scripts/check.js"]]]);
 });
 
-test("yolo mode skips command approval but keeps command policy blocks", async () => {
-  const sandbox = makeSandbox();
-  const approvals = [];
-  const spawns = [];
-  const answer = await runModeScenario(sandbox, "yolo", [
-    'HACKL_TOOL {"name":"run_command","cmd":"node","args":["scripts/check.js"]}',
-    'HACKL_TOOL {"name":"run_command","cmd":"sudo","args":["npm","test"]}',
-    "yolo verified; sudo blocked",
-  ], { approvals, spawns });
-
-  assert.equal(answer.content, "yolo verified; sudo blocked");
-  assert.deepEqual(approvals, []);
-  assert.deepEqual(spawns.map((call) => [call.cmd, call.args]), [["node", ["scripts/check.js"]]]);
-});
-
 async function runModeScenario(sandbox, mode, completions, state = {}) {
   const backend = {
     async complete(messages, options) {
@@ -101,10 +121,9 @@ async function runModeScenario(sandbox, mode, completions, state = {}) {
   };
   const runTool = createWorkspaceToolRunner({
     maxFileChars: 1000,
-    allowEdits: mode === "edit" || mode === "work" || mode === "agent" || mode === "yolo",
-    allowSearch: mode === "work" || mode === "agent" || mode === "yolo",
-    allowCommands: mode === "agent" || mode === "yolo",
-    commandApproval: mode === "yolo" ? "auto" : "ask",
+    allowEdits: mode === "edit" || mode === "work" || mode === "agent",
+    allowSearch: mode === "work" || mode === "agent",
+    allowCommands: mode === "agent",
     requestApproval: async (request) => {
       state.approvals?.push(request);
       return true;

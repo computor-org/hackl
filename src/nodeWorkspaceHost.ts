@@ -1,11 +1,15 @@
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import type { ReadFileRequest, ReplaceTextRequest, SearchFilesRequest, ToolResult } from "./tools";
 import type { WorkspaceToolHost } from "./workspaceTools";
 
+const MAX_TOOL_FILE_BYTES = 1_000_000;
+const BINARY_SAMPLE_BYTES = 8192;
+
 export function createNodeWorkspaceHost(root: string, spawnImpl: typeof spawn = spawn): WorkspaceToolHost {
-  const workspaceRoot = path.resolve(root);
+  const workspaceRoot = realpathSync(path.resolve(root)) ?? path.resolve(root);
   return {
     root: () => workspaceRoot,
     readFile: (request, maxFileChars) => nodeReadFile(workspaceRoot, request, maxFileChars),
@@ -21,6 +25,8 @@ async function nodeReadFile(root: string, request: ReadFileRequest, maxFileChars
   }
 
   try {
+    const guard = await validateTextFile(filePath);
+    if (!guard.ok) return guard;
     const text = await fsp.readFile(filePath, "utf8");
     const lines = text.split(/\r?\n/);
     const source = {
@@ -43,6 +49,8 @@ async function nodeReplaceText(root: string, request: ReplaceTextRequest): Promi
   }
 
   try {
+    const guard = await validateTextFile(filePath);
+    if (!guard.ok) return guard;
     const text = await fsp.readFile(filePath, "utf8");
     const first = text.indexOf(request.old_text);
     if (first < 0 || text.indexOf(request.old_text, first + request.old_text.length) >= 0) {
@@ -142,6 +150,8 @@ async function addNodeTextMatches(
   if (!filePath) return;
   let text: string;
   try {
+    const guard = await validateTextFile(filePath);
+    if (!guard.ok) return;
     text = await fsp.readFile(filePath, "utf8");
   } catch {
     return;
@@ -180,12 +190,53 @@ function resolveNodePath(root: string, requestPath: string): string | undefined 
   const candidate = path.isAbsolute(requestPath)
     ? path.normalize(requestPath)
     : path.normalize(path.join(root, requestPath));
-  return isWithin(root, candidate) ? candidate : undefined;
+  if (!isWithin(root, candidate)) {
+    return undefined;
+  }
+  const realCandidate = realpathSync(candidate);
+  return realCandidate && isWithin(root, realCandidate) ? realCandidate : undefined;
 }
 
 function isWithin(root: string, candidate: string): boolean {
   const relative = path.relative(path.normalize(root), candidate);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function realpathSync(filePath: string): string | undefined {
+  try {
+    return fs.realpathSync.native(filePath);
+  } catch {
+    return undefined;
+  }
+}
+
+async function validateTextFile(filePath: string): Promise<ToolResult> {
+  const stat = await fsp.stat(filePath);
+  if (!stat.isFile()) {
+    return { ok: false, content: "Path is not a regular file." };
+  }
+  if (stat.size > MAX_TOOL_FILE_BYTES) {
+    return { ok: false, content: `File is too large for Hackl tools (${stat.size} bytes, max ${MAX_TOOL_FILE_BYTES}).` };
+  }
+  const handle = await fsp.open(filePath, "r");
+  try {
+    const length = Math.min(stat.size, BINARY_SAMPLE_BYTES);
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, 0);
+    if (looksBinary(buffer.subarray(0, bytesRead))) {
+      return { ok: false, content: "Binary files are not available to Hackl tools." };
+    }
+    return { ok: true, content: "" };
+  } finally {
+    await handle.close();
+  }
+}
+
+function looksBinary(sample: Buffer): boolean {
+  if (sample.includes(0)) {
+    return true;
+  }
+  return sample.toString("utf8").includes("\uFFFD");
 }
 
 function matchesSimpleGlob(file: string, glob: string | undefined): boolean {

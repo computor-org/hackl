@@ -110,8 +110,7 @@ async function answerPrompt(
       maxFileChars: config.maxToolFileChars,
       allowEdits: canEdit(config.mode),
       allowSearch: canWork(config.mode),
-      allowCommands: config.mode === "agent" || config.mode === "yolo",
-      commandApproval: config.mode === "yolo" ? "auto" : "ask",
+      allowCommands: config.mode === "agent",
       requestApproval,
       workspace: createNodeWorkspaceHost(config.cwd),
     }),
@@ -214,12 +213,9 @@ function languageId(fileName: string): string {
 
 async function requestCliApproval(
   request: Parameters<ApprovalRequester>[0],
-  config: CliConfig,
+  _config: CliConfig,
   io: CliIo,
 ): Promise<boolean> {
-  if (config.mode === "yolo" && request.title !== "Workspace is not a Git repository") {
-    return true;
-  }
   if (!io.stdin.isTTY || !io.stderr.isTTY) {
     return false;
   }
@@ -234,22 +230,22 @@ async function requestCliApproval(
 }
 
 function canEdit(mode: PromptMode): boolean {
-  return mode === "edit" || mode === "work" || mode === "agent" || mode === "yolo";
+  return mode === "edit" || mode === "work" || mode === "agent";
 }
 
 function canWork(mode: PromptMode): boolean {
-  return mode === "work" || mode === "agent" || mode === "yolo";
+  return mode === "work" || mode === "agent";
 }
 
 function toolCallLimit(mode: PromptMode): number {
-  if (mode === "agent" || mode === "yolo") return 48;
+  if (mode === "agent") return 48;
   if (mode === "work") return 24;
   if (mode === "edit") return 12;
   return 4;
 }
 
 function parseMode(value: string | undefined): PromptMode {
-  return value === "edit" || value === "work" || value === "agent" || value === "yolo" ? value : "ask";
+  return value === "edit" || value === "work" || value === "agent" ? value : "ask";
 }
 
 function parsePositiveInt(value: string | undefined): number | undefined {
@@ -281,7 +277,7 @@ async function readStdin(stdin: NodeJS.ReadStream): Promise<string> {
 
 function usage(): string {
   return [
-    "Usage: hackl [--mode ask|edit|work|agent|yolo] [--file path[:line]] [prompt...]",
+    "Usage: hackl [--mode ask|edit|work|agent] [--file path[:line]] [prompt...]",
     "",
     "Reads additional prompt text from stdin and writes the final answer to stdout.",
     "Environment: HACKL_ENDPOINT, HACKL_MODE, HACKL_CWD, HACKL_MAX_TOOL_FILE_CHARS.",

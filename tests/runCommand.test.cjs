@@ -40,18 +40,18 @@ test("run_command blocks hard-denied commands before approval or spawn", async (
   });
 });
 
-test("run_command in yolo mode skips approval for unknown safe commands", async () => {
+test("run_command asks before unknown safe commands", async () => {
   let approvals = 0;
   let spawns = 0;
   await withVscodeStub(vscodeStub(), async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
-    const runTool = createWorkspaceToolRunner({ maxFileChars: 1000, allowCommands: true, commandApproval: "auto",
+    const runTool = createWorkspaceToolRunner({ maxFileChars: 1000, allowCommands: true,
       requestApproval: async () => { approvals += 1; return true; },
       spawnImpl: () => { spawns += 1; return childStub("", "", 0); } });
     const result = await runTool({ name: "run_command", cmd: "node", args: ["scripts/check.js"] });
 
     assert.equal(result.ok, true);
-    assert.equal(approvals, 1);
+    assert.equal(approvals, 2);
     assert.equal(spawns, 1);
   });
 });

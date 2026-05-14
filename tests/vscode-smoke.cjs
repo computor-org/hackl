@@ -8,7 +8,7 @@ async function run() {
   const properties = extension.packageJSON.contributes.configuration.properties;
   assert.ok(properties["hackl.endpoint"], "hackl.endpoint setting is contributed");
   assert.equal(properties["hackl.endpoint"].default, "");
-  assert.equal(properties["hackl.debug"].default, true);
+  assert.equal(properties["hackl.debug"].default, false);
   assert.equal(properties["hackl.model"], undefined);
   assert.ok(extension.packageJSON.contributes.viewsContainers.secondarySidebar, "Hackl contributes a secondary sidebar container");
   assert.ok(extension.packageJSON.contributes.views.hackl, "Hackl view container has views");
