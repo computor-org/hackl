@@ -54,8 +54,15 @@ test("SetupPanel opens and reveals in the editor column", () => {
   const { fake, calls } = makeFakeVscode();
   const { SetupPanel } = loadSetupPanel(fake);
   const context = { extensionUri: "extension:" };
-  SetupPanel.show(context, async () => [], async () => undefined);
-  SetupPanel.show(context, async () => [], async () => undefined);
+  const hooks = {
+    detectCodex: async () => ({ available: false, command: "codex", authMode: "none", models: [] }),
+    useCodex: async () => undefined,
+    codexLogin: async () => undefined,
+    isHintDismissed: () => false,
+    setHintDismissed: async () => undefined,
+  };
+  SetupPanel.show(context, async () => [], async () => undefined, hooks);
+  SetupPanel.show(context, async () => [], async () => undefined, hooks);
 
   assert.equal(calls.create.length, 1);
   assert.equal(calls.create[0].column, fake.ViewColumn.One);

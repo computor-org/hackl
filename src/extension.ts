@@ -1,13 +1,16 @@
 import * as vscode from "vscode";
-import { ChatMessage, createOpenAICompatibleBackend } from "./chatClient";
+import { ChatMessage } from "./chatClient";
 import {
   ApprovalRequester,
   BasketBridge,
   ChatAnswer,
+  ChatBackendsState,
   ChatState,
   PromptHandlerArgs,
 } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
+import { BackendChoice, buildBackend, normalizeBackendChoice } from "./backendRegistry";
+import { clearCodexDetectionCache, detectCodex, CodexDetection } from "./codexDetect";
 import { buildPromptContext, collectEditorContext } from "./context";
 import {
   detectMaxContextTokens,
@@ -48,6 +51,26 @@ let extensionContext: vscode.ExtensionContext | undefined;
 let activationDebug: ReturnType<typeof createDebugLog> | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
 
+const BACKEND_CHOICE_KEY = "hackl.backendChoice";
+const SETUP_HINT_DISMISSED_KEY = "hackl.setupHintDismissed";
+
+function readBackendChoice(): BackendChoice | undefined {
+  const raw = extensionContext?.globalState.get<unknown>(BACKEND_CHOICE_KEY);
+  return normalizeBackendChoice(raw);
+}
+
+async function writeBackendChoice(choice: BackendChoice | undefined): Promise<void> {
+  await extensionContext?.globalState.update(BACKEND_CHOICE_KEY, choice);
+}
+
+function isSetupHintDismissed(): boolean {
+  return Boolean(extensionContext?.globalState.get<boolean>(SETUP_HINT_DISMISSED_KEY, false));
+}
+
+export async function dismissSetupHint(value: boolean): Promise<void> {
+  await extensionContext?.globalState.update(SETUP_HINT_DISMISSED_KEY, value);
+}
+
 export interface HacklApi {
   readonly version: 1;
   getBasket(): BasketSnapshot;
@@ -80,6 +103,20 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     basketBridge,
     () => resolveReviewTargets(basketService!),
   );
+  chatViewProvider.setBackendSetter(async (kind, model) => {
+    if (kind === "codex") {
+      if (!model) return;
+      await writeBackendChoice({ kind: "codex", model });
+      await vscode.workspace
+        .getConfiguration("hackl")
+        .update("codex.model", model, vscode.ConfigurationTarget.Global);
+    } else {
+      const cfg = readHacklConfig();
+      const endpoint = cfg.endpoint || undefined;
+      await writeBackendChoice({ kind: "local", model: model || "", endpoint });
+    }
+    await refreshStatus();
+  });
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
   context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
@@ -93,7 +130,35 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       chatViewProvider.focusInput();
     }),
     vscode.commands.registerCommand("hackl.openSetupGuide", () => {
-      SetupPanel.show(context, runProbe, setEndpoint);
+      SetupPanel.show(context, runProbe, setEndpoint, {
+        detectCodex: () => detectCodex({ command: readHacklConfig().codexCommand }),
+        useCodex: async (model) => {
+          await writeBackendChoice({ kind: "codex", model });
+          await vscode.workspace.getConfiguration("hackl").update("codex.model", model, vscode.ConfigurationTarget.Global);
+          await refreshStatus();
+          void chatViewProvider.postState();
+        },
+        codexLogin: async () => {
+          const terminal = vscode.window.createTerminal({ name: "codex login" });
+          terminal.show();
+          terminal.sendText(`${readHacklConfig().codexCommand} login`, true);
+        },
+        isHintDismissed: () => isSetupHintDismissed(),
+        setHintDismissed: (value) => dismissSetupHint(value),
+      });
+    }),
+    vscode.commands.registerCommand("hackl.selectBackend", async () => {
+      await pickBackend(chatViewProvider);
+    }),
+    vscode.commands.registerCommand("hackl.dismissSetupHint", async () => {
+      await dismissSetupHint(true);
+      await refreshStatus();
+      void chatViewProvider.postState();
+    }),
+    vscode.commands.registerCommand("hackl.showSetupHint", async () => {
+      await dismissSetupHint(false);
+      await refreshStatus();
+      void chatViewProvider.postState();
     }),
     vscode.commands.registerCommand("hackl.checkLocalServer", async () => {
       const probe = await runProbe();
@@ -101,6 +166,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     }),
     vscode.commands.registerCommand("hackl.refreshEndpoint", async () => {
       detectedContextCache.clear();
+      clearCodexDetectionCache();
       SetupPanel.refresh();
       const probe = await runProbe();
       await reportProbe(probe);
@@ -315,15 +381,66 @@ function isEditorDocument(document: vscode.TextDocument | undefined): boolean {
 async function refreshStatus(): Promise<void> {
   if (!statusBarItem) return;
   const cfg = readHacklConfig();
+  const choice = readBackendChoice();
+  if (choice?.kind === "codex" && cfg.codexEnabled) {
+    const codex = await detectCodex({ command: cfg.codexCommand }).catch(() => undefined);
+    if (codex?.available && codex.authMode !== "none") {
+      statusBarItem.text = `$(zap) Codex · ${choice.model}`;
+      statusBarItem.tooltip = `Hackl connected via codex app-server (${choice.model})`;
+      statusBarItem.show();
+      return;
+    }
+  }
   const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
   if (probe?.ok) {
     statusBarItem.text = `$(pulse) ${probe.model ?? "Hackl"}`;
     statusBarItem.tooltip = `Hackl connected to ${probe.endpoint}`;
   } else {
     statusBarItem.text = "$(plug) Hackl: connect";
-    statusBarItem.tooltip = "No local model server detected. Click for setup help.";
+    statusBarItem.tooltip = "No model detected. Click for setup help.";
   }
   statusBarItem.show();
+}
+
+async function pickBackend(view: ChatViewProvider): Promise<void> {
+  const cfg = readHacklConfig();
+  const items: Array<vscode.QuickPickItem & { choice: BackendChoice }> = [];
+  const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
+  if (probe?.ok) {
+    items.push({
+      label: `$(pulse) ${probe.model ?? "Local"}`,
+      description: probe.endpoint,
+      detail: "Local OpenAI-compatible server",
+      choice: { kind: "local", endpoint: probe.endpoint, model: probe.model ?? "" },
+    });
+  }
+  if (cfg.codexEnabled) {
+    const codex = await detectCodex({ command: cfg.codexCommand }).catch(() => undefined);
+    if (codex?.available && codex.authMode !== "none") {
+      for (const model of codex.models) {
+        items.push({
+          label: `$(zap) ${model}`,
+          description: "Codex",
+          detail: `codex app-server · ${codex.authMode === "chatgpt" ? "ChatGPT login" : "API key"}`,
+          choice: { kind: "codex", model },
+        });
+      }
+    }
+  }
+  if (items.length === 0) {
+    vscode.window.showInformationMessage("Hackl: no backend available. Open the setup guide to configure one.");
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(items, { title: "Hackl backend", placeHolder: "Choose backend and model" });
+  if (!picked) return;
+  if (picked.choice.kind === "codex") {
+    await writeBackendChoice(picked.choice);
+    await vscode.workspace.getConfiguration("hackl").update("codex.model", picked.choice.model, vscode.ConfigurationTarget.Global);
+  } else {
+    await writeBackendChoice(picked.choice);
+  }
+  await refreshStatus();
+  void view.postState();
 }
 
 async function tryProbe(endpoint: string, endpointConfigured: boolean): Promise<ProbeResult | undefined> {
@@ -389,15 +506,22 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   if (endpointApproval) {
     return endpointApproval;
   }
-  const target = await resolveChatTarget({
-    endpoint: cfg.endpoint,
-    endpointConfigured: cfg.endpointConfigured,
-  });
+  const stored = readBackendChoice();
+  const useCodex = stored?.kind === "codex" && cfg.codexEnabled;
+  let target: { endpoint: string; model: string };
+  if (useCodex) {
+    target = { endpoint: "codex", model: stored!.model };
+  } else {
+    target = await resolveChatTarget({
+      endpoint: cfg.endpoint,
+      endpointConfigured: cfg.endpointConfigured,
+    });
+  }
   progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
   const maxToolFileChars = cfg.maxToolFileChars;
   const debug = createDebugLog(cfg.debug);
   const configuredMaxContext = cfg.maxContextTokensConfigured ? cfg.maxContextTokens : undefined;
-  const detectedMaxContext = configuredMaxContext === undefined
+  const detectedMaxContext = configuredMaxContext === undefined && !useCodex
     ? await getDetectedMaxContext(target.endpoint)
     : undefined;
   const maxContextTokens = configuredMaxContext ?? detectedMaxContext ?? 32768;
@@ -428,8 +552,17 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
 
   const modelStartedAt = Date.now();
   const allowEdits = mode === "edit" || mode === "work" || mode === "agent";
+  const choiceForCall: BackendChoice = useCodex
+    ? { kind: "codex", model: target.model }
+    : { kind: "local", endpoint: target.endpoint, model: target.model };
   const answer = await completeWithTools({
-    backend: createOpenAICompatibleBackend({ ...target, enableThinking }),
+    backend: buildBackend({
+      choice: choiceForCall,
+      enableThinking,
+      codexCommand: cfg.codexCommand,
+      cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      clientVersion: extensionContext?.extension.packageJSON?.version,
+    }),
     messages,
     runTool: createWorkspaceToolRunner({
       maxFileChars: maxToolFileChars,
@@ -473,6 +606,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       mode,
       endpoint: target.endpoint,
       model: target.model,
+      backendKind: useCodex ? "codex" : "local",
       targets,
       answer: answer.content,
       annotations: createdAnnotations,
@@ -496,6 +630,7 @@ async function emitHacklSession(input: {
   mode: PromptMode;
   endpoint: string;
   model: string;
+  backendKind: "local" | "codex";
   targets: HacklTarget[];
   answer: string;
   annotations: HacklAnnotation[];
@@ -506,6 +641,7 @@ async function emitHacklSession(input: {
     mode: input.mode,
     endpoint: input.endpoint,
     model: input.model,
+    backendKind: input.backendKind,
     targets: input.targets,
     answer: input.answer,
     annotations: input.annotations,
@@ -558,31 +694,75 @@ async function requireEndpointApproval(
 
 async function currentChatState(): Promise<ChatState> {
   const cfg = readHacklConfig();
-  if (cfg.endpointConfigured && requiresNonLocalEndpointApproval(cfg.endpoint)) {
-    return {
-      type: "state",
-      enableThinking: cfg.enableThinking,
-      connected: false,
-      endpoint: cfg.endpoint,
-      endpointApprovalRequired: true,
-    };
-  }
-  const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
-  if (cfg.endpointConfigured && cfg.endpoint && !probe?.ok) {
-    return {
-      type: "state",
-      enableThinking: cfg.enableThinking,
-      endpoint: cfg.endpoint,
-      endpointApprovalRequired: false,
-    };
-  }
-  return {
+  const codex = cfg.codexEnabled
+    ? await detectCodex({ command: cfg.codexCommand }).catch(() => undefined)
+    : undefined;
+  const probe = (!cfg.endpointConfigured || !requiresNonLocalEndpointApproval(cfg.endpoint))
+    ? await tryProbe(cfg.endpoint, cfg.endpointConfigured)
+    : undefined;
+  const choice = effectiveBackendChoice(probe, codex);
+  const backends = buildBackendsState(choice, probe, codex);
+  const base: ChatState = {
     type: "state",
     enableThinking: cfg.enableThinking,
+    backends,
+  };
+  if (cfg.endpointConfigured && requiresNonLocalEndpointApproval(cfg.endpoint)) {
+    return { ...base, connected: false, endpoint: cfg.endpoint, endpointApprovalRequired: true };
+  }
+  if (choice.kind === "codex" && backends.codex.available && !backends.codex.needsLogin) {
+    return { ...base, connected: true, endpoint: "codex", model: choice.model, endpointApprovalRequired: false };
+  }
+  if (cfg.endpointConfigured && cfg.endpoint && !probe?.ok) {
+    return { ...base, endpoint: cfg.endpoint, endpointApprovalRequired: false };
+  }
+  return {
+    ...base,
     connected: Boolean(probe?.ok),
     endpoint: probe?.endpoint,
     model: probe?.model,
     endpointApprovalRequired: false,
+  };
+}
+
+function effectiveBackendChoice(
+  probe: ProbeResult | undefined,
+  codex: CodexDetection | undefined,
+): BackendChoice {
+  const stored = readBackendChoice();
+  if (stored?.kind === "codex" && codex?.available && codex.authMode !== "none") {
+    return stored;
+  }
+  if (stored?.kind === "local") {
+    return { kind: "local", model: stored.model || probe?.model || "", endpoint: stored.endpoint ?? probe?.endpoint };
+  }
+  if (probe?.ok) {
+    return { kind: "local", model: probe.model ?? "", endpoint: probe.endpoint };
+  }
+  if (codex?.available && codex.authMode !== "none" && codex.models.length > 0) {
+    return { kind: "codex", model: codex.models[0] };
+  }
+  return { kind: "local", model: "", endpoint: probe?.endpoint };
+}
+
+function buildBackendsState(
+  current: BackendChoice,
+  probe: ProbeResult | undefined,
+  codex: CodexDetection | undefined,
+): ChatBackendsState {
+  return {
+    local: {
+      available: Boolean(probe?.ok),
+      endpoint: probe?.endpoint,
+      model: probe?.model,
+    },
+    codex: {
+      available: Boolean(codex?.available),
+      models: codex?.models ?? [],
+      authMode: codex?.authMode ?? "none",
+      needsLogin: Boolean(codex?.available && codex.authMode === "none"),
+    },
+    current: { kind: current.kind, model: current.model || undefined },
   };
 }
 

@@ -67,6 +67,17 @@ test("annotation reply is the only custom comment editor action", () => {
   ]);
 });
 
+test("codex backend commands and config keys are declared", () => {
+  const manifest = readManifest();
+  for (const id of ["hackl.selectBackend", "hackl.dismissSetupHint", "hackl.showSetupHint"]) {
+    assert.ok(command(manifest, id), `missing command ${id}`);
+  }
+  const cfg = manifest.contributes.configuration.properties;
+  assert.ok(cfg["hackl.codex.enabled"], "missing hackl.codex.enabled");
+  assert.ok(cfg["hackl.codex.command"], "missing hackl.codex.command");
+  assert.ok(cfg["hackl.codex.model"], "missing hackl.codex.model");
+});
+
 test("internal annotation commands stay out of the command palette", () => {
   const manifest = readManifest();
   const hidden = new Set(

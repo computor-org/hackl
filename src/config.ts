@@ -9,6 +9,9 @@ export interface HacklConfig {
   enableThinking: boolean;
   debug: boolean;
   persistSessions: boolean;
+  codexEnabled: boolean;
+  codexCommand: string;
+  codexModel: string;
 }
 
 const DEFAULTS = {
@@ -17,6 +20,9 @@ const DEFAULTS = {
   enableThinking: false,
   debug: false,
   persistSessions: true,
+  codexEnabled: true,
+  codexCommand: "codex",
+  codexModel: "",
 };
 
 interface Inspect<T> {
@@ -51,5 +57,8 @@ export function readHacklConfig(): HacklConfig {
     enableThinking: c.get<boolean>("enableThinking", DEFAULTS.enableThinking),
     debug: c.get<boolean>("debug", DEFAULTS.debug),
     persistSessions: c.get<boolean>("persistSessions", DEFAULTS.persistSessions),
+    codexEnabled: c.get<boolean>("codex.enabled", DEFAULTS.codexEnabled),
+    codexCommand: (c.get<string>("codex.command", DEFAULTS.codexCommand) || DEFAULTS.codexCommand).trim(),
+    codexModel: (c.get<string>("codex.model", DEFAULTS.codexModel) || "").trim(),
   };
 }

@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack local-first.",
-  "version": "0.0.47",
+  "version": "0.0.48",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -115,6 +115,21 @@
       {
         "command": "hackl.revealTarget",
         "title": "Reveal Target",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.selectBackend",
+        "title": "Select Backend",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.dismissSetupHint",
+        "title": "Dismiss Setup Hint",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.showSetupHint",
+        "title": "Show Setup Hint",
         "category": "Hackl"
       }
     ],
@@ -274,6 +289,21 @@
           "type": "boolean",
           "default": true,
           "description": "Persist completed Hackl sessions (when annotations are requested) as JSON files in VS Code extension storage."
+        },
+        "hackl.codex.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Codex CLI backend. When enabled, Hackl auto-detects `codex` on PATH and offers it alongside the local OpenAI-compatible backend."
+        },
+        "hackl.codex.command": {
+          "type": "string",
+          "default": "codex",
+          "description": "Command used to invoke the Codex CLI. Override if codex is installed at a non-standard location."
+        },
+        "hackl.codex.model": {
+          "type": "string",
+          "default": "",
+          "description": "Last-selected Codex model. Set automatically when picking a model from the chat dropdown."
         }
       }
     },

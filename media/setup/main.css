@@ -27,3 +27,19 @@ button.linklike:hover { color: var(--vscode-textLink-activeForeground, var(--vsc
 .tiers table { width: 100%; border-collapse: collapse; margin-top: 6px; }
 .tiers th, .tiers td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--vscode-panel-border, transparent); font-size: 11px; }
 .tiers th { font-weight: 600; color: var(--vscode-descriptionForeground); }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 4px; }
+@media (max-width: 820px) { .columns { grid-template-columns: 1fr; } }
+.column h2 { font-size: 14px; margin: 4px 0 6px; }
+.column .lede { font-size: 12px; color: var(--vscode-descriptionForeground); margin: 0 0 10px; }
+.card.open { padding: 12px; }
+.codex-state { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+.codex-pill { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.codex-state-ready .codex-pill { background: rgba(60, 180, 100, 0.25); color: #4ade80; }
+.codex-state-login .codex-pill { background: rgba(220, 160, 60, 0.25); color: #f59e0b; }
+.codex-state-missing .codex-pill { background: rgba(220, 60, 60, 0.22); color: #f87171; }
+.codex-models { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.codex-models li { font-size: 12px; }
+.codex-models label { display: flex; gap: 6px; align-items: center; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.codex-models label:hover { background: var(--vscode-list-hoverBackground); }
+.dismiss { margin-top: 12px; font-size: 12px; color: var(--vscode-descriptionForeground); }
+.dismiss label { display: flex; align-items: center; gap: 6px; cursor: pointer; }

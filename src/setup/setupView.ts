@@ -1,15 +1,24 @@
 import * as vscode from "vscode";
 import { ProbeResult } from "../localServers";
+import { CodexDetection } from "../codexDetect";
 import { renderSetupHtml } from "./setupViewHtml";
 
 type ProbeRunner = () => Promise<ProbeResult[]>;
 type EndpointSetter = (endpoint: string) => Promise<void>;
 
+export interface SetupPanelHooks {
+  detectCodex: () => Promise<CodexDetection>;
+  useCodex: (model: string) => Promise<void>;
+  codexLogin: () => Promise<void>;
+  isHintDismissed: () => boolean;
+  setHintDismissed: (value: boolean) => Promise<void>;
+}
+
 export class SetupPanel {
   static readonly viewType = "hackl.setupPanel";
   private static current: SetupPanel | undefined;
 
-  static show(context: vscode.ExtensionContext, runProbe: ProbeRunner, setEndpoint: EndpointSetter): void {
+  static show(context: vscode.ExtensionContext, runProbe: ProbeRunner, setEndpoint: EndpointSetter, hooks: SetupPanelHooks): void {
     if (SetupPanel.current) {
       SetupPanel.current.panel.reveal(vscode.ViewColumn.One);
       void SetupPanel.current.postStatus();
@@ -25,7 +34,7 @@ export class SetupPanel {
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "media", "setup")],
       },
     );
-    SetupPanel.current = new SetupPanel(panel, context, runProbe, setEndpoint);
+    SetupPanel.current = new SetupPanel(panel, context, runProbe, setEndpoint, hooks);
   }
 
   static refresh(): void {
@@ -37,6 +46,7 @@ export class SetupPanel {
     context: vscode.ExtensionContext,
     private readonly runProbe: ProbeRunner,
     private readonly setEndpoint: EndpointSetter,
+    private readonly hooks: SetupPanelHooks,
   ) {
     panel.webview.html = renderSetupHtml(panel.webview, context.extensionUri);
     panel.webview.onDidReceiveMessage(async (msg) => {
@@ -62,6 +72,20 @@ export class SetupPanel {
             await vscode.env.openExternal(vscode.Uri.parse(msg.href));
           }
           break;
+        case "useCodex":
+          if (typeof msg.model === "string" && msg.model) {
+            await this.hooks.useCodex(msg.model);
+            await this.postStatus();
+            vscode.window.showInformationMessage(`Hackl backend set to Codex (${msg.model}).`);
+          }
+          break;
+        case "codexLogin":
+          await this.hooks.codexLogin();
+          break;
+        case "setHintDismissed":
+          await this.hooks.setHintDismissed(Boolean(msg.value));
+          await this.postStatus();
+          break;
       }
     });
     panel.onDidDispose(() => {
@@ -74,7 +98,10 @@ export class SetupPanel {
   }
 
   private async postStatus(): Promise<void> {
-    const probes = await this.runProbe();
+    const [probes, codex] = await Promise.all([
+      this.runProbe(),
+      this.hooks.detectCodex().catch(() => undefined),
+    ]);
     const ok = probes.find((p) => p.ok);
     await this.panel.webview.postMessage({
       type: "status",
@@ -83,6 +110,8 @@ export class SetupPanel {
       model: ok?.model,
       ctx: ok?.ctx,
       profile: this.profile(),
+      codex: codex ?? { available: false, command: "codex", authMode: "none", models: [] },
+      hintDismissed: this.hooks.isHintDismissed(),
     });
   }
 }

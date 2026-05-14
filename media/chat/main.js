@@ -18,6 +18,10 @@
   const modeButton = document.getElementById("mode-button");
   const modeMenu = document.getElementById("mode-menu");
   const modeLabel = document.getElementById("mode-label");
+  const modelButton = document.getElementById("model-button");
+  const modelMenu = document.getElementById("model-menu");
+  const modelLabel = document.getElementById("model-label");
+  let backends = null;
   // html: false is the XSS contract for every innerHTML = md.render(...) sink below.
   // Do not enable html or switch sinks to direct string assignment.
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
@@ -110,6 +114,95 @@
     openSetupBtn.addEventListener("click", () => {
       vscode.postMessage({ type: "runCommand", value: "hackl.openSetupGuide" });
     });
+  }
+  const dismissHintBtn = document.getElementById("dismiss-hint");
+  if (dismissHintBtn) {
+    dismissHintBtn.addEventListener("click", () => {
+      vscode.postMessage({ type: "runCommand", value: "hackl.dismissSetupHint" });
+    });
+  }
+
+  if (modelButton && modelMenu) {
+    modelButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = modelMenu.hidden;
+      modelMenu.hidden = !open;
+      modelButton.setAttribute("aria-expanded", String(open));
+    });
+    document.addEventListener("click", (event) => {
+      if (modelMenu.hidden) return;
+      const target = event.target;
+      if (target instanceof Node && (modelButton.contains(target) || modelMenu.contains(target))) return;
+      modelMenu.hidden = true;
+      modelButton.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function renderModelMenu() {
+    if (!modelMenu || !backends) return;
+    modelMenu.innerHTML = "";
+    const current = backends.current || {};
+    function addHeader(text) {
+      const h = document.createElement("div");
+      h.className = "mode-option";
+      h.setAttribute("role", "presentation");
+      h.setAttribute("disabled", "true");
+      h.style.opacity = "0.7";
+      h.style.fontSize = "10px";
+      h.style.textTransform = "uppercase";
+      h.style.letterSpacing = "0.5px";
+      h.textContent = text;
+      modelMenu.appendChild(h);
+    }
+    function addOption(label, kind, model, enabled, title) {
+      const btn = document.createElement("button");
+      btn.className = "mode-option";
+      btn.type = "button";
+      btn.setAttribute("role", "option");
+      btn.setAttribute("data-kind", kind);
+      btn.setAttribute("data-model", model || "");
+      btn.textContent = label;
+      if (title) btn.title = title;
+      const selected = current.kind === kind && (current.model || "") === (model || current.model || "");
+      btn.setAttribute("aria-selected", String(selected));
+      if (!enabled) btn.setAttribute("disabled", "true");
+      btn.addEventListener("click", () => {
+        if (!enabled) return;
+        vscode.postMessage({ type: "setBackend", backendKind: kind, model: model });
+        modelMenu.hidden = true;
+        modelButton.setAttribute("aria-expanded", "false");
+      });
+      modelMenu.appendChild(btn);
+    }
+    addHeader("Local");
+    if (backends.local && backends.local.available) {
+      addOption(backends.local.model || "Auto", "local", backends.local.model || "", true, backends.local.endpoint || "");
+    } else {
+      addOption("Not reachable", "local", "", false, "Start a local server first.");
+    }
+    addHeader("Codex");
+    if (backends.codex && backends.codex.available && !backends.codex.needsLogin) {
+      for (const model of backends.codex.models) {
+        addOption(model, "codex", model, true, "codex app-server");
+      }
+    } else if (backends.codex && backends.codex.available && backends.codex.needsLogin) {
+      addOption("Run codex login", "codex", "", false, "Run `codex login` in a terminal to enable.");
+    } else {
+      addOption("Not installed", "codex", "", false, "Install the Codex CLI to enable.");
+    }
+    updateModelLabel();
+  }
+
+  function updateModelLabel() {
+    if (!modelLabel || !backends) return;
+    const c = backends.current || {};
+    if (c.kind === "codex") {
+      modelLabel.textContent = "Codex · " + (c.model || "");
+    } else if (c.kind === "local" && backends.local && backends.local.model) {
+      modelLabel.textContent = backends.local.model;
+    } else {
+      modelLabel.textContent = "Local";
+    }
   }
 
   function updateComboStrip() {
@@ -446,6 +539,10 @@
   function applyState(message) {
     if (reasoningToggle && typeof message.enableThinking === "boolean") {
       reasoningToggle.setAttribute("aria-pressed", String(message.enableThinking));
+    }
+    if (message.backends) {
+      backends = message.backends;
+      renderModelMenu();
     }
     updateEndpointStatus(message);
     updateConnectHint(message);

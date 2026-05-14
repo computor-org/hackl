@@ -12,6 +12,8 @@ export const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
   "hackl.clearContext",
   "hackl.openSetupGuide",
   "hackl.discardLastAnnotations",
+  "hackl.dismissSetupHint",
+  "hackl.selectBackend",
 ]);
 
 export function isAllowedWebviewCommand(command: string): boolean {
@@ -27,6 +29,8 @@ export interface ChatIncomingMessage {
   value?: unknown;
   targetId?: string;
   createAnnotations?: boolean;
+  backendKind?: "local" | "codex";
+  model?: string;
 }
 
 export interface HacklRequestOptions {
@@ -94,6 +98,12 @@ export type PromptProgress =
   | { type: "target"; endpoint: string; model: string }
   | { type: "delta"; channel: "answer" | "reasoning"; text: string };
 
+export interface ChatBackendsState {
+  local: { available: boolean; endpoint?: string; model?: string };
+  codex: { available: boolean; models: string[]; authMode: "chatgpt" | "apikey" | "none"; needsLogin: boolean };
+  current: { kind: "local" | "codex"; model?: string };
+}
+
 export interface ChatState {
   type: "state";
   enableThinking?: boolean;
@@ -101,6 +111,7 @@ export interface ChatState {
   endpoint?: string;
   model?: string;
   endpointApprovalRequired?: boolean;
+  backends?: ChatBackendsState;
 }
 
 export type ApprovalRequester = (request: Omit<ApprovalRequest, "type" | "id">) => Promise<boolean>;

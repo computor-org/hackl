@@ -10,6 +10,7 @@ export interface HacklSessionRecord {
   mode: PromptMode;
   endpoint?: string;
   model?: string;
+  backendKind?: "local" | "codex";
   gitHead?: string;
   targets: HacklTarget[];
   answer?: string;

@@ -1,0 +1,150 @@
+import { spawn } from "node:child_process";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
+
+export type CodexAuthMode = "chatgpt" | "apikey" | "none";
+
+export interface CodexDetection {
+  available: boolean;
+  command: string;
+  version?: string;
+  authMode: CodexAuthMode;
+  models: string[];
+  error?: string;
+}
+
+export const DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
+  "gpt-5-codex",
+  "gpt-5.1-codex",
+  "gpt-5.5",
+];
+
+let cached: { key: string; result: Promise<CodexDetection> } | undefined;
+
+export function detectCodex(options: { command?: string; codexHome?: string; force?: boolean } = {}): Promise<CodexDetection> {
+  const command = options.command?.trim() || "codex";
+  const codexHome = options.codexHome ?? process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
+  const key = `${command}|${codexHome}`;
+  if (!options.force && cached && cached.key === key) {
+    return cached.result;
+  }
+  const result = runDetect(command, codexHome);
+  cached = { key, result };
+  return result;
+}
+
+export function clearCodexDetectionCache(): void {
+  cached = undefined;
+}
+
+async function runDetect(command: string, codexHome: string): Promise<CodexDetection> {
+  const version = await runCodexVersion(command);
+  if (!version.ok) {
+    return { available: false, command, authMode: "none", models: [], error: version.error };
+  }
+  const authMode = await readAuthMode(codexHome);
+  const models = await readModels(codexHome);
+  return {
+    available: true,
+    command,
+    version: version.value,
+    authMode,
+    models,
+  };
+}
+
+interface VersionProbe {
+  ok: boolean;
+  value?: string;
+  error?: string;
+}
+
+function runCodexVersion(command: string): Promise<VersionProbe> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (probe: VersionProbe) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(probe);
+    };
+    let child;
+    try {
+      child = spawn(command, ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (error) {
+      finish({ ok: false, error: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+    const chunks: Buffer[] = [];
+    child.stdout?.on("data", (data: Buffer) => chunks.push(data));
+    child.stderr?.on("data", (data: Buffer) => chunks.push(data));
+    child.on("error", (error) => finish({ ok: false, error: error.message }));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        finish({ ok: false, error: `codex --version exited with code ${code}` });
+        return;
+      }
+      const text = Buffer.concat(chunks).toString("utf8").trim();
+      finish({ ok: true, value: text || "unknown" });
+    });
+    const timer = setTimeout(() => {
+      try { child.kill(); } catch {}
+      finish({ ok: false, error: "codex --version timed out" });
+    }, 3000);
+    child.on("close", () => clearTimeout(timer));
+  });
+}
+
+async function readAuthMode(codexHome: string): Promise<CodexAuthMode> {
+  const authFile = path.join(codexHome, "auth.json");
+  try {
+    const raw = await fs.readFile(authFile, "utf8");
+    const json = JSON.parse(raw) as { auth_mode?: unknown; OPENAI_API_KEY?: unknown };
+    const mode = typeof json.auth_mode === "string" ? json.auth_mode.toLowerCase() : "";
+    if (mode === "chatgpt" || mode === "apikey") return mode;
+    if (typeof json.OPENAI_API_KEY === "string" && json.OPENAI_API_KEY.length > 0) return "apikey";
+    return "none";
+  } catch {
+    return "none";
+  }
+}
+
+async function readModels(codexHome: string): Promise<string[]> {
+  const configFile = path.join(codexHome, "config.toml");
+  const fromConfig = await readModelsFromConfig(configFile);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of [...fromConfig, ...DEFAULT_CODEX_MODELS]) {
+    const trimmed = m.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+async function readModelsFromConfig(configFile: string): Promise<string[]> {
+  let text: string;
+  try {
+    text = await fs.readFile(configFile, "utf8");
+  } catch {
+    return [];
+  }
+  return parseModelsFromTomlText(text);
+}
+
+// Best-effort TOML scan: collect `model = "..."` and `[model_presets.<id>]` entries
+// without pulling in a TOML parser. Quoted-string only.
+export function parseModelsFromTomlText(text: string): string[] {
+  const out: string[] = [];
+  const modelLine = /^\s*model\s*=\s*"([^"\n]+)"/gm;
+  let match: RegExpExecArray | null;
+  while ((match = modelLine.exec(text)) !== null) {
+    out.push(match[1]);
+  }
+  const presetLine = /^\s*\[model_presets\.([^\]\s]+)\]/gm;
+  while ((match = presetLine.exec(text)) !== null) {
+    out.push(match[1]);
+  }
+  return out;
+}

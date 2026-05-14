@@ -13,11 +13,14 @@ import {
 
 export { isAllowedWebviewCommand };
 
+export type BackendSetter = (kind: "local" | "codex", model: string) => Promise<void>;
+
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = "hackl.chatView";
   private readonly session: ChatSession;
   private view: vscode.WebviewView | undefined;
   private pendingFocus = false;
+  private setBackend: BackendSetter | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -27,6 +30,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     resolveReviewTargets?: ReviewTargetResolver,
   ) {
     this.session = new ChatSession(onPrompt, basket, resolveReviewTargets);
+  }
+
+  setBackendSetter(setter: BackendSetter): void {
+    this.setBackend = setter;
+  }
+
+  async postState(): Promise<void> {
+    if (!this.view) return;
+    const state = await this.getState();
+    await post(this.view.webview, state);
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -44,6 +57,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (message: ChatIncomingMessage) => {
       if (message.type === "setThinking") {
         await vscode.workspace.getConfiguration("hackl").update("enableThinking", Boolean(message.value), vscode.ConfigurationTarget.Global);
+        return;
+      }
+      if (message.type === "setBackend") {
+        const kind = message.backendKind === "codex" ? "codex" : "local";
+        const model = typeof message.model === "string" ? message.model : "";
+        if (this.setBackend) {
+          await this.setBackend(kind, model);
+          await webviewView.webview.postMessage(await this.getState());
+        }
         return;
       }
       if (message.type === "ready") {

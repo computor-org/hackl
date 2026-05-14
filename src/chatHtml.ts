@@ -39,8 +39,9 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
     <main id="thread" aria-live="polite">
       <div id="connect-hint" class="connect-hint" hidden>
         <span class="codicon codicon-plug" aria-hidden="true"></span>
-        <span>No local model detected. Start one (LM Studio, llama.cpp, Ollama) and point Hackl at it.</span>
+        <span id="connect-hint-text">No local model or Codex login detected. Open the setup guide to connect either one.</span>
         <button id="open-setup" type="button">Open setup</button>
+        <button id="dismiss-hint" type="button" title="Don't show again">Hide</button>
       </div>
       <div id="empty-state" class="empty-state">
         <div class="empty-mark" aria-hidden="true"></div>
@@ -87,6 +88,13 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
               <button class="mode-option" type="button" role="option" data-value="work" aria-selected="false" title="Read + edit + search. Multi-step file changes. No commands.">Work</button>
               <button class="mode-option" type="button" role="option" data-value="agent" aria-selected="false" title="Read + edit + search + safe commands (approval-gated).">Agent</button>
             </div>
+          </div>
+          <div class="mode-dropdown model-dropdown">
+            <button id="model-button" class="mode-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Model" title="Pick backend and model">
+              <span id="model-label">Local</span>
+              <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
+            </button>
+            <div id="model-menu" class="mode-menu" role="listbox" hidden></div>
           </div>
           <button id="reasoning-toggle" class="tool-button" type="button" title="Toggle reasoning" aria-label="Toggle reasoning" aria-pressed="false">
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
