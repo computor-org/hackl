@@ -201,6 +201,32 @@ export function createSourceRangeTarget(editor: vscodeTypes.TextEditor): SourceR
   };
 }
 
+export function createCurrentFileTarget(editor: vscodeTypes.TextEditor): SourceRangeTarget | undefined {
+  const vscode = getVscode();
+  const doc = editor.document;
+  if (doc.lineCount < 1) return undefined;
+  const lastLine = Math.max(0, doc.lineCount - 1);
+  const lastLineText = doc.lineAt(lastLine).text;
+  const fullRange = new vscode.Range(0, 0, lastLine, lastLineText.length);
+  const raw = doc.getText(fullRange);
+  const { text, truncated } = truncate(raw);
+  return {
+    id: newId("file"),
+    addedAt: Date.now(),
+    kind: "source-range",
+    uri: doc.uri.toString(),
+    languageId: doc.languageId,
+    relativePath: vscode.workspace.asRelativePath(doc.uri, false),
+    startLine: 1,
+    startCharacter: 1,
+    endLine: doc.lineCount,
+    endCharacter: lastLineText.length + 1,
+    text,
+    truncated,
+    metadata: { scope: "current-file" },
+  };
+}
+
 export function createMarkdownSectionTarget(editor: vscodeTypes.TextEditor): MarkdownSectionTarget | undefined {
   const document = editor.document;
   if (document.languageId !== "markdown") return undefined;

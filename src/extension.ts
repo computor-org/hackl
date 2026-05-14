@@ -28,6 +28,7 @@ import {
   BasketSnapshot,
   HacklTarget,
   createMarkdownSectionTarget,
+  createCurrentFileTarget,
   createSourceRangeTarget,
   describeTarget,
 } from "./basket";
@@ -35,8 +36,9 @@ import { HacklAnnotation, AnnotationController, parseAnnotationsFromAnswer } fro
 import { filterAnnotationsForTargets, targetRevealLocation } from "./targetResolve";
 import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
 import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./hacklSession";
-import { handleAnnotationReply, handleDeleteAnnotationThread } from "./annotationCommands";
+import { handleAnnotationReply, handleDeleteAnnotationThread, handleResolveAnnotationThread } from "./annotationCommands";
 import { readHacklConfig, hasUserConfigured } from "./config";
+import { resolveReviewTargets } from "./reviewTargets";
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let basketService: BasketService | undefined;
@@ -61,7 +63,13 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
   sessionFinishedEmitter = new vscode.EventEmitter<HacklSessionRecord>();
   const basketBridge = makeBasketBridge(basketService);
 
-  const chatViewProvider = new ChatViewProvider(context, answerPrompt, currentChatState, basketBridge);
+  const chatViewProvider = new ChatViewProvider(
+    context,
+    answerPrompt,
+    currentChatState,
+    basketBridge,
+    () => resolveReviewTargets(basketService!),
+  );
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
   context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
@@ -96,12 +104,20 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       await handleAnnotationReply(reply, basketService, annotationController);
       await vscode.commands.executeCommand("hackl.chat");
       chatViewProvider.notifyStatus(
-        `Reply attached to basket from ${vscode.workspace.asRelativePath(reply.thread.uri, false)}:${(reply.thread.range?.start.line ?? 0) + 1}`,
+        `Reply attached to context from ${vscode.workspace.asRelativePath(reply.thread.uri, false)}:${(reply.thread.range?.start.line ?? 0) + 1}`,
       );
     }),
     vscode.commands.registerCommand("hackl.deleteAnnotationThread", (thread: vscode.CommentThread) => {
       if (!basketService || !annotationController) return;
       handleDeleteAnnotationThread(thread, basketService, annotationController);
+    }),
+    vscode.commands.registerCommand("hackl.resolveAnnotationThread", (thread: vscode.CommentThread) => {
+      if (!basketService || !annotationController) return;
+      const n = handleResolveAnnotationThread(thread, basketService, annotationController);
+      vscode.window.setStatusBarMessage(
+        n > 0 ? `Hackl: resolved annotation thread` : "Hackl: annotation thread already resolved",
+        2000,
+      );
     }),
     vscode.commands.registerCommand("hackl.addSelectionToContext", async () => {
       const editor = vscode.window.activeTextEditor;
@@ -110,6 +126,15 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
         return;
       }
       const target = createSourceRangeTarget(editor);
+      if (target) addAndReveal(basketService!, target, chatViewProvider);
+    }),
+    vscode.commands.registerCommand("hackl.addCurrentFileToContext", () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showInformationMessage("Hackl: open a file first.");
+        return;
+      }
+      const target = createCurrentFileTarget(editor);
       if (target) addAndReveal(basketService!, target, chatViewProvider);
     }),
     vscode.commands.registerCommand("hackl.addMarkdownSectionToContext", async () => {
@@ -183,11 +208,8 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       basketService!.clear();
       basketService!.add(result);
       await vscode.commands.executeCommand("hackl.chat");
-      chatViewProvider.setPromptText(
-        "Review the staged changes for correctness, regressions, missing tests, and risky assumptions.",
-      );
-      chatViewProvider.setCreateAnnotations(true);
-      chatViewProvider.notifyStatus("Annotations toggle is enabled — press Send to run the review.");
+      chatViewProvider.setPromptText("/review");
+      chatViewProvider.notifyStatus("Attached staged changes. Press Send to run /review.");
     }),
   );
 
@@ -373,18 +395,10 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
         `Hackl: ${createdAnnotations.length} annotation${createdAnnotations.length === 1 ? "" : "s"}${dropSuffix}`,
         3000,
       );
-    } else if (parsed.blocks === 0) {
-      vscode.window.setStatusBarMessage("Hackl: no hackl-annotations block in answer — showing raw answer.", 4000);
-    } else if (parsed.parseErrors > 0) {
-      vscode.window.setStatusBarMessage(
-        `Hackl: ${parsed.parseErrors} annotation block${parsed.parseErrors === 1 ? "" : "s"} were invalid JSON — showing raw answer.`,
-        5000,
-      );
+    } else if (parsed.blocks === 0 || parsed.parseErrors > 0) {
+      vscode.window.setStatusBarMessage("Hackl could not create annotations. Showing the raw answer.", 5000);
     } else {
-      vscode.window.setStatusBarMessage(
-        `Hackl: 0 annotations kept (${dropped} dropped) — showing raw answer.`,
-        5000,
-      );
+      vscode.window.setStatusBarMessage("No annotations created.", 4000);
     }
   }
   if (createAnnotations && !signal?.aborted) {

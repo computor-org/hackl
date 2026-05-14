@@ -30,6 +30,9 @@ interface ThreadEntry {
   comment: HacklAnnotation;
 }
 
+const OPEN_THREAD_CONTEXT = "hackl.annotation.open";
+const RESOLVED_THREAD_CONTEXT = "hackl.annotation.resolved";
+
 export class AnnotationController {
   private controller: vscodeTypes.CommentController;
   private readonly threads = new Map<string, ThreadEntry>();
@@ -139,7 +142,7 @@ export class AnnotationController {
     thread.label = `Hackl · ${comment.severity}`;
     thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Expanded;
     thread.canReply = true;
-    thread.contextValue = "hackl.annotation";
+    thread.contextValue = OPEN_THREAD_CONTEXT;
     thread.state = this.vscode.CommentThreadState?.Unresolved;
     const body = new this.vscode.MarkdownString(formatBody(comment));
     body.isTrusted = false;
@@ -207,10 +210,26 @@ export class AnnotationController {
     thread.label = "Hackl · note";
     thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Expanded;
     thread.canReply = true;
-    thread.contextValue = "hackl.annotation";
+    thread.contextValue = OPEN_THREAD_CONTEXT;
     thread.state = this.vscode.CommentThreadState?.Unresolved;
     this.threads.set(id, { thread, comment });
     return comment;
+  }
+
+  resolveThread(thread: vscodeTypes.CommentThread): number {
+    let n = 0;
+    for (const entry of this.threads.values()) {
+      if (entry.thread === thread && entry.comment.status === "open") {
+        entry.comment.status = "resolved";
+        n += 1;
+      }
+    }
+    if (n === 0) return 0;
+    thread.state = this.vscode.CommentThreadState?.Resolved;
+    thread.contextValue = RESOLVED_THREAD_CONTEXT;
+    thread.canReply = false;
+    thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Collapsed;
+    return n;
   }
 
   disposeThread(thread: vscodeTypes.CommentThread): string[] {
@@ -229,8 +248,7 @@ export class AnnotationController {
     const entry = this.threads.get(id);
     if (!entry) return;
     entry.comment.status = "resolved";
-    entry.thread.dispose();
-    this.threads.delete(id);
+    this.resolveThread(entry.thread);
   }
 
   dismiss(id: string): void {

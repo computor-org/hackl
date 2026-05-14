@@ -35,6 +35,7 @@ async function run() {
     "hackl.openSetupGuide",
     "hackl.checkLocalServer",
     "hackl.addSelectionToContext",
+    "hackl.addCurrentFileToContext",
     "hackl.clearContext",
     "hackl.discardLastAnnotations",
     "hackl.reviewStagedChanges",

@@ -71,3 +71,34 @@ test("handleAnnotationReply ignores empty replies", async () => {
   });
   assert.equal(called, false);
 });
+
+test("handleResolveAnnotationThread resolves and removes thread basket targets", async () => {
+  const vsc = makeVscodeStub();
+  const removed = [];
+  const thread = {
+    uri: { toString: () => "file:///x.ts" },
+    range: { start: { line: 3, character: 0 }, end: { line: 3, character: 4 } },
+  };
+  const basket = {
+    add: () => undefined,
+    list: () => [
+      { id: "keep", metadata: { threadKey: "file:///x.ts#1-1" } },
+      { id: "drop", metadata: { threadKey: "file:///x.ts#4-4" } },
+    ],
+    remove: (id) => { removed.push(id); },
+  };
+  let resolvedThread;
+  await withVscode(vsc, async () => {
+    delete require.cache[require.resolve("../dist/annotationCommands.js")];
+    const { handleResolveAnnotationThread } = require("../dist/annotationCommands.js");
+    const n = handleResolveAnnotationThread(thread, basket, {
+      resolveThread: (t) => {
+        resolvedThread = t;
+        return 2;
+      },
+    });
+    assert.equal(n, 2);
+  });
+  assert.deepEqual(removed, ["drop"]);
+  assert.equal(resolvedThread, thread);
+});

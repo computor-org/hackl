@@ -4,6 +4,7 @@ import type { HacklAnnotation } from "./annotations";
 
 export const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
   "hackl.addSelectionToContext",
+  "hackl.addCurrentFileToContext",
   "hackl.addMarkdownSectionToContext",
   "hackl.addStagedChangesToContext",
   "hackl.addLastCommitToContext",
@@ -31,7 +32,29 @@ export interface HacklRequestOptions {
   createAnnotations?: boolean;
 }
 
-export const DEFAULT_ANNOTATION_PROMPT = "Review the basket and produce Hackl annotations.";
+export const DEFAULT_ANNOTATION_PROMPT = "Review the attached context and produce Hackl annotations.";
+export const DEFAULT_REVIEW_PROMPT = "Review the selected context for correctness, regressions, missing tests, risky assumptions, unclear code, and maintainability. Add concise line-anchored annotations for concrete findings. Do not edit files.";
+
+export type ParsedCommand =
+  | { kind: "review"; prompt: string; createAnnotations: true; forceMode: "ask" }
+  | { kind: "freeform"; prompt: string; createAnnotations: false };
+
+export function parseSlashCommand(input: string): ParsedCommand {
+  const trimmed = input.trim();
+  if (trimmed === "/review") {
+    return {
+      kind: "review",
+      prompt: DEFAULT_REVIEW_PROMPT,
+      createAnnotations: true,
+      forceMode: "ask",
+    };
+  }
+  return {
+    kind: "freeform",
+    prompt: input,
+    createAnnotations: false,
+  };
+}
 
 export type ChatOutgoingMessage =
   | { type: "answer"; text: string; reasoning?: string; annotations?: HacklAnnotation[] }
@@ -93,6 +116,7 @@ export interface PromptHandlerArgs {
 }
 
 export type PromptHandler = (args: PromptHandlerArgs) => Promise<ChatAnswer | string>;
+export type ReviewTargetResolver = () => Promise<HacklTarget[] | { error: string }>;
 
 export interface BasketBridge {
   snapshot(): BasketSnapshot;
@@ -110,6 +134,7 @@ export class ChatSession {
   constructor(
     private readonly onPrompt: PromptHandler,
     private readonly basket?: BasketBridge,
+    private readonly resolveReviewTargets?: ReviewTargetResolver,
   ) {}
 
   dispose(): void {
@@ -184,18 +209,30 @@ export class ChatSession {
     options: HacklRequestOptions,
     post: ChatPost,
   ): Promise<void> {
-    const prompt = rawPrompt?.trim() || (options.createAnnotations ? DEFAULT_ANNOTATION_PROMPT : "");
+    const parsed = parseSlashCommand(rawPrompt ?? "");
+    const prompt = parsed.kind === "review"
+      ? parsed.prompt
+      : rawPrompt?.trim() || (options.createAnnotations ? DEFAULT_ANNOTATION_PROMPT : "");
     if (!prompt) {
       return;
     }
+    const effectiveMode = parsed.kind === "review" ? parsed.forceMode : mode;
+    const effectiveOptions = parsed.kind === "review"
+      ? { ...options, createAnnotations: parsed.createAnnotations }
+      : options;
 
     await post({ type: "status", text: "Preprocessing..." });
     const previousHistory = [...this.history];
     this.history.push({ role: "user", content: prompt });
     const controller = new AbortController();
     this.currentController = controller;
-    const targets = this.basket?.snapshot().targets ?? [];
     try {
+      const targets = await this.targetsForPrompt(parsed);
+      if ("error" in targets) {
+        this.history.pop();
+        await post({ type: "error", text: targets.error });
+        return;
+      }
       const progress = (event: PromptProgress) => {
         if (controller.signal.aborted) return;
         for (const message of progressToMessages(event)) {
@@ -206,12 +243,12 @@ export class ChatSession {
       const rawAnswer = await this.onPrompt({
         prompt,
         history: previousHistory,
-        mode,
+        mode: effectiveMode,
         progress,
         requestApproval,
         signal: controller.signal,
         targets,
-        options,
+        options: effectiveOptions,
       });
       if (controller.signal.aborted) {
         this.history.pop();
@@ -237,6 +274,15 @@ export class ChatSession {
       }
       this.rejectApprovals();
     }
+  }
+
+  private async targetsForPrompt(command: ParsedCommand): Promise<HacklTarget[] | { error: string }> {
+    if (command.kind === "review") {
+      if (this.resolveReviewTargets) return this.resolveReviewTargets();
+      const targets = this.basket?.snapshot().targets ?? [];
+      return targets.length > 0 ? targets : { error: "Select code or attach context first." };
+    }
+    return this.basket?.snapshot().targets ?? [];
   }
 
   private readonly approvals = new Map<string, (approved: boolean) => void>();

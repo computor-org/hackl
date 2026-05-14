@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.39",
+  "version": "0.0.40",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -44,9 +44,9 @@
       },
       {
         "command": "hackl.replyToAnnotationThread",
-        "title": "Submit Annotation Reply",
+        "title": "Submit",
         "category": "Hackl",
-        "icon": "$(check)"
+        "icon": "$(arrow-up)"
       },
       {
         "command": "hackl.deleteAnnotationThread",
@@ -55,19 +55,31 @@
         "icon": "$(trash)"
       },
       {
+        "command": "hackl.resolveAnnotationThread",
+        "title": "Resolve",
+        "category": "Hackl",
+        "icon": "$(check)"
+      },
+      {
         "command": "hackl.addSelectionToContext",
-        "title": "Add Selection to Context",
+        "title": "Add Selection",
         "category": "Hackl",
         "icon": "$(add)"
       },
       {
+        "command": "hackl.addCurrentFileToContext",
+        "title": "Add Current File",
+        "category": "Hackl",
+        "icon": "$(file-code)"
+      },
+      {
         "command": "hackl.addMarkdownSectionToContext",
-        "title": "Add Markdown Section to Context",
+        "title": "Add Markdown Section",
         "category": "Hackl"
       },
       {
         "command": "hackl.addStagedChangesToContext",
-        "title": "Add Staged Changes to Context",
+        "title": "Add Staged Changes",
         "category": "Hackl"
       },
       {
@@ -77,7 +89,7 @@
       },
       {
         "command": "hackl.clearContext",
-        "title": "Clear Context Basket",
+        "title": "Clear Context",
         "category": "Hackl"
       },
       {
@@ -151,6 +163,10 @@
           "when": "false"
         },
         {
+          "command": "hackl.resolveAnnotationThread",
+          "when": "false"
+        },
+        {
           "command": "hackl.revealTarget",
           "when": "false"
         }
@@ -165,6 +181,11 @@
           "command": "hackl.addSelectionToContext",
           "group": "navigation@52",
           "when": "editorTextFocus && editorHasSelection"
+        },
+        {
+          "command": "hackl.addCurrentFileToContext",
+          "group": "navigation@53",
+          "when": "editorTextFocus"
         }
       ],
       "comments/commentThread/context": [
@@ -172,6 +193,13 @@
           "command": "hackl.replyToAnnotationThread",
           "group": "inline@1",
           "when": "commentController == hackl.annotations"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "hackl.resolveAnnotationThread",
+          "group": "inline@1",
+          "when": "commentController == hackl.annotations && commentThread == hackl.annotation.open"
         }
       ],
       "scm/title": [
@@ -210,7 +238,12 @@
         },
         "hackl.setupProfile": {
           "type": "string",
-          "enum": ["auto", "lmstudio", "llamacpp", "ollama"],
+          "enum": [
+            "auto",
+            "lmstudio",
+            "llamacpp",
+            "ollama"
+          ],
           "default": "auto",
           "description": "Preferred backend for setup-guide ordering only. Hackl never starts a server; this just decides which recipe is foregrounded in the Setup view."
         },
@@ -236,22 +269,34 @@
             "id": "hackl.walkthrough.pickServer",
             "title": "Pick a server",
             "description": "LM Studio is the easy path. llama.cpp is the expert path. Ollama works too.\n\n[Open setup guide](command:hackl.openSetupGuide)",
-            "media": { "markdown": "media/setup-tutorial.md" },
-            "completionEvents": ["onCommand:hackl.openSetupGuide"]
+            "media": {
+              "markdown": "media/setup-tutorial.md"
+            },
+            "completionEvents": [
+              "onCommand:hackl.openSetupGuide"
+            ]
           },
           {
             "id": "hackl.walkthrough.setEndpoint",
             "title": "Set the endpoint",
             "description": "Once your server is running, point Hackl at it.\n\n[Edit settings](command:workbench.action.openSettings?%22hackl.endpoint%22) · [Check connection](command:hackl.checkLocalServer)",
-            "media": { "markdown": "media/setup-tutorial.md" },
-            "completionEvents": ["onCommand:hackl.checkLocalServer"]
+            "media": {
+              "markdown": "media/setup-tutorial.md"
+            },
+            "completionEvents": [
+              "onCommand:hackl.checkLocalServer"
+            ]
           },
           {
             "id": "hackl.walkthrough.chat",
             "title": "Open chat",
             "description": "Start chatting locally.\n\n[Open chat](command:hackl.chat)",
-            "media": { "markdown": "media/setup-tutorial.md" },
-            "completionEvents": ["onCommand:hackl.chat"]
+            "media": {
+              "markdown": "media/setup-tutorial.md"
+            },
+            "completionEvents": [
+              "onCommand:hackl.chat"
+            ]
           }
         ]
       }

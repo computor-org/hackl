@@ -15,14 +15,25 @@ function command(manifest, id) {
 
 test("annotation comment commands are not globally disabled", () => {
   const manifest = readManifest();
-  for (const id of ["hackl.replyToAnnotationThread", "hackl.deleteAnnotationThread", "hackl.revealTarget"]) {
+  for (const id of ["hackl.replyToAnnotationThread", "hackl.deleteAnnotationThread", "hackl.resolveAnnotationThread", "hackl.revealTarget"]) {
     assert.equal(command(manifest, id)?.enablement, undefined, `${id} must be invokable from VS Code UI contexts`);
   }
+});
+
+test("context command titles use user-facing context wording", () => {
+  const manifest = readManifest();
+  assert.equal(command(manifest, "hackl.addSelectionToContext")?.title, "Add Selection");
+  assert.equal(command(manifest, "hackl.addCurrentFileToContext")?.title, "Add Current File");
+  assert.equal(command(manifest, "hackl.addStagedChangesToContext")?.title, "Add Staged Changes");
+  assert.equal(command(manifest, "hackl.clearContext")?.title, "Clear Context");
 });
 
 test("annotation reply is the only custom comment editor action", () => {
   const manifest = readManifest();
   const menus = manifest.contributes.menus;
+  const reply = command(manifest, "hackl.replyToAnnotationThread");
+  assert.equal(reply.title, "Submit");
+  assert.equal(reply.icon, "$(arrow-up)");
   assert.deepEqual(menus["comments/commentThread/context"], [
     {
       command: "hackl.replyToAnnotationThread",
@@ -30,7 +41,13 @@ test("annotation reply is the only custom comment editor action", () => {
       when: "commentController == hackl.annotations",
     },
   ]);
-  assert.equal(menus["comments/commentThread/title"], undefined);
+  assert.deepEqual(menus["comments/commentThread/title"], [
+    {
+      command: "hackl.resolveAnnotationThread",
+      group: "inline@1",
+      when: "commentController == hackl.annotations && commentThread == hackl.annotation.open",
+    },
+  ]);
 });
 
 test("internal annotation commands stay out of the command palette", () => {
@@ -42,5 +59,6 @@ test("internal annotation commands stay out of the command palette", () => {
   );
   assert.ok(hidden.has("hackl.replyToAnnotationThread"));
   assert.ok(hidden.has("hackl.deleteAnnotationThread"));
+  assert.ok(hidden.has("hackl.resolveAnnotationThread"));
   assert.ok(hidden.has("hackl.revealTarget"));
 });

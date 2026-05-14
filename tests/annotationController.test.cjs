@@ -23,6 +23,7 @@ function makeFakeVscode() {
       MarkdownString: function MarkdownString(s) { this.value = s; this.isTrusted = false; },
       CommentMode: { Preview: 1, Editing: 0 },
       CommentThreadCollapsibleState: { Expanded: 1, Collapsed: 0 },
+      CommentThreadState: { Unresolved: 0, Resolved: 1 },
       comments: {
         createCommentController: () => ({
           createCommentThread: (uri, range) => new CommentThread(uri, range),
@@ -129,6 +130,30 @@ test("AnnotationController.registerHumanComment uses annotation ids", () => {
     };
     const annotation = controller.registerHumanComment(thread, "note");
     assert.match(annotation.id, /^ann-/);
+  });
+});
+
+test("AnnotationController.resolveThread marks a thread resolved without disposing it", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    const annotation = controller.add({
+      uri: "file:///x.ts",
+      startLine: 1,
+      endLine: 1,
+      severity: "note",
+      message: "note",
+      authorType: "ai",
+    });
+    const thread = fake.threads[0];
+
+    assert.equal(controller.resolveThread(thread), 1);
+    assert.equal(thread.state, fake.vscode.CommentThreadState.Resolved);
+    assert.equal(thread.contextValue, "hackl.annotation.resolved");
+    assert.equal(thread.canReply, false);
+    assert.equal(thread.disposed, false);
+    assert.equal(controller.list().find((item) => item.id === annotation.id).status, "resolved");
   });
 });
 

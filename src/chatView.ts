@@ -7,6 +7,7 @@ import {
   ChatSession,
   ChatState,
   PromptHandler,
+  ReviewTargetResolver,
   isAllowedWebviewCommand,
 } from "./chatSession";
 
@@ -23,8 +24,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     onPrompt: PromptHandler,
     private readonly getState: () => Promise<ChatState>,
     basket?: BasketBridge,
+    resolveReviewTargets?: ReviewTargetResolver,
   ) {
-    this.session = new ChatSession(onPrompt, basket);
+    this.session = new ChatSession(onPrompt, basket, resolveReviewTargets);
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {

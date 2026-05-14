@@ -13,6 +13,7 @@
   const basketList = document.getElementById("basket-list");
   const basketCount = document.getElementById("basket-count");
   const basketAdd = document.getElementById("basket-add");
+  const basketAddFile = document.getElementById("basket-add-file");
   const basketAddStaged = document.getElementById("basket-add-staged");
   const basketClear = document.getElementById("basket-clear");
   const attachButton = document.getElementById("attach");
@@ -30,7 +31,7 @@
   let annotationsOn = false;
   let annotationsAvailable = false;
   const pendingQueue = [];
-  const annotationOnlyPrompt = "Review the basket and produce Hackl annotations.";
+  const annotationOnlyPrompt = "Review the attached context and produce Hackl annotations.";
 
   installMath(md);
   autoResize();
@@ -141,6 +142,11 @@
   if (basketAdd) {
     basketAdd.addEventListener("click", () => {
       vscode.postMessage({ type: "runCommand", value: "hackl.addSelectionToContext" });
+    });
+  }
+  if (basketAddFile) {
+    basketAddFile.addEventListener("click", () => {
+      vscode.postMessage({ type: "runCommand", value: "hackl.addCurrentFileToContext" });
     });
   }
   if (basketAddStaged) {
@@ -542,7 +548,7 @@
     }
     send.classList.remove("stop");
     setSendIcon("arrow-up");
-    send.title = "Send (Enter)";
+    send.title = "Send (Enter)" + (annotationsOn ? " + annotations" : "");
     send.setAttribute("aria-label", "Send");
     const hasText = prompt.value.trim().length > 0;
     send.disabled = !(hasText || (annotationsOn && annotationsAvailable));

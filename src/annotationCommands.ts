@@ -40,15 +40,30 @@ export function handleDeleteAnnotationThread(
   basketService: BasketService,
   annotationController: AnnotationController,
 ): void {
-  const range = thread.range;
-  const key = range
-    ? `${thread.uri.toString()}#${range.start.line + 1}-${range.end.line + 1}`
-    : undefined;
-  if (key) {
-    for (const target of basketService.list()) {
-      const meta = target.metadata as { threadKey?: string } | undefined;
-      if (meta?.threadKey === key) basketService.remove(target.id);
-    }
-  }
+  removeBasketTargetsForThread(thread, basketService);
   annotationController.disposeThread(thread);
+}
+
+export function handleResolveAnnotationThread(
+  thread: vscode.CommentThread,
+  basketService: BasketService,
+  annotationController: AnnotationController,
+): number {
+  removeBasketTargetsForThread(thread, basketService);
+  return annotationController.resolveThread(thread);
+}
+
+function removeBasketTargetsForThread(thread: vscode.CommentThread, basketService: BasketService): void {
+  const key = threadKey(thread);
+  if (!key) return;
+  for (const target of basketService.list()) {
+    const meta = target.metadata as { threadKey?: string } | undefined;
+    if (meta?.threadKey === key) basketService.remove(target.id);
+  }
+}
+
+function threadKey(thread: vscode.CommentThread): string | undefined {
+  const range = thread.range;
+  if (!range) return undefined;
+  return `${thread.uri.toString()}#${range.start.line + 1}-${range.end.line + 1}`;
 }
