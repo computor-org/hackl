@@ -481,16 +481,18 @@ async function currentChatState(): Promise<ChatState> {
     return {
       type: "state",
       enableThinking: cfg.enableThinking,
+      connected: false,
       endpoint: cfg.endpoint,
       endpointApprovalRequired: true,
     };
   }
-  const target = await resolveChatTarget({ endpoint: cfg.endpoint, endpointConfigured: cfg.endpointConfigured });
+  const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
   return {
     type: "state",
     enableThinking: cfg.enableThinking,
-    endpoint: target.endpoint,
-    model: target.model,
+    connected: Boolean(probe?.ok),
+    endpoint: probe?.endpoint,
+    model: probe?.model,
     endpointApprovalRequired: false,
   };
 }

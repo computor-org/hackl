@@ -99,7 +99,7 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           </button>
           <div class="compose-spacer"></div>
           <span id="context-meter" class="meter" title="Estimated prompt tokens / configured context window"></span>
-          <button id="send" class="send-button" type="submit" title="Send (Enter)" aria-label="Send"><span class="codicon codicon-arrow-up" aria-hidden="true"></span><span id="send-label" class="send-label">Ask</span></button>
+          <button id="send" class="send-button" type="submit" title="Send (Enter)" aria-label="Send"><span class="codicon codicon-arrow-up" aria-hidden="true"></span></button>
         </div>
       </div>
     </form>

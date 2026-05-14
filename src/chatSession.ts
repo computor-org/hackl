@@ -71,6 +71,7 @@ export type PromptProgress =
 export interface ChatState {
   type: "state";
   enableThinking?: boolean;
+  connected?: boolean;
   endpoint?: string;
   model?: string;
   endpointApprovalRequired?: boolean;
@@ -286,6 +287,7 @@ function progressToMessages(event: PromptProgress): ChatOutgoingMessage[] {
   if (event.type === "target") {
     return [{
       type: "state",
+      connected: true,
       endpoint: event.endpoint,
       model: event.model,
       endpointApprovalRequired: false,

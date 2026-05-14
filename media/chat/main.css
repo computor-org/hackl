@@ -266,12 +266,6 @@ h1 {
   opacity: 0.85;
 }
 
-.send-label {
-  margin-left: 6px;
-  font-size: 11px;
-  letter-spacing: 0.2px;
-}
-
 .tool-button.hidden-unavailable { display: none; }
 
 .meter:empty {

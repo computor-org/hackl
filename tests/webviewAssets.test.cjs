@@ -17,7 +17,6 @@ test("media/chat/main.css exists and contains expected rules", () => {
   const css = fs.readFileSync(file, "utf8");
   assert.ok(css.length > 1000, `main.css is suspiciously short: ${css.length} bytes`);
   assert.match(css, /\.send-button/);
-  assert.match(css, /\.send-label/);
   assert.match(css, /\.hidden-unavailable/);
   assert.match(css, /\.tool-button\[aria-pressed="true"\]/);
 });
@@ -29,4 +28,21 @@ test("main.js still wires the key element ids the HTML shell renders", () => {
     assert.match(src, new RegExp(`"${id}"`), `main.js missing id "${id}"`);
   }
   assert.match(src, /diffTruncated/);
+});
+
+test("connect hint follows explicit connection state instead of model text", () => {
+  const file = path.join(root, "media/chat/main.js");
+  const src = fs.readFileSync(file, "utf8");
+  assert.match(src, /message\.connected === false/);
+  assert.doesNotMatch(src, /const needsConnect = !message\.model/);
+});
+
+test("send button remains icon-only", () => {
+  const htmlFile = path.join(root, "src/chatHtml.ts");
+  const jsFile = path.join(root, "media/chat/main.js");
+  const html = fs.readFileSync(htmlFile, "utf8");
+  const js = fs.readFileSync(jsFile, "utf8");
+  assert.match(html, /id="send"[^>]*class="send-button"[^>]*>.*codicon-arrow-up/s);
+  assert.doesNotMatch(html, /send-label/);
+  assert.doesNotMatch(js, /send-label/);
 });

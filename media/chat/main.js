@@ -121,11 +121,6 @@
   }
 
   function updateComboStrip() {
-    const sendLabel = document.getElementById("send-label");
-    if (sendLabel) {
-      const cap = selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
-      sendLabel.textContent = cap + (annotationsOn ? " + annotations" : "");
-    }
     if (send) {
       const tier = { ask: "read", edit: "read+edit", work: "read+edit+search", agent: "read+edit+search+cmd" }[selectedMode] || selectedMode;
       send.title = "Send · " + selectedMode + " (" + tier + ")" + (annotationsOn ? " + annotations" : "");
@@ -499,19 +494,27 @@
   function updateConnectHint(message) {
     const hint = document.getElementById("connect-hint");
     if (!hint) return;
-    const needsConnect = !message.model && !message.endpointApprovalRequired;
+    const needsConnect = message.connected === false && !message.endpointApprovalRequired;
     hint.hidden = !needsConnect;
   }
 
   function updateEndpointStatus(message) {
-    if (!endpointStatus || !message.endpoint) return;
+    if (!endpointStatus) return;
+    if (message.connected === false && !message.endpointApprovalRequired) {
+      endpointStatus.textContent = "";
+      endpointStatus.title = "";
+      return;
+    }
+    if (!message.endpoint) return;
     const endpoint = endpointLabel(message.endpoint);
     const model = message.model || (message.endpointApprovalRequired ? "approval required" : "");
     const text = model ? endpoint + " · " + model : endpoint;
     endpointStatus.textContent = text;
     endpointStatus.title = message.endpointApprovalRequired
       ? "Configured non-local endpoint. Hackl will ask before sending prompts or selected context."
-      : "OpenAI-compatible endpoint and model: " + text;
+      : message.model
+        ? "OpenAI-compatible endpoint and model: " + text
+        : "OpenAI-compatible endpoint: " + endpoint;
   }
 
   function endpointLabel(endpoint) {

@@ -56,8 +56,9 @@ try {
   await page.setContent(`${vscodeApiShim}${html}`, { waitUntil: "load" });
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "ready"), diagnostics);
 
-  // Send button carries the mode label
-  assert.equal((await page.locator("#send-label").innerText()).trim(), "Ask");
+  // Send button stays icon-only.
+  assert.equal(await page.locator("#send-label").count(), 0);
+  assert.equal(await page.locator("#send .codicon-arrow-up").count(), 1);
 
   // Annotations toggle hidden until an anchorable target lands in the basket
   assert.equal(await page.locator("#annotations-toggle").isVisible(), false);
@@ -69,10 +70,10 @@ try {
   await page.waitForFunction(() => !document.getElementById("annotations-toggle").classList.contains("hidden-unavailable"));
   assert.equal(await page.locator("#annotations-toggle").isVisible(), true);
 
-  // Toggling annotations updates the send label
+  // Toggling annotations updates button state without adding visible text.
   await page.locator("#annotations-toggle").click();
-  await page.waitForFunction(() => document.getElementById("send-label").textContent.includes("annotations"));
-  assert.match(await page.locator("#send-label").innerText(), /\+ annotations/);
+  await page.waitForFunction(() => document.getElementById("annotations-toggle").getAttribute("aria-pressed") === "true");
+  assert.match(await page.locator("#send").getAttribute("title"), /\+ annotations/);
   await page.locator("#annotations-toggle").click();
 
   // Staged diffs are also annotatable.
@@ -88,8 +89,8 @@ try {
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", { data: { type: "setCreateAnnotations", value: true } }));
   });
-  await page.waitForFunction(() => document.getElementById("send-label").textContent.includes("annotations"));
-  assert.match(await page.locator("#send-label").innerText(), /\+ annotations/);
+  await page.waitForFunction(() => document.getElementById("annotations-toggle").getAttribute("aria-pressed") === "true");
+  assert.match(await page.locator("#send").getAttribute("title"), /\+ annotations/);
   await page.locator("#annotations-toggle").click();
 
   // setPromptText populates the textarea

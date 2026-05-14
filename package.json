@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.38",
+  "version": "0.0.39",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -46,15 +46,13 @@
         "command": "hackl.replyToAnnotationThread",
         "title": "Submit Annotation Reply",
         "category": "Hackl",
-        "icon": "$(check)",
-        "enablement": "false"
+        "icon": "$(check)"
       },
       {
         "command": "hackl.deleteAnnotationThread",
         "title": "Delete Annotation Thread",
         "category": "Hackl",
-        "icon": "$(trash)",
-        "enablement": "false"
+        "icon": "$(trash)"
       },
       {
         "command": "hackl.addSelectionToContext",
@@ -100,8 +98,7 @@
       {
         "command": "hackl.revealTarget",
         "title": "Reveal Target",
-        "category": "Hackl",
-        "enablement": "false"
+        "category": "Hackl"
       }
     ],
     "viewsContainers": {
@@ -144,6 +141,20 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "hackl.replyToAnnotationThread",
+          "when": "false"
+        },
+        {
+          "command": "hackl.deleteAnnotationThread",
+          "when": "false"
+        },
+        {
+          "command": "hackl.revealTarget",
+          "when": "false"
+        }
+      ],
       "editor/context": [
         {
           "command": "hackl.chat",
@@ -159,13 +170,6 @@
       "comments/commentThread/context": [
         {
           "command": "hackl.replyToAnnotationThread",
-          "group": "inline@1",
-          "when": "commentController == hackl.annotations"
-        }
-      ],
-      "comments/commentThread/title": [
-        {
-          "command": "hackl.deleteAnnotationThread",
           "group": "inline@1",
           "when": "commentController == hackl.annotations"
         }

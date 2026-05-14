@@ -11,14 +11,14 @@ export class SetupPanel {
 
   static show(context: vscode.ExtensionContext, runProbe: ProbeRunner, setEndpoint: EndpointSetter): void {
     if (SetupPanel.current) {
-      SetupPanel.current.panel.reveal();
+      SetupPanel.current.panel.reveal(vscode.ViewColumn.One);
       void SetupPanel.current.postStatus();
       return;
     }
     const panel = vscode.window.createWebviewPanel(
       SetupPanel.viewType,
       "Hackl — Setup",
-      vscode.ViewColumn.Active,
+      vscode.ViewColumn.One,
       {
         enableScripts: true,
         retainContextWhenHidden: false,
