@@ -605,6 +605,10 @@ h1 {
   font-size: 12px;
 }
 
+.connect-hint[hidden] {
+  display: none;
+}
+
 .connect-hint button {
   margin-left: auto;
   background: var(--vscode-button-background);
