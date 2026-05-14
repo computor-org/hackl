@@ -87,21 +87,40 @@ async function discoverLocalServer(
 }
 
 async function probeServer(endpoint: string, fetchImpl: typeof fetch): Promise<ProbedServer | undefined> {
+  const base = trimSlash(endpoint);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
   try {
-    const response = await fetchImpl(`${trimSlash(endpoint)}/models`, { signal: controller.signal });
+    const response = await fetchImpl(`${base}/models`, { signal: controller.signal });
     if (!response.ok) {
       const model = firstAvailableModel(await response.text());
-      return model ? { endpoint: trimSlash(endpoint), model } : undefined;
+      return model ? { endpoint: base, model } : await probeHealth(base, fetchImpl);
     }
-    return { endpoint: trimSlash(endpoint), model: firstModelId(await response.json()) };
+    return { endpoint: base, model: firstModelId(await response.json()) };
   } catch {
-    return undefined;
+    return await probeHealth(base, fetchImpl);
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function probeHealth(endpoint: string, fetchImpl: typeof fetch): Promise<ProbedServer | undefined> {
+  const base = trimSlash(endpoint);
+  const root = base.replace(/\/v1$/, "");
+  for (const url of [`${root}/health`, `${base}/props`, `${root}/props`]) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    try {
+      const response = await fetchImpl(url, { signal: controller.signal });
+      if (response.ok) return { endpoint: base };
+    } catch {
+      // Try the next lightweight endpoint.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return undefined;
 }
 
 function firstAvailableModel(text: string): string | undefined {

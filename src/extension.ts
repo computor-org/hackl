@@ -487,6 +487,14 @@ async function currentChatState(): Promise<ChatState> {
     };
   }
   const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
+  if (cfg.endpointConfigured && cfg.endpoint && !probe?.ok) {
+    return {
+      type: "state",
+      enableThinking: cfg.enableThinking,
+      endpoint: cfg.endpoint,
+      endpointApprovalRequired: false,
+    };
+  }
   return {
     type: "state",
     enableThinking: cfg.enableThinking,

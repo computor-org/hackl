@@ -38,6 +38,9 @@ test("resolveChatTarget discovers LM Studio after llama.cpp is unavailable", asy
 
   assert.deepEqual(calls, [
     "http://localhost:8080/v1/models",
+    "http://localhost:8080/health",
+    "http://localhost:8080/v1/props",
+    "http://localhost:8080/props",
     "http://localhost:1234/v1/models",
   ]);
   assert.deepEqual(target, {
@@ -118,6 +121,29 @@ test("resolveChatTarget uses first advertised model when server requires a model
     endpoint: "http://slopgate.example/v1",
     model: "qwen",
   });
+});
+
+test("resolveChatTarget accepts llama.cpp health when model listing is unavailable", async () => {
+  const calls = [];
+  const target = await resolveChatTarget({
+    endpoint: "http://localhost:8080/v1",
+    endpointConfigured: true,
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      if (String(url).endsWith("/models")) return new Response("not found", { status: 404 });
+      if (String(url) === "http://localhost:8080/health") return new Response("ok", { status: 200 });
+      throw new Error("unexpected");
+    },
+  });
+
+  assert.deepEqual(target, {
+    endpoint: "http://localhost:8080/v1",
+    model: "local-model",
+  });
+  assert.deepEqual(calls, [
+    "http://localhost:8080/v1/models",
+    "http://localhost:8080/health",
+  ]);
 });
 
 test("requiresNonLocalEndpointApproval only flags configured non-loopback endpoints", () => {

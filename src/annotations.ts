@@ -21,6 +21,8 @@ export interface HacklAnnotation {
   createdAt: number;
 }
 
+export type AnnotationAuthor = Pick<HacklAnnotation, "authorType" | "aiModel">;
+
 let counter = 0;
 
 interface ThreadEntry {
@@ -76,6 +78,10 @@ export class AnnotationController {
   constructor() {
     this.vscode = getVscode();
     this.controller = this.vscode.comments.createCommentController("hackl.annotations", "Hackl Annotations");
+    this.controller.options = {
+      prompt: "Reply to Hackl",
+      placeHolder: "Reply to this annotation. Ctrl+Enter submits.",
+    };
     const VscRange = this.vscode.Range;
     this.controller.commentingRangeProvider = {
       provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.Range[] {
@@ -133,6 +139,8 @@ export class AnnotationController {
     thread.label = `Hackl · ${comment.severity}`;
     thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Expanded;
     thread.canReply = true;
+    thread.contextValue = "hackl.annotation";
+    thread.state = this.vscode.CommentThreadState?.Unresolved;
     const body = new this.vscode.MarkdownString(formatBody(comment));
     body.isTrusted = false;
     const authorName = comment.authorType === "ai"
@@ -158,6 +166,18 @@ export class AnnotationController {
   }
 
   registerHumanComment(thread: vscodeTypes.CommentThread, message: string): HacklAnnotation {
+    return this.registerThreadComment(thread, message, { authorType: "human" });
+  }
+
+  registerAiComment(thread: vscodeTypes.CommentThread, message: string, aiModel?: string): HacklAnnotation {
+    return this.registerThreadComment(thread, message, { authorType: "ai", aiModel });
+  }
+
+  private registerThreadComment(
+    thread: vscodeTypes.CommentThread,
+    message: string,
+    author: AnnotationAuthor,
+  ): HacklAnnotation {
     counter += 1;
     const id = `ann-${Date.now().toString(36)}-${counter.toString(36)}`;
     const startLine = (thread.range?.start.line ?? 0) + 1;
@@ -170,7 +190,8 @@ export class AnnotationController {
       endLine,
       severity: "note",
       message,
-      authorType: "human",
+      authorType: author.authorType,
+      aiModel: author.aiModel,
       createdAt: Date.now(),
     };
     const body = new this.vscode.MarkdownString(message);
@@ -179,12 +200,15 @@ export class AnnotationController {
     existing.push({
       body,
       mode: this.vscode.CommentMode.Preview,
-      author: { name: "You" },
+      author: { name: authorName(author) },
       contextValue: `hackl:${id}`,
     });
     thread.comments = existing;
     thread.label = "Hackl · note";
     thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Expanded;
+    thread.canReply = true;
+    thread.contextValue = "hackl.annotation";
+    thread.state = this.vscode.CommentThreadState?.Unresolved;
     this.threads.set(id, { thread, comment });
     return comment;
   }
@@ -235,6 +259,11 @@ function formatBody(comment: HacklAnnotation): string {
     lines.push(`_${comment.rationale}_`);
   }
   return lines.join("\n");
+}
+
+function authorName(author: AnnotationAuthor): string {
+  if (author.authorType === "human") return "You";
+  return `Hackl · ${author.aiModel ?? "ai"}`;
 }
 
 const ANNOTATION_BLOCK_RE = /```(?:hackl-annotations|hackl-review|review)\s*([\s\S]*?)```/g;

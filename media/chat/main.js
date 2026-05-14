@@ -28,7 +28,9 @@
   let isBusy = false;
   let selectedMode = "ask";
   let annotationsOn = false;
+  let annotationsAvailable = false;
   const pendingQueue = [];
+  const annotationOnlyPrompt = "Review the basket and produce Hackl annotations.";
 
   installMath(md);
   autoResize();
@@ -39,19 +41,20 @@
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const text = prompt.value.trim();
-    if (!text) return;
-    const entry = appendUser(text);
+    const promptText = text || (annotationsOn && annotationsAvailable ? annotationOnlyPrompt : "");
+    if (!promptText) return;
+    const entry = appendUser(promptText);
     prompt.value = "";
     autoResize();
     focusPrompt();
     if (isBusy) {
-      const item = { text, mode: selectedMode, createAnnotations: annotationsOn, entry };
+      const item = { text: promptText, mode: selectedMode, createAnnotations: annotationsOn, entry };
       pendingQueue.push(item);
       markQueued(entry, true, () => removeQueuedItem(item));
       updateSendState();
       return;
     }
-    sendPrompt(text, selectedMode, annotationsOn);
+    sendPrompt(promptText, selectedMode, annotationsOn);
   });
 
   send.addEventListener("click", (event) => {
@@ -279,6 +282,7 @@
   function updateAnnotationsAvailable(targets) {
     if (!annotationsToggle) return;
     const anchorable = targets.some(canAnnotateTarget);
+    annotationsAvailable = anchorable;
     annotationsToggle.disabled = !anchorable;
     annotationsToggle.classList.toggle("hidden-unavailable", !anchorable);
     if (!anchorable && annotationsOn) {
@@ -289,6 +293,7 @@
     annotationsToggle.title = annotationsOn
       ? "Annotations ON - model will also emit line annotations"
       : "Also produce line annotations";
+    updateSendState();
   }
 
   function canAnnotateTarget(target) {
@@ -306,6 +311,7 @@
       ? "Annotations ON - model will also emit line annotations"
       : "Also produce line annotations";
     updateComboStrip();
+    updateSendState();
   }
 
   function renderBasket(targets) {
@@ -539,7 +545,7 @@
     send.title = "Send (Enter)";
     send.setAttribute("aria-label", "Send");
     const hasText = prompt.value.trim().length > 0;
-    send.disabled = !hasText;
+    send.disabled = !(hasText || (annotationsOn && annotationsAvailable));
   }
 
   function setSendIcon(name) {

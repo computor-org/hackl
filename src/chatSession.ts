@@ -31,6 +31,8 @@ export interface HacklRequestOptions {
   createAnnotations?: boolean;
 }
 
+export const DEFAULT_ANNOTATION_PROMPT = "Review the basket and produce Hackl annotations.";
+
 export type ChatOutgoingMessage =
   | { type: "answer"; text: string; reasoning?: string; annotations?: HacklAnnotation[] }
   | ApprovalRequest
@@ -182,7 +184,7 @@ export class ChatSession {
     options: HacklRequestOptions,
     post: ChatPost,
   ): Promise<void> {
-    const prompt = rawPrompt?.trim();
+    const prompt = rawPrompt?.trim() || (options.createAnnotations ? DEFAULT_ANNOTATION_PROMPT : "");
     if (!prompt) {
       return;
     }

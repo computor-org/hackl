@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { ChatSession } = require("../dist/chatSession");
+const { ChatSession, DEFAULT_ANNOTATION_PROMPT } = require("../dist/chatSession");
 
 test("ChatSession sends prompt with previous history and records the answer", async () => {
   const calls = [];
@@ -31,6 +31,23 @@ test("ChatSession sends prompt with previous history and records the answer", as
     },
   ]);
   assert.deepEqual(posted.map((message) => message.type), ["status", "answer", "status", "answer"]);
+});
+
+test("ChatSession accepts empty prompts when annotations are requested", async () => {
+  const calls = [];
+  const posted = [];
+  const session = new ChatSession(async ({ prompt, options }) => {
+    calls.push({ prompt, createAnnotations: options.createAnnotations });
+    return "answer";
+  });
+
+  await session.handle({ type: "prompt", prompt: "   ", createAnnotations: true }, (message) => {
+    posted.push(message);
+    return Promise.resolve(true);
+  });
+
+  assert.deepEqual(calls, [{ prompt: DEFAULT_ANNOTATION_PROMPT, createAnnotations: true }]);
+  assert.deepEqual(posted.map((message) => message.type), ["status", "answer"]);
 });
 
 test("ChatSession replays and clears history", async () => {

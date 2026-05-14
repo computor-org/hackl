@@ -50,3 +50,16 @@ test("probeAll tolerates a probe that succeeds but lacks model or ctx", async ()
   assert.equal(results[0].ok, true);
   assert.equal(results[0].model, undefined);
 });
+
+test("probeAll treats llama.cpp health as connected when models are unavailable", async () => {
+  const fetchImpl = async (url) => {
+    const u = String(url);
+    if (u.endsWith("/models")) return new Response("not found", { status: 404 });
+    if (u === "http://localhost:8080/health") return new Response("ok", { status: 200 });
+    return new Response("not found", { status: 404 });
+  };
+  const results = await probeAll([{ name: "llama.cpp", endpoint: "http://localhost:8080/v1" }], fetchImpl);
+  assert.equal(results[0].ok, true);
+  assert.equal(results[0].endpoint, "http://localhost:8080/v1");
+  assert.equal(results[0].model, undefined);
+});
