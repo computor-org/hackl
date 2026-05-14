@@ -88,12 +88,33 @@ test("AnnotationController provides editor line comment ranges without file comm
     const controller = new AnnotationController();
     const provider = controller.controller.commentingRangeProvider;
 
-    const ranges = provider.provideCommentingRanges({ lineCount: 42 });
+    const ranges = provider.provideCommentingRanges({
+      uri: { scheme: "file", toString: () => "file:///x.ts" },
+      languageId: "typescript",
+      lineCount: 42,
+    });
 
     assert.equal(Array.isArray(ranges), true);
     assert.equal(ranges.length, 1);
     assert.deepEqual(ranges[0].start, { line: 0, character: 0 });
     assert.deepEqual(ranges[0].end, { line: 41, character: 0 });
+  });
+});
+
+test("AnnotationController does not provide comment ranges for comment input documents", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    const provider = controller.controller.commentingRangeProvider;
+
+    const ranges = provider.provideCommentingRanges({
+      uri: { scheme: "comment", toString: () => "comment://hackl.annotations/input.md" },
+      languageId: "markdown",
+      lineCount: 1,
+    });
+
+    assert.deepEqual(ranges, []);
   });
 });
 

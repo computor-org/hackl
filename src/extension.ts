@@ -61,10 +61,9 @@ export interface HacklApi {
 
 export function activate(context: vscode.ExtensionContext): HacklApi {
   extensionContext = context;
-  activationDebug = createDebugLog(true);
+  activationDebug = createDebugLog(readHacklConfig().debug);
   activationDebug?.("extension.activate", {
     activationEvents: context.extension.packageJSON?.activationEvents,
-    diagnosticTrace: true,
     activeEditor: vscode.window.activeTextEditor?.document.uri.toString(),
     visibleEditors: vscode.window.visibleTextEditors.map((editor) => editor.document.uri.toString()),
   });
@@ -288,17 +287,29 @@ function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): voi
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       activationDebug?.("annotations.activeEditorChanged", { uri: editor?.document.uri.toString() });
-      annotationController?.refreshCommentingRanges();
+      refreshAnnotationRangesForDocument(editor?.document);
     }),
     vscode.window.onDidChangeVisibleTextEditors((editors) => {
       activationDebug?.("annotations.visibleEditorsChanged", { uris: editors.map((editor) => editor.document.uri.toString()) });
-      annotationController?.refreshCommentingRanges();
+      if (editors.some((editor) => isEditorDocument(editor.document))) {
+        annotationController?.refreshCommentingRanges();
+      }
     }),
     vscode.workspace.onDidOpenTextDocument((document) => {
       activationDebug?.("annotations.documentOpened", { uri: document.uri.toString(), languageId: document.languageId });
-      annotationController?.refreshCommentingRanges();
+      refreshAnnotationRangesForDocument(document);
     }),
   );
+}
+
+function refreshAnnotationRangesForDocument(document: vscode.TextDocument | undefined): void {
+  if (!isEditorDocument(document)) return;
+  annotationController?.refreshCommentingRanges();
+}
+
+function isEditorDocument(document: vscode.TextDocument | undefined): boolean {
+  const scheme = document?.uri.scheme;
+  return scheme === "file" || scheme === "untitled" || scheme === "vscode-remote";
 }
 
 async function refreshStatus(): Promise<void> {

@@ -104,6 +104,14 @@ export class AnnotationController {
     const debug = this.debug;
     return {
       provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.Range[] {
+        if (!isEditorDocumentScheme(document.uri?.scheme)) {
+          debug?.("annotations.provideCommentingRanges.skipped", {
+            uri: document.uri?.toString(),
+            scheme: document.uri?.scheme,
+            languageId: document.languageId,
+          });
+          return [];
+        }
         const ranges = [new VscRange(0, 0, Math.max(0, document.lineCount - 1), 0)];
         debug?.("annotations.provideCommentingRanges", {
           uri: document.uri.toString(),
@@ -293,6 +301,10 @@ export class AnnotationController {
     this.clear();
     this.controller.dispose();
   }
+}
+
+function isEditorDocumentScheme(scheme: string | undefined): boolean {
+  return scheme === "file" || scheme === "untitled" || scheme === "vscode-remote";
 }
 
 function formatBody(comment: HacklAnnotation): string {
