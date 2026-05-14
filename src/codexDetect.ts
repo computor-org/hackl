@@ -11,6 +11,7 @@ export interface CodexDetection {
   version?: string;
   authMode: CodexAuthMode;
   models: string[];
+  modelContextWindows: Record<string, number>;
   error?: string;
 }
 
@@ -44,16 +45,18 @@ export function clearCodexDetectionCache(): void {
 async function runDetect(command: string, codexHome: string): Promise<CodexDetection> {
   const version = await runCodexVersion(command);
   if (!version.ok) {
-    return { available: false, command, authMode: "none", models: [], error: version.error };
+    return { available: false, command, authMode: "none", models: [], modelContextWindows: {}, error: version.error };
   }
   const authMode = await readAuthMode(codexHome);
-  const models = await readModels(codexHome);
+  const catalog = await readModelCatalog(version.command ?? command);
+  const models = catalog.models.length > 0 ? catalog.models : await readModels(codexHome);
   return {
     available: true,
     command: version.command ?? command,
     version: version.value,
     authMode,
     models,
+    modelContextWindows: catalog.modelContextWindows,
   };
 }
 
@@ -157,6 +160,80 @@ async function readModels(codexHome: string): Promise<string[]> {
     out.push(trimmed);
   }
   return out;
+}
+
+interface CodexModelCatalog {
+  models: string[];
+  modelContextWindows: Record<string, number>;
+}
+
+async function readModelCatalog(command: string): Promise<CodexModelCatalog> {
+  const probe = await runCodexJson(command, ["debug", "models"]);
+  if (!probe.ok || probe.value === undefined) return { models: [], modelContextWindows: {} };
+  return parseCodexModelCatalog(probe.value);
+}
+
+function runCodexJson(command: string, args: string[]): Promise<{ ok: boolean; value?: unknown }> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (probe: { ok: boolean; value?: unknown }) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(probe);
+    };
+    let child;
+    try {
+      child = spawn(command, args, { stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      finish({ ok: false });
+      return;
+    }
+    const chunks: Buffer[] = [];
+    child.stdout?.on("data", (data: Buffer) => chunks.push(data));
+    child.on("error", () => finish({ ok: false }));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        finish({ ok: false });
+        return;
+      }
+      try {
+        finish({ ok: true, value: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
+      } catch {
+        finish({ ok: false });
+      }
+    });
+    const timer = setTimeout(() => {
+      try { child.kill(); } catch {}
+      finish({ ok: false });
+    }, 3000);
+    child.on("close", () => clearTimeout(timer));
+  });
+}
+
+export function parseCodexModelCatalog(value: unknown): CodexModelCatalog {
+  const rawModels = value && typeof value === "object" && Array.isArray((value as { models?: unknown }).models)
+    ? (value as { models: unknown[] }).models
+    : [];
+  const models: string[] = [];
+  const modelContextWindows: Record<string, number> = {};
+  for (const raw of rawModels) {
+    if (!raw || typeof raw !== "object") continue;
+    const model = raw as Record<string, unknown>;
+    const slug = typeof model.slug === "string" ? model.slug : "";
+    if (!slug || model.visibility !== "list") continue;
+    models.push(slug);
+    const contextWindow = positiveInteger(model.context_window);
+    const percent = positiveInteger(model.effective_context_window_percent) ?? 100;
+    if (contextWindow !== undefined) {
+      modelContextWindows[slug] = Math.floor((contextWindow * percent) / 100);
+    }
+  }
+  return { models, modelContextWindows };
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : undefined;
+  return n !== undefined && Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
 }
 
 async function readModelsFromConfig(configFile: string): Promise<string[]> {

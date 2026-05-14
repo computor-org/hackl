@@ -514,16 +514,17 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   const stored = readBackendChoice();
   const useCodex = stored?.kind === "codex" && cfg.codexEnabled;
   let codexCommand = cfg.codexCommand;
+  let codexDetection: CodexDetection | undefined;
   let target: { endpoint: string; model: string };
   if (useCodex) {
-    const codex = await detectCodex({ command: cfg.codexCommand });
-    if (!codex.available) {
-      return { content: `Codex is not available: ${codex.error ?? "command not found"}` };
+    codexDetection = await detectCodex({ command: cfg.codexCommand });
+    if (!codexDetection.available) {
+      return { content: `Codex is not available: ${codexDetection.error ?? "command not found"}` };
     }
-    if (codex.authMode === "none") {
+    if (codexDetection.authMode === "none") {
       return { content: "Codex is installed but not logged in. Run `codex login`, then try again." };
     }
-    codexCommand = codex.command;
+    codexCommand = codexDetection.command;
     target = { endpoint: "codex", model: stored!.model };
   } else {
     target = await resolveChatTarget({
@@ -535,10 +536,11 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   const maxToolFileChars = cfg.maxToolFileChars;
   const debug = createDebugLog(cfg.debug);
   const configuredMaxContext = cfg.maxContextTokensConfigured ? cfg.maxContextTokens : undefined;
+  const codexMaxContext = useCodex ? codexDetection?.modelContextWindows[target.model] : undefined;
   const detectedMaxContext = configuredMaxContext === undefined && !useCodex
     ? await getDetectedMaxContext(target.endpoint)
     : undefined;
-  const maxContextTokens = configuredMaxContext ?? detectedMaxContext ?? 32768;
+  const maxContextTokens = configuredMaxContext ?? codexMaxContext ?? detectedMaxContext ?? 32768;
   const enableThinking = cfg.enableThinking;
   debug?.("prompt.start", {
     mode,
