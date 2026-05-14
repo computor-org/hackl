@@ -32,28 +32,45 @@ export class ReviewCommentController {
   private controller: vscodeTypes.CommentController;
   private readonly threads = new Map<string, ThreadEntry>();
   private readonly vscode: typeof vscodeTypes;
-  private lastBatchIds: string[] = [];
+  private batches: string[][] = [];
 
   beginBatch(): void {
-    this.lastBatchIds = [];
+    this.batches.push([]);
   }
 
   recordBatch(ids: string[]): void {
-    this.lastBatchIds = ids;
+    if (this.batches.length === 0) this.batches.push([]);
+    this.batches[this.batches.length - 1] = ids;
   }
 
   discardLastBatch(): number {
     let n = 0;
-    for (const id of this.lastBatchIds) {
-      const entry = this.threads.get(id);
-      if (entry) {
-        entry.thread.dispose();
-        this.threads.delete(id);
-        n += 1;
+    while (this.batches.length > 0) {
+      const ids = this.batches.pop()!;
+      for (const id of ids) {
+        const entry = this.threads.get(id);
+        if (entry) {
+          entry.thread.dispose();
+          this.threads.delete(id);
+          n += 1;
+        }
+      }
+      if (n > 0) break;
+    }
+    return n;
+  }
+
+  private threadKey(uri: string, startLine: number, endLine: number): string {
+    return `${uri}#${startLine}-${endLine}`;
+  }
+
+  findByLocation(uri: string, startLine: number, endLine: number): HacklReviewComment | undefined {
+    for (const entry of this.threads.values()) {
+      if (entry.comment.uri === uri && entry.comment.startLine === startLine && entry.comment.endLine === endLine) {
+        return entry.comment;
       }
     }
-    this.lastBatchIds = [];
-    return n;
+    return undefined;
   }
 
   constructor() {
@@ -72,6 +89,10 @@ export class ReviewCommentController {
   }
 
   add(input: Omit<HacklReviewComment, "id" | "status" | "createdAt"> & { status?: ReviewStatus; createdAt?: number }): HacklReviewComment {
+    const dup = this.findByLocation(input.uri, input.startLine, input.endLine);
+    if (dup && dup.message === input.message && dup.severity === input.severity && dup.authorType === input.authorType) {
+      return dup;
+    }
     counter += 1;
     const id = `rev-${Date.now().toString(36)}-${counter.toString(36)}`;
     const comment: HacklReviewComment = {
@@ -195,7 +216,7 @@ function formatBody(comment: HacklReviewComment): string {
   return lines.join("\n");
 }
 
-const REVIEW_COMMENT_BLOCK_RE = /```(?:hackl-review|review)\s+([\s\S]*?)```/g;
+const REVIEW_COMMENT_BLOCK_RE = /```(?:hackl-review|review)\s*([\s\S]*?)```/g;
 
 export interface ParsedReviewComments {
   comments: Array<Omit<HacklReviewComment, "id" | "status" | "createdAt">>;

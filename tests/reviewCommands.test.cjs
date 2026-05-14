@@ -1,0 +1,73 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+const Module = require("node:module");
+
+function makeVscodeStub() {
+  return {
+    Range: function Range(a, b, c, d) { this.start = { line: a, character: b }; this.end = { line: c, character: d }; },
+    Uri: { parse: (s) => ({ toString: () => s, fsPath: s.replace("file://", "") }) },
+    workspace: {
+      openTextDocument: async (uri) => ({
+        languageId: "typescript",
+        lineCount: 5,
+        lineAt: (n) => ({ text: `line ${n + 1}` }),
+        getText: () => "code",
+      }),
+      asRelativePath: (uri) => "x.ts",
+    },
+  };
+}
+
+function withVscode(vscode, callback) {
+  const original = Module._load;
+  Module._load = function load(request, parent, isMain) {
+    if (request === "vscode") return vscode;
+    return original.call(this, request, parent, isMain);
+  };
+  return Promise.resolve(callback()).finally(() => { Module._load = original; });
+}
+
+test("handleReviewReply adds a basket target and registers a human comment", async () => {
+  const vsc = makeVscodeStub();
+  let addedTarget;
+  let humanText;
+  const basket = {
+    add: (t) => { addedTarget = t; },
+    list: () => [],
+    remove: () => undefined,
+  };
+  const reviewController = {
+    registerHumanComment: (_t, text) => { humanText = text; return { id: "rev-1" }; },
+    disposeThread: () => undefined,
+  };
+  const thread = {
+    uri: { toString: () => "file:///x.ts" },
+    range: { start: { line: 3, character: 0 }, end: { line: 3, character: 4 } },
+  };
+  const reply = { thread, text: " please clarify  " };
+  await withVscode(vsc, async () => {
+    delete require.cache[require.resolve("../dist/reviewCommands.js")];
+    delete require.cache[require.resolve("../dist/basket.js")];
+    const { handleReviewReply } = require("../dist/reviewCommands.js");
+    await handleReviewReply(reply, basket, reviewController);
+  });
+  assert.ok(addedTarget, "expected basket.add to be called");
+  assert.equal(addedTarget.kind, "source-range");
+  assert.equal(addedTarget.metadata && addedTarget.metadata.note, "please clarify");
+  assert.equal(humanText, "please clarify");
+});
+
+test("handleReviewReply ignores empty replies", async () => {
+  const vsc = makeVscodeStub();
+  let called = false;
+  await withVscode(vsc, async () => {
+    delete require.cache[require.resolve("../dist/reviewCommands.js")];
+    const { handleReviewReply } = require("../dist/reviewCommands.js");
+    await handleReviewReply(
+      { thread: { uri: { toString: () => "x" }, range: { start: {line:0}, end: {line:0} } }, text: "   " },
+      { add: () => { called = true; }, list: () => [], remove: () => undefined },
+      { registerHumanComment: () => { called = true; }, disposeThread: () => undefined },
+    );
+  });
+  assert.equal(called, false);
+});

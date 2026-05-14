@@ -59,6 +59,18 @@ export class ChatPanel {
   focusInput(): void {
     void post(this.panel.webview, { type: "focusInput" });
   }
+
+  setPromptText(text: string): void {
+    void post(this.panel.webview, { type: "setPromptText", text });
+  }
+
+  notifyStatus(text: string): void {
+    void post(this.panel.webview, { type: "status", text });
+  }
+
+  submitPreset(prompt: string, mode: import("./prompt").PromptMode, options: { createAnnotations?: boolean }): Promise<void> {
+    return this.session.runDirect(prompt, mode, options, (response) => post(this.panel.webview, response));
+  }
 }
 
 async function post(webview: vscode.Webview, message: ChatOutgoingMessage): Promise<boolean> {

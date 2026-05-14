@@ -28,15 +28,21 @@ export function newHacklSessionId(): string {
 export async function persistHacklSession(
   workspaceRoot: string,
   session: HacklSessionRecord,
-  retainCount = 200,
 ): Promise<string | undefined> {
   if (!workspaceRoot) return undefined;
   const dir = path.join(workspaceRoot, ".hackl", "sessions");
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${session.id}.json`);
   await fs.writeFile(file, JSON.stringify(session, null, 2), "utf8");
-  await pruneOldSessions(dir, retainCount);
   return file;
+}
+
+export async function pruneSessionsOnDisk(workspaceRoot: string, retainCount: number): Promise<void> {
+  if (!workspaceRoot) return;
+  const dir = path.join(workspaceRoot, ".hackl", "sessions");
+  const exists = await fs.stat(dir).then(() => true, () => false);
+  if (!exists) return;
+  await pruneOldSessions(dir, retainCount);
 }
 
 async function pruneOldSessions(dir: string, retainCount: number): Promise<void> {

@@ -1,4 +1,3 @@
-export const CHAT_CLIENT_SCRIPT = `
 (function () {
   const vscode = acquireVsCodeApi();
   const form = document.getElementById("form");
@@ -127,11 +126,15 @@ export const CHAT_CLIENT_SCRIPT = `
   }
 
   function updateComboStrip() {
-    const strip = document.getElementById("combo-strip");
-    if (!strip) return;
-    const tier = { ask: "read", edit: "read+edit", work: "read+edit+search", agent: "read+edit+search+cmd" }[selectedMode] || selectedMode;
-    const annot = annotationsOn ? " · anchored comments" : "";
-    strip.textContent = selectedMode + " (" + tier + ")" + annot;
+    const sendLabel = document.getElementById("send-label");
+    if (sendLabel) {
+      const cap = selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
+      sendLabel.textContent = cap + (annotationsOn ? " + annotations" : "");
+    }
+    if (send) {
+      const tier = { ask: "read", edit: "read+edit", work: "read+edit+search", agent: "read+edit+search+cmd" }[selectedMode] || selectedMode;
+      send.title = "Send · " + selectedMode + " (" + tier + ")" + (annotationsOn ? " + anchored comments" : "");
+    }
   }
 
   const annotationsDiscard = document.getElementById("annotations-discard");
@@ -233,6 +236,11 @@ export const CHAT_CLIENT_SCRIPT = `
     if (message.type === "state") applyState(message);
     if (message.type === "basket") renderBasket(message.targets || []);
     if (message.type === "userPrompt") appendUser(message.text || "");
+    if (message.type === "setPromptText" && prompt) {
+      prompt.value = message.text || "";
+      prompt.focus();
+      autoResize();
+    }
     if (message.type === "focusInput") {
       requestAnimationFrame(() => {
         prompt.focus();
@@ -279,16 +287,15 @@ export const CHAT_CLIENT_SCRIPT = `
     if (!annotationsToggle) return;
     const anchorable = targets.some((t) => t.kind === "source-range" || t.kind === "markdown-section");
     annotationsToggle.disabled = !anchorable;
-    annotationsToggle.classList.toggle("disabled", !anchorable);
+    annotationsToggle.classList.toggle("hidden-unavailable", !anchorable);
     if (!anchorable && annotationsOn) {
       annotationsOn = false;
       annotationsToggle.setAttribute("aria-pressed", "false");
+      updateComboStrip();
     }
-    annotationsToggle.title = anchorable
-      ? (annotationsOn
-        ? "Annotations ON — model will also emit anchored comments"
-        : "Also produce line-anchored comments")
-      : "Annotations need a text-file target — add a selection or markdown section to the basket";
+    annotationsToggle.title = annotationsOn
+      ? "Annotations ON — model will also emit anchored comments"
+      : "Also produce line-anchored comments";
   }
 
   function renderBasket(targets) {
@@ -824,4 +831,3 @@ export const CHAT_CLIENT_SCRIPT = `
     });
   }
 }());
-`;

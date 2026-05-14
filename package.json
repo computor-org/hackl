@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -161,6 +161,11 @@
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
         "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "hackl.discardLastAnnotations",
+        "key": "ctrl+alt+z",
+        "mac": "cmd+alt+z"
       }
     ],
     "menus": {

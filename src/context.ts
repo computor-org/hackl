@@ -1,4 +1,5 @@
 import type * as vscodeTypes from "vscode";
+import { getVscode } from "./vscodeShim";
 
 export interface ContextDocument {
   fileName: string;
@@ -35,7 +36,7 @@ export function buildPromptContext(documents: ContextDocument[], options: Contex
 }
 
 export function collectEditorContext(): ContextDocument[] {
-  const vscode = require("vscode") as typeof vscodeTypes;
+  const vscode = getVscode();
   const activeEditor = vscode.window.activeTextEditor;
   const seen = new Set<string>();
   const documents: ContextDocument[] = [];

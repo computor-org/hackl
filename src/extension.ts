@@ -38,6 +38,7 @@ import { resolveTargetIdFor } from "./targetResolve";
 import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
 import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./hacklSession";
 import { handleReviewReply, handleDeleteReviewThread } from "./reviewCommands";
+import { readHacklConfig, hasUserConfigured } from "./config";
 
 let chatPanel: ChatPanel | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -62,15 +63,6 @@ export interface HacklApi {
   onDidChangeBasket: vscode.Event<BasketSnapshot>;
   onDidFinishSession: vscode.Event<HacklSessionRecord>;
   openChat(): Thenable<void>;
-}
-
-interface ConfigInspection<T> {
-  globalValue?: T;
-  workspaceValue?: T;
-  workspaceFolderValue?: T;
-  globalLanguageValue?: T;
-  workspaceLanguageValue?: T;
-  workspaceFolderLanguageValue?: T;
 }
 
 export function activate(context: vscode.ExtensionContext): HacklApi {
@@ -201,15 +193,15 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       basketService!.clear();
       basketService!.add(result);
       await vscode.commands.executeCommand("hackl.chat");
-      await chatViewProvider.submitPreset(
+      chatViewProvider.setPromptText(
         "Review the staged changes for correctness, regressions, missing tests, and risky assumptions.",
-        "ask",
-        { createAnnotations: true },
       );
+      chatViewProvider.notifyStatus("Annotations toggle is enabled — press Send to run the review.");
     }),
   );
 
   void refreshStatus();
+  void pruneSessionsAtStartup();
 
   const api: HacklApi = {
     version: 1,
@@ -249,10 +241,8 @@ function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatView
 
 async function refreshStatus(): Promise<void> {
   if (!statusBarItem) return;
-  const config = vscode.workspace.getConfiguration("hackl");
-  const endpoint = (config.get<string>("endpoint", "") || "").trim();
-  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
-  const probe = await tryProbe(endpoint, endpointConfigured);
+  const cfg = readHacklConfig();
+  const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
   if (probe?.ok) {
     statusBarItem.text = `$(pulse) ${probe.model ?? "Hackl"}`;
     statusBarItem.tooltip = `Hackl connected to ${probe.endpoint}`;
@@ -272,11 +262,9 @@ async function tryProbe(endpoint: string, endpointConfigured: boolean): Promise<
 }
 
 async function runProbe(): Promise<ProbeResult[]> {
-  const config = vscode.workspace.getConfiguration("hackl");
-  const endpoint = (config.get<string>("endpoint", "") || "").trim();
-  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
-  const candidates = endpointConfigured && endpoint
-    ? [{ name: "configured", endpoint }]
+  const cfg = readHacklConfig();
+  const candidates = cfg.endpointConfigured && cfg.endpoint
+    ? [{ name: "configured", endpoint: cfg.endpoint }]
     : LOCAL_SERVER_CANDIDATES;
   return probeAll(candidates);
 }
@@ -324,28 +312,24 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   const createAnnotations = Boolean(options.createAnnotations);
   const startedAt = Date.now();
   progress?.({ type: "phase", text: "Preprocessing prompt..." });
-  const config = vscode.workspace.getConfiguration("hackl");
-  const configuredEndpoint = config.get<string>("endpoint", "");
-  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
-  const endpointApproval = await requireEndpointApproval(configuredEndpoint, endpointConfigured, requestApproval);
+  const cfg = readHacklConfig();
+  const endpointApproval = await requireEndpointApproval(cfg.endpoint, cfg.endpointConfigured, requestApproval);
   if (endpointApproval) {
     return endpointApproval;
   }
   const target = await resolveChatTarget({
-    endpoint: configuredEndpoint,
-    endpointConfigured,
+    endpoint: cfg.endpoint,
+    endpointConfigured: cfg.endpointConfigured,
   });
   progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
-  const maxToolFileChars = config.get<number>("maxToolFileChars", 12000);
-  const debug = createDebugLog(config.get<boolean>("debug", false));
-  const configuredMaxContext = hasUserConfigured(config.inspect<number>("maxContextTokens"))
-    ? config.get<number>("maxContextTokens", 32768)
-    : undefined;
+  const maxToolFileChars = cfg.maxToolFileChars;
+  const debug = createDebugLog(cfg.debug);
+  const configuredMaxContext = cfg.maxContextTokensConfigured ? cfg.maxContextTokens : undefined;
   const detectedMaxContext = configuredMaxContext === undefined
     ? await getDetectedMaxContext(target.endpoint)
     : undefined;
   const maxContextTokens = configuredMaxContext ?? detectedMaxContext ?? 32768;
-  const enableThinking = config.get<boolean>("enableThinking", false);
+  const enableThinking = cfg.enableThinking;
   debug?.("prompt.start", {
     mode,
     endpoint: target.endpoint,
@@ -425,8 +409,8 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       );
     }
   }
-  if (createAnnotations) {
-    await emitHacklSession({
+  if (createAnnotations && !signal?.aborted) {
+    void emitHacklSession({
       mode,
       endpoint: target.endpoint,
       model: target.model,
@@ -438,6 +422,17 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     });
   }
   return result;
+}
+
+async function pruneSessionsAtStartup(): Promise<void> {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!root) return;
+  try {
+    const { pruneSessionsOnDisk } = await import("./hacklSession");
+    await pruneSessionsOnDisk(root, 200);
+  } catch {
+    // best-effort
+  }
 }
 
 async function emitHacklSession(input: {
@@ -463,18 +458,16 @@ async function emitHacklSession(input: {
     comments: input.comments,
   };
   sessionFinishedEmitter?.fire(session);
-  const config = vscode.workspace.getConfiguration("hackl");
-  if (!config.get<boolean>("persistSessions", true)) return;
+  if (!readHacklConfig().persistSessions) return;
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!root) return;
-  try {
-    await persistHacklSession(root, session);
-  } catch (error) {
+  // Fire-and-forget: do not block the next prompt on disk I/O. Errors land in status bar.
+  persistHacklSession(root, session).catch((error) => {
     vscode.window.setStatusBarMessage(
       `Hackl: failed to persist session (${error instanceof Error ? error.message : String(error)})`,
       4000,
     );
-  }
+  });
 }
 
 function defaultUriForReview(targets: HacklTarget[]): string | undefined {
@@ -511,41 +504,23 @@ async function requireEndpointApproval(
 }
 
 async function currentChatState(): Promise<ChatState> {
-  const config = vscode.workspace.getConfiguration("hackl");
-  const endpoint = config.get<string>("endpoint", "");
-  const endpointConfigured = hasUserConfigured(config.inspect<string>("endpoint"));
-  const enableThinking = config.get<boolean>("enableThinking", false);
-  if (endpointConfigured && requiresNonLocalEndpointApproval(endpoint)) {
+  const cfg = readHacklConfig();
+  if (cfg.endpointConfigured && requiresNonLocalEndpointApproval(cfg.endpoint)) {
     return {
       type: "state",
-      enableThinking,
-      endpoint: endpoint.trim(),
+      enableThinking: cfg.enableThinking,
+      endpoint: cfg.endpoint,
       endpointApprovalRequired: true,
     };
   }
-  const target = await resolveChatTarget({ endpoint, endpointConfigured });
+  const target = await resolveChatTarget({ endpoint: cfg.endpoint, endpointConfigured: cfg.endpointConfigured });
   return {
     type: "state",
-    enableThinking,
+    enableThinking: cfg.enableThinking,
     endpoint: target.endpoint,
     model: target.model,
     endpointApprovalRequired: false,
   };
-}
-
-function hasUserConfigured<T>(inspection: ConfigInspection<T> | undefined): boolean {
-  if (!inspection) {
-    return false;
-  }
-
-  return [
-    inspection.globalValue,
-    inspection.workspaceValue,
-    inspection.workspaceFolderValue,
-    inspection.globalLanguageValue,
-    inspection.workspaceLanguageValue,
-    inspection.workspaceFolderLanguageValue,
-  ].some((value) => value !== undefined && (typeof value !== "string" || value.trim() !== ""));
 }
 
 async function getDetectedMaxContext(endpoint: string): Promise<number | undefined> {

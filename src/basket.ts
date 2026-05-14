@@ -1,4 +1,5 @@
 import type * as vscodeTypes from "vscode";
+import { getVscode } from "./vscodeShim";
 
 type Listener<T> = (value: T) => void;
 
@@ -224,7 +225,7 @@ function sameReviewContext(a: ReviewContext | undefined, b: ReviewContext | unde
 
 export function createSourceRangeTarget(editor: vscodeTypes.TextEditor): SourceRangeTarget | undefined {
   if (editor.selection.isEmpty) return undefined;
-  const vscode = require("vscode") as typeof vscodeTypes;
+  const vscode = getVscode();
   const raw = editor.document.getText(editor.selection);
   const { text, truncated } = truncate(raw);
   return {
@@ -246,7 +247,7 @@ export function createSourceRangeTarget(editor: vscodeTypes.TextEditor): SourceR
 export function createMarkdownSectionTarget(editor: vscodeTypes.TextEditor): MarkdownSectionTarget | undefined {
   const document = editor.document;
   if (document.languageId !== "markdown") return undefined;
-  const vscode = require("vscode") as typeof vscodeTypes;
+  const vscode = getVscode();
   const cursorLine = editor.selection.active.line;
   const { startLine, endLine, headingPath } = findMarkdownSection(document, cursorLine);
   const range = new vscode.Range(startLine, 0, endLine, document.lineAt(endLine).text.length);

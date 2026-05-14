@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
-import { CHAT_STYLES } from "./chatStyles";
-import { CHAT_CLIENT_SCRIPT } from "./chatScript";
+import { randomBytes } from "node:crypto";
 
 interface ChatAssets {
   markdownItScript: vscode.Uri;
   katexScript: vscode.Uri;
   katexStyle: vscode.Uri;
   codiconStyle: vscode.Uri;
+  chatScript: vscode.Uri;
+  chatStyle: vscode.Uri;
 }
 
 export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
@@ -17,12 +18,12 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hackl</title>
   <link rel="stylesheet" href="${assets.codiconStyle}">
   <link rel="stylesheet" href="${assets.katexStyle}">
-  <style>${styles}</style>
+  <link rel="stylesheet" href="${assets.chatStyle}">
 </head>
 <body>
   <div class="shell">
@@ -78,7 +79,7 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           <button id="annotations-toggle" class="tool-button" type="button" title="Also produce line-anchored comments (requires a text-file target in the basket)" aria-label="Create annotations" aria-pressed="false">
             <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
           </button>
-          <button id="annotations-discard" class="tool-button" type="button" title="Discard the last batch of AI annotations" aria-label="Discard last annotations" hidden>
+          <button id="annotations-discard" class="tool-button" type="button" title="Discard the last batch of AI annotations (Ctrl+Alt+Z)" aria-label="Discard last annotations" hidden>
             <span class="codicon codicon-discard" aria-hidden="true"></span>
           </button>
           <div class="mode-dropdown">
@@ -96,17 +97,16 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           <button id="reasoning-toggle" class="tool-button" type="button" title="Toggle reasoning" aria-label="Toggle reasoning" aria-pressed="false">
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
           </button>
-          <span id="combo-strip" class="combo-strip" aria-live="polite" title="Current mode + annotation output"></span>
           <div class="compose-spacer"></div>
           <span id="context-meter" class="meter" title="Estimated prompt tokens / configured context window"></span>
-          <button id="send" class="send-button" type="submit" title="Send (Enter)" aria-label="Send"><span class="codicon codicon-arrow-up" aria-hidden="true"></span></button>
+          <button id="send" class="send-button" type="submit" title="Send (Enter)" aria-label="Send"><span class="codicon codicon-arrow-up" aria-hidden="true"></span><span id="send-label" class="send-label">Ask</span></button>
         </div>
       </div>
     </form>
   </div>
   <script nonce="${nonce}" src="${assets.markdownItScript}"></script>
   <script nonce="${nonce}" src="${assets.katexScript}"></script>
-  <script nonce="${nonce}">${clientScript}</script>
+  <script nonce="${nonce}" src="${assets.chatScript}"></script>
 </body>
 </html>`;
 }
@@ -117,17 +117,11 @@ function getChatAssets(webview: vscode.Webview, extensionUri: vscode.Uri): ChatA
     katexScript: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "vendor", "katex", "katex.min.js")),
     katexStyle: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "vendor", "katex", "katex.min.css")),
     codiconStyle: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "vendor", "codicons", "codicon.css")),
+    chatScript: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "chat", "main.js")),
+    chatStyle: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "chat", "main.css")),
   };
 }
 
 function getNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let nonce = "";
-  for (let i = 0; i < 32; i++) {
-    nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return nonce;
+  return randomBytes(16).toString("hex");
 }
-
-const styles = CHAT_STYLES;
-const clientScript = CHAT_CLIENT_SCRIPT;

@@ -41,6 +41,7 @@ export type ChatOutgoingMessage =
   | { type: "history"; entries: ConversationMessage[] }
   | { type: "basket"; targets: HacklTarget[] }
   | { type: "userPrompt"; text: string }
+  | { type: "setPromptText"; text: string }
   | ChatState
   | { type: "focusInput" };
 

@@ -80,9 +80,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  notifyStatus(text: string): void {
+  setPromptText(text: string): void {
     if (!this.view) return;
-    void post(this.view.webview, { type: "status", text });
+    void post(this.view.webview, { type: "setPromptText", text });
+  }
+
+  notifyStatus(text: string): void {
+    if (this.view) {
+      void post(this.view.webview, { type: "status", text });
+      return;
+    }
+    void (async () => {
+      const vsc = (await import("vscode"));
+      vsc.window.setStatusBarMessage(`Hackl: ${text}`, 4000);
+    })();
   }
 }
 

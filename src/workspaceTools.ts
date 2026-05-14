@@ -3,6 +3,7 @@ import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import type * as vscodeTypes from "vscode";
+import { getVscode } from "./vscodeShim";
 import { classifyCommand, commandLine } from "./commandPolicy";
 import type { ReadFileRequest, ReplaceTextRequest, RunCommandRequest, SearchFilesRequest, ToolRequest, ToolResult } from "./tools";
 export { createNodeWorkspaceHost } from "./nodeWorkspaceHost";
@@ -212,7 +213,7 @@ function killChild(child: ChildProcessWithoutNullStreams): void {
 }
 
 function createVsCodeWorkspaceHost(): WorkspaceToolHost {
-  const vscode = require("vscode") as typeof vscodeTypes;
+  const vscode = getVscode();
   return {
     root: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     readFile: (request, maxFileChars) => vscodeReadFile(vscode, request, maxFileChars),
