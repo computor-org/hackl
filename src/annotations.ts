@@ -200,16 +200,13 @@ export class AnnotationController {
       this.debug?.("annotations.focusThreadReply.openFailed", { id: annotationId, error: String(error) });
       return;
     }
-    // Steal focus back from the chat webview. preserveFocus:false on
-    // showTextDocument doesn't actually displace a focused webview, so the
-    // editor would otherwise show the cursor without owning keyboard focus.
-    try {
-      await this.vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
-    } catch (error) {
-      this.debug?.("annotations.focusThreadReply.focusEditorFailed", { id: annotationId, error: String(error) });
-    }
-    // Proposed API: lands focus inside the reply textarea. No-op on stable
-    // VS Code without --enable-proposed-api; that's fine, we fall through.
+    // Try CommentThread.reveal first — the proposed commentReveal API lands
+    // focus directly inside the reply textarea. If the host doesn't expose it
+    // (stable VS Code without --enable-proposed-api), fall through to the
+    // public command, which at least focuses the comment widget on the line
+    // we just placed the cursor on. We deliberately do NOT call
+    // workbench.action.focusActiveEditorGroup here: focus that reveal places
+    // in the reply textarea would be yanked back to the editor group.
     const reveal = (thread as unknown as { reveal?: (commentOrOptions?: unknown, options?: unknown) => Thenable<void> }).reveal;
     if (typeof reveal === "function") {
       try {

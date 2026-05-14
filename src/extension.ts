@@ -384,12 +384,15 @@ function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatView
 }
 
 function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): void {
-  // Two startup heartbeats: one immediately so the provider is registered as
-  // soon as the comments controller spins up, and one after a short delay to
-  // catch the case where other extensions register their own comment
-  // controllers right after activation and would otherwise crowd ours out.
-  // Subsequent recompute is driven by editor events (below) with throttling
-  // inside AnnotationController.refreshCommentingRanges.
+  // Two startup heartbeats so the provider is registered before VS Code's
+  // commentsController initialises its per-editor listeners. After that we
+  // must NOT reassign the provider in response to editor events: that fires
+  // the main thread's onDidUpdateCommentingRanges → beginComputeAndHandleEditorChange
+  // → setComments → removeCommentWidgetsAndStoreCache, which disposes every
+  // ReviewZoneWidget and destroys focused reply textareas. Our provider
+  // returns {enableFileComments: true} for every document, so VS Code's
+  // decoration count never drops to zero and clearEditorListeners never
+  // fires; the listeners stay installed without our intervention.
   for (const delay of [0, 1500]) {
     const timer = setTimeout(() => {
       activationDebug?.("annotations.scheduledRefresh", { delay });
@@ -397,32 +400,6 @@ function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): voi
     }, delay);
     context.subscriptions.push({ dispose: () => clearTimeout(timer) });
   }
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
-      activationDebug?.("annotations.activeEditorChanged", { uri: editor?.document.uri.toString() });
-      refreshAnnotationRangesForDocument(editor?.document);
-    }),
-    vscode.window.onDidChangeVisibleTextEditors((editors) => {
-      activationDebug?.("annotations.visibleEditorsChanged", { uris: editors.map((editor) => editor.document.uri.toString()) });
-      if (editors.some((editor) => isEditorDocument(editor.document))) {
-        annotationController?.refreshCommentingRanges();
-      }
-    }),
-    vscode.workspace.onDidOpenTextDocument((document) => {
-      activationDebug?.("annotations.documentOpened", { uri: document.uri.toString(), languageId: document.languageId });
-      refreshAnnotationRangesForDocument(document);
-    }),
-  );
-}
-
-function refreshAnnotationRangesForDocument(document: vscode.TextDocument | undefined): void {
-  if (!isEditorDocument(document)) return;
-  annotationController?.refreshCommentingRanges();
-}
-
-function isEditorDocument(document: vscode.TextDocument | undefined): boolean {
-  const scheme = document?.uri.scheme;
-  return scheme === "file" || scheme === "untitled" || scheme === "vscode-remote";
 }
 
 async function refreshStatus(): Promise<void> {
