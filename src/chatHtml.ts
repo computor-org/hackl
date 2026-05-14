@@ -65,9 +65,6 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
       <div class="compose">
         <textarea id="prompt" placeholder="Message Hackl" rows="1"></textarea>
         <div class="compose-toolbar">
-          <button id="annotate-toggle" class="tool-button" type="button" title="Toggle Annotation mode (Ctrl+Alt+M)" aria-label="Toggle Annotation mode" aria-pressed="false">
-            <span class="codicon codicon-pencil" aria-hidden="true"></span>
-          </button>
           <button id="attach" class="tool-button" type="button" title="Add current selection (Ctrl+Alt+A)" aria-label="Add current selection">
             <span class="codicon codicon-add" aria-hidden="true"></span>
           </button>
@@ -271,15 +268,6 @@ body {
 }
 
 .basket-remove .codicon { font-size: 10px; }
-
-.basket-annotation-banner {
-  padding: 4px 8px;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--hackl-accent) 14%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--hackl-accent) 50%, var(--hackl-border));
-  color: var(--vscode-foreground);
-  font-size: 11px;
-}
 
 .review-list {
   margin: 6px 0 0;
@@ -1093,7 +1081,6 @@ const clientScript = `
   const basketAdd = document.getElementById("basket-add");
   const basketAddStaged = document.getElementById("basket-add-staged");
   const basketClear = document.getElementById("basket-clear");
-  const annotateToggle = document.getElementById("annotate-toggle");
   const attachButton = document.getElementById("attach");
   const modeButton = document.getElementById("mode-button");
   const modeMenu = document.getElementById("mode-menu");
@@ -1169,13 +1156,6 @@ const clientScript = `
       const next = reasoningToggle.getAttribute("aria-pressed") !== "true";
       reasoningToggle.setAttribute("aria-pressed", String(next));
       vscode.postMessage({ type: "setThinking", value: next });
-      focusPrompt();
-    });
-  }
-
-  if (annotateToggle) {
-    annotateToggle.addEventListener("click", () => {
-      vscode.postMessage({ type: "toggleAnnotation" });
       focusPrompt();
     });
   }
@@ -1275,7 +1255,7 @@ const clientScript = `
     if (message.type === "status") showStatus(message.text);
     if (message.type === "metrics") updateMeter(message.inputTokens, message.maxContextTokens);
     if (message.type === "state") applyState(message);
-    if (message.type === "basket") renderBasket(message.targets || [], !!message.annotationMode);
+    if (message.type === "basket") renderBasket(message.targets || []);
     if (message.type === "focusInput") {
       requestAnimationFrame(() => {
         prompt.focus();
@@ -1311,25 +1291,12 @@ const clientScript = `
     return ["edit", "work", "agent", "review"].includes(mode) ? mode : "ask";
   }
 
-  function renderBasket(targets, annotationMode) {
+  function renderBasket(targets) {
     if (!basketSection || !basketList) return;
-    if (annotateToggle) {
-      annotateToggle.setAttribute("aria-pressed", String(annotationMode));
-      annotateToggle.title = annotationMode
-        ? "Annotation mode ON — selecting code auto-adds to basket (Ctrl+Alt+M)"
-        : "Toggle Annotation mode (Ctrl+Alt+M)";
-    }
     basketList.innerHTML = "";
     const hasTargets = targets.length > 0;
-    basketSection.hidden = !hasTargets && !annotationMode;
+    basketSection.hidden = !hasTargets;
     if (basketCount) basketCount.textContent = hasTargets ? String(targets.length) : "";
-    if (annotationMode && !hasTargets) {
-      const banner = document.createElement("li");
-      banner.className = "basket-annotation-banner";
-      banner.textContent = "Annotation mode on. Select code in any editor to add it.";
-      basketList.appendChild(banner);
-      return;
-    }
     for (const target of targets) {
       const item = document.createElement("li");
       item.className = "basket-item";

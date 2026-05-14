@@ -15,7 +15,6 @@ const ALLOWED_WEBVIEW_COMMANDS = new Set([
   "hackl.addStagedChangesToContext",
   "hackl.addLastCommitToContext",
   "hackl.clearContext",
-  "hackl.toggleAnnotationMode",
 ]);
 
 export function isAllowedWebviewCommand(command: string): boolean {

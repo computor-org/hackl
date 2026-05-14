@@ -31,10 +31,10 @@ import {
   HacklTarget,
   ReviewContext,
   createMarkdownSectionTarget,
+  createReviewNoteTarget,
   createSourceRangeTarget,
   describeTarget,
 } from "./basket";
-import { AnnotationModeController } from "./annotation";
 import { HacklReviewComment, ReviewCommentController, parseReviewCommentsFromAnswer } from "./reviewComments";
 import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
 import { ReviewSession, newReviewSessionId, persistReviewSession } from "./reviewSession";
@@ -55,8 +55,6 @@ export interface HacklApi {
   clearBasket(): void;
   setReviewContext(context: ReviewContext | undefined): void;
   getReviewContext(): ReviewContext | undefined;
-  setAnnotationMode(on: boolean): void;
-  isAnnotationMode(): boolean;
   addReviewComment(comment: Omit<HacklReviewComment, "id" | "status" | "createdAt"> & {
     status?: HacklReviewComment["status"];
     createdAt?: number;
@@ -78,16 +76,15 @@ interface ConfigInspection<T> {
 
 export function activate(context: vscode.ExtensionContext): HacklApi {
   basketService = new BasketService();
-  const annotation = new AnnotationModeController(basketService);
   reviewController = new ReviewCommentController();
   reviewFinishedEmitter = new vscode.EventEmitter<ReviewSession>();
-  const basketBridge = makeBasketBridge(basketService, annotation);
+  const basketBridge = makeBasketBridge(basketService);
 
   const chatViewProvider = new ChatViewProvider(context, answerPrompt, currentChatState, basketBridge);
   setupProvider = new SetupViewProvider(context, runProbe, setEndpoint);
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
-  context.subscriptions.push(statusBarItem, basketService, annotation, reviewController, reviewFinishedEmitter);
+  context.subscriptions.push(statusBarItem, basketService, reviewController, reviewFinishedEmitter);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
@@ -120,8 +117,11 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       const uri = vscode.Uri.joinPath(context.extensionUri, "docs", file);
       await vscode.commands.executeCommand("markdown.showPreview", uri);
     }),
-    vscode.commands.registerCommand("hackl.toggleAnnotationMode", () => {
-      annotation.toggle();
+    vscode.commands.registerCommand("hackl.replyToReviewThread", async (reply: vscode.CommentReply) => {
+      await handleReviewReply(reply);
+    }),
+    vscode.commands.registerCommand("hackl.deleteReviewThread", (thread: vscode.CommentThread) => {
+      handleDeleteReviewThread(thread);
     }),
     vscode.commands.registerCommand("hackl.addSelectionToContext", async () => {
       const editor = vscode.window.activeTextEditor;
@@ -179,10 +179,6 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     clearBasket: () => basketService!.clear(),
     setReviewContext: (ctx) => basketService!.setReviewContext(ctx),
     getReviewContext: () => basketService!.getReviewContext(),
-    setAnnotationMode: (on) => {
-      if (basketService!.isAnnotationMode() !== on) annotation.toggle();
-    },
-    isAnnotationMode: () => basketService!.isAnnotationMode(),
     addReviewComment: (comment) => reviewController!.add({
       ...comment,
       authorType: comment.authorType ?? "human",
@@ -195,14 +191,58 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
   return api;
 }
 
-function makeBasketBridge(basket: BasketService, annotation: AnnotationModeController): BasketBridge {
+function makeBasketBridge(basket: BasketService): BasketBridge {
   return {
     snapshot: () => basket.snapshot(),
     onDidChange: (listener: (snap: BasketSnapshot) => void) => basket.onDidChange(listener),
     remove: (id: string) => basket.remove(id),
     clear: () => basket.clear(),
-    toggleAnnotation: () => annotation.toggle(),
   };
+}
+
+async function handleReviewReply(reply: vscode.CommentReply): Promise<void> {
+  if (!basketService || !reviewController) return;
+  const text = (reply.text ?? "").trim();
+  if (!text) return;
+  const thread = reply.thread;
+  const range = thread.range;
+  if (!range) return;
+  const document = await vscode.workspace.openTextDocument(thread.uri);
+  const startLineIdx = Math.max(0, Math.min(range.start.line, document.lineCount - 1));
+  const endLineIdx = Math.max(startLineIdx, Math.min(range.end.line, document.lineCount - 1));
+  const endLineText = document.lineAt(endLineIdx).text;
+  const code = document.getText(new vscode.Range(startLineIdx, 0, endLineIdx, endLineText.length));
+  const startLine = startLineIdx + 1;
+  const endLine = endLineIdx + 1;
+  const threadKey = `${thread.uri.toString()}#${startLine}-${endLine}`;
+  const target = createReviewNoteTarget({
+    uri: thread.uri.toString(),
+    languageId: document.languageId,
+    relativePath: vscode.workspace.asRelativePath(thread.uri, false),
+    startLine,
+    endLine,
+    endCharacter: endLineText.length + 1,
+    code,
+    note: text,
+    threadKey,
+  });
+  basketService.add(target);
+  reviewController.registerHumanComment(thread, text);
+}
+
+function handleDeleteReviewThread(thread: vscode.CommentThread): void {
+  if (!basketService || !reviewController) return;
+  const range = thread.range;
+  const key = range
+    ? `${thread.uri.toString()}#${range.start.line + 1}-${range.end.line + 1}`
+    : undefined;
+  if (key) {
+    for (const target of basketService.list()) {
+      const meta = target.metadata as { threadKey?: string } | undefined;
+      if (meta?.threadKey === key) basketService.remove(target.id);
+    }
+  }
+  reviewController.disposeThread(thread);
 }
 
 function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatViewProvider): void {

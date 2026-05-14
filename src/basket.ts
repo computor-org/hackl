@@ -108,7 +108,6 @@ export interface DiagnosticTarget extends BaseTarget {
 
 export interface BasketSnapshot {
   targets: HacklTarget[];
-  annotationMode: boolean;
   reviewContext?: ReviewContext;
 }
 
@@ -133,7 +132,6 @@ export function truncateDiff(diff: string): { diff: string; truncated: boolean }
 
 export class BasketService {
   private targets: HacklTarget[] = [];
-  private annotation = false;
   private reviewContext: ReviewContext | undefined;
   private readonly emitter = new SimpleEmitter<BasketSnapshot>();
   readonly onDidChange = this.emitter.event;
@@ -141,7 +139,6 @@ export class BasketService {
   snapshot(): BasketSnapshot {
     return {
       targets: [...this.targets],
-      annotationMode: this.annotation,
       reviewContext: this.reviewContext,
     };
   }
@@ -154,16 +151,6 @@ export class BasketService {
 
   getReviewContext(): ReviewContext | undefined {
     return this.reviewContext;
-  }
-
-  setAnnotationMode(on: boolean): void {
-    if (this.annotation === on) return;
-    this.annotation = on;
-    this.fire();
-  }
-
-  isAnnotationMode(): boolean {
-    return this.annotation;
   }
 
   add(target: HacklTarget): void {
@@ -192,13 +179,16 @@ export class BasketService {
     return this.targets.find((existing) => {
       if (existing.kind !== target.kind) return false;
       if (existing.kind === "source-range" && target.kind === "source-range") {
-        return (
+        const sameRange =
           existing.uri === target.uri &&
           existing.startLine === target.startLine &&
           existing.endLine === target.endLine &&
           existing.startCharacter === target.startCharacter &&
-          existing.endCharacter === target.endCharacter
-        );
+          existing.endCharacter === target.endCharacter;
+        if (!sameRange) return false;
+        const aKey = (existing.metadata as { threadKey?: string } | undefined)?.threadKey;
+        const bKey = (target.metadata as { threadKey?: string } | undefined)?.threadKey;
+        return aKey === bKey;
       }
       if (existing.kind === "staged-changes" && target.kind === "staged-changes") {
         return existing.workspaceRoot === target.workspaceRoot;
@@ -333,6 +323,35 @@ export function createStagedChangesTarget(args: {
     files: args.files,
     diff,
     diffTruncated: truncated,
+  };
+}
+
+export function createReviewNoteTarget(args: {
+  uri: string;
+  languageId: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  endCharacter: number;
+  code: string;
+  note: string;
+  threadKey: string;
+}): SourceRangeTarget {
+  const { text, truncated } = truncate(args.code);
+  return {
+    id: newId("ann"),
+    addedAt: Date.now(),
+    kind: "source-range",
+    uri: args.uri,
+    languageId: args.languageId,
+    relativePath: args.relativePath,
+    startLine: args.startLine,
+    startCharacter: 1,
+    endLine: args.endLine,
+    endCharacter: args.endCharacter,
+    text,
+    truncated,
+    metadata: { note: args.note, threadKey: args.threadKey },
   };
 }
 

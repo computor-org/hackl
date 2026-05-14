@@ -70,7 +70,7 @@ export class ReviewCommentController {
     const thread = this.controller.createCommentThread(uri, range, []);
     thread.label = `Hackl · ${comment.severity}`;
     thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Expanded;
-    thread.canReply = false;
+    thread.canReply = true;
     const body = new this.vscode.MarkdownString(formatBody(comment));
     body.isTrusted = false;
     const vscodeComment: vscodeTypes.Comment = {
@@ -82,6 +82,50 @@ export class ReviewCommentController {
     thread.comments = [vscodeComment];
     this.threads.set(id, { thread, comment });
     return comment;
+  }
+
+  registerHumanComment(thread: vscodeTypes.CommentThread, message: string): HacklReviewComment {
+    counter += 1;
+    const id = `rev-${Date.now().toString(36)}-${counter.toString(36)}`;
+    const startLine = (thread.range?.start.line ?? 0) + 1;
+    const endLine = (thread.range?.end.line ?? 0) + 1;
+    const comment: HacklReviewComment = {
+      id,
+      status: "open",
+      uri: thread.uri.toString(),
+      startLine,
+      endLine,
+      severity: "note",
+      message,
+      authorType: "human",
+      createdAt: Date.now(),
+    };
+    const body = new this.vscode.MarkdownString(message);
+    body.isTrusted = false;
+    const existing = Array.isArray(thread.comments) ? [...thread.comments] : [];
+    existing.push({
+      body,
+      mode: this.vscode.CommentMode.Preview,
+      author: { name: "You" },
+      contextValue: `hackl:${id}`,
+    });
+    thread.comments = existing;
+    thread.label = "Hackl · note";
+    thread.collapsibleState = this.vscode.CommentThreadCollapsibleState.Expanded;
+    this.threads.set(id, { thread, comment });
+    return comment;
+  }
+
+  disposeThread(thread: vscodeTypes.CommentThread): string[] {
+    const removedIds: string[] = [];
+    for (const [id, entry] of this.threads) {
+      if (entry.thread === thread) {
+        removedIds.push(id);
+        this.threads.delete(id);
+      }
+    }
+    thread.dispose();
+    return removedIds;
   }
 
   resolve(id: string): void {

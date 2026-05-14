@@ -42,16 +42,6 @@ test("BasketService remove and clear fire change events", () => {
   assert.deepEqual(events, [1, 2, 1, 0]);
 });
 
-test("BasketService setAnnotationMode toggles and fires only on change", () => {
-  const basket = new BasketService();
-  let fires = 0;
-  basket.onDidChange(() => fires++);
-  basket.setAnnotationMode(true);
-  basket.setAnnotationMode(true);
-  basket.setAnnotationMode(false);
-  assert.equal(fires, 2);
-});
-
 test("truncate caps text and flags truncation", () => {
   assert.deepEqual(truncate("abc", 10), { text: "abc", truncated: false });
   const big = "x".repeat(20);

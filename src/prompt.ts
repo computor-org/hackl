@@ -132,7 +132,9 @@ function formatTarget(target: HacklTarget): string {
       const head = `- id=${target.id} src ${target.relativePath}:${target.startLine}-${target.endLine} (${target.languageId}) uri=${target.uri}`;
       const fence = "```" + (target.languageId || "");
       const trunc = target.truncated ? "\n...(truncated)" : "";
-      return `${head}\n${fence}\n${target.text}${trunc}\n\`\`\``;
+      const note = (target.metadata as { note?: string } | undefined)?.note;
+      const noteBlock = note ? `\n  reviewer note: ${note}` : "";
+      return `${head}${noteBlock}\n${fence}\n${target.text}${trunc}\n\`\`\``;
     }
     case "markdown-section": {
       const heading = target.headingPath.length ? ` heading=${target.headingPath.join(" > ")}` : "";

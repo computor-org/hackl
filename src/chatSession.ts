@@ -20,7 +20,7 @@ export type ChatOutgoingMessage =
   | { type: "metrics"; inputTokens: number; maxContextTokens: number }
   | { type: "cleared" }
   | { type: "history"; entries: ConversationMessage[] }
-  | { type: "basket"; targets: HacklTarget[]; annotationMode: boolean }
+  | { type: "basket"; targets: HacklTarget[] }
   | ChatState
   | { type: "focusInput" };
 
@@ -71,7 +71,6 @@ export interface BasketBridge {
   onDidChange(listener: (snapshot: BasketSnapshot) => void): { dispose(): void };
   remove(id: string): void;
   clear(): void;
-  toggleAnnotation(): void;
 }
 
 export class ChatSession {
@@ -95,11 +94,11 @@ export class ChatSession {
       if (this.basket) {
         if (!this.basketSubscription) {
           this.basketSubscription = this.basket.onDidChange((snap) => {
-            void post({ type: "basket", targets: snap.targets, annotationMode: snap.annotationMode });
+            void post({ type: "basket", targets: snap.targets });
           });
         }
         const snap = this.basket.snapshot();
-        await post({ type: "basket", targets: snap.targets, annotationMode: snap.annotationMode });
+        await post({ type: "basket", targets: snap.targets });
       }
       return;
     }
@@ -124,10 +123,6 @@ export class ChatSession {
     }
     if (message.type === "clearBasket") {
       this.basket?.clear();
-      return;
-    }
-    if (message.type === "toggleAnnotation") {
-      this.basket?.toggleAnnotation();
       return;
     }
     if (message.type === "prompt") {

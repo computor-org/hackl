@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -23,7 +23,6 @@
     "onCommand:hackl.checkLocalServer",
     "onCommand:hackl.refreshEndpoint",
     "onCommand:hackl.openSetupDoc",
-    "onCommand:hackl.toggleAnnotationMode",
     "onCommand:hackl.addSelectionToContext",
     "onCommand:hackl.addMarkdownSectionToContext",
     "onCommand:hackl.addStagedChangesToContext",
@@ -67,10 +66,18 @@
         "category": "Hackl"
       },
       {
-        "command": "hackl.toggleAnnotationMode",
-        "title": "Toggle Annotation Mode",
+        "command": "hackl.replyToReviewThread",
+        "title": "Submit Review Comment",
         "category": "Hackl",
-        "icon": "$(pencil)"
+        "icon": "$(check)",
+        "enablement": "false"
+      },
+      {
+        "command": "hackl.deleteReviewThread",
+        "title": "Delete Review Thread",
+        "category": "Hackl",
+        "icon": "$(trash)",
+        "enablement": "false"
       },
       {
         "command": "hackl.addSelectionToContext",
@@ -143,11 +150,6 @@
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
         "when": "editorTextFocus && editorHasSelection"
-      },
-      {
-        "command": "hackl.toggleAnnotationMode",
-        "key": "ctrl+alt+m",
-        "mac": "cmd+alt+m"
       }
     ],
     "menus": {
@@ -161,11 +163,20 @@
           "command": "hackl.addSelectionToContext",
           "group": "navigation@52",
           "when": "editorTextFocus && editorHasSelection"
-        },
+        }
+      ],
+      "comments/commentThread/context": [
         {
-          "command": "hackl.toggleAnnotationMode",
-          "group": "navigation@53",
-          "when": "editorTextFocus"
+          "command": "hackl.replyToReviewThread",
+          "group": "inline@1",
+          "when": "commentController == hackl.review"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "hackl.deleteReviewThread",
+          "group": "inline@1",
+          "when": "commentController == hackl.review"
         }
       ],
       "scm/title": [
