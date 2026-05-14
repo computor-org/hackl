@@ -73,6 +73,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
   context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
+  scheduleAnnotationRangeRefreshes(context);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
@@ -249,6 +250,14 @@ function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatView
   basket.add(target);
   view.show();
   vscode.window.setStatusBarMessage(`Hackl: added ${describeTarget(target)}`, 2000);
+}
+
+function scheduleAnnotationRangeRefreshes(context: vscode.ExtensionContext): void {
+  // Comment providers from other extensions often register after startup.
+  for (const delay of [500, 2000, 6000, 10000, 15000]) {
+    const timer = setTimeout(() => annotationController?.refreshCommentingRanges(), delay);
+    context.subscriptions.push({ dispose: () => clearTimeout(timer) });
+  }
 }
 
 async function refreshStatus(): Promise<void> {

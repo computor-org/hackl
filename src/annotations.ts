@@ -85,8 +85,16 @@ export class AnnotationController {
       prompt: "Comment",
       placeHolder: "Comment. Enter submits, Shift+Enter for newline.",
     };
+    this.refreshCommentingRanges();
+  }
+
+  refreshCommentingRanges(): void {
+    this.controller.commentingRangeProvider = this.createCommentingRangeProvider();
+  }
+
+  private createCommentingRangeProvider(): vscodeTypes.CommentingRangeProvider {
     const VscRange = this.vscode.Range;
-    this.controller.commentingRangeProvider = {
+    return {
       provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.CommentingRanges {
         return {
           enableFileComments: false,

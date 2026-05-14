@@ -97,6 +97,20 @@ test("AnnotationController provides editor line comment ranges without file comm
   });
 });
 
+test("AnnotationController.refreshCommentingRanges replaces the provider", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    const first = controller.controller.commentingRangeProvider;
+
+    controller.refreshCommentingRanges();
+
+    assert.notEqual(controller.controller.commentingRangeProvider, first);
+    assert.equal(typeof controller.controller.commentingRangeProvider.provideCommentingRanges, "function");
+  });
+});
+
 test("AnnotationController.add dedupes by location + message + severity + authorType", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
