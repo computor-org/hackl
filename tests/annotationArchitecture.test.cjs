@@ -8,7 +8,7 @@ const path = require("node:path");
 const { BasketService } = require("../dist/basket.js");
 const { parseAnnotationsFromAnswer } = require("../dist/annotations.js");
 const { newHacklSessionId, persistHacklSession } = require("../dist/hacklSession.js");
-const { resolveTargetIdFor, targetRevealLocation } = require("../dist/targetResolve.js");
+const { filterAnnotationsForTargets, resolveTargetIdFor, targetRevealLocation } = require("../dist/targetResolve.js");
 
 test("resolveTargetIdFor prefers an enclosing range, falls back to same uri", () => {
   const targets = [
@@ -21,7 +21,7 @@ test("resolveTargetIdFor prefers an enclosing range, falls back to same uri", ()
   assert.equal(resolveTargetIdFor({ uri: "file:///z.ts", startLine: 1, endLine: 1 }, targets), undefined);
 });
 
-test("targetRevealLocation opens source ranges and first staged file", () => {
+test("targetRevealLocation opens source ranges and revealable staged files", () => {
   assert.deepEqual(
     targetRevealLocation({
       id: "src-1",
@@ -38,8 +38,39 @@ test("targetRevealLocation opens source ranges and first staged file", () => {
       kind: "staged-changes",
       workspaceRoot: "/repo",
       files: ["src/a.ts", "src/b.ts"],
+      metadata: { revealFiles: ["src/a.ts", "src/b.ts"] },
     }),
     { uri: "file:///repo/src/a.ts" },
+  );
+  assert.deepEqual(
+    targetRevealLocation({
+      id: "staged-space",
+      kind: "staged-changes",
+      workspaceRoot: "/repo",
+      files: ["src/file with space.ts"],
+      metadata: { revealFiles: ["src/file with space.ts"] },
+    }),
+    { uri: "file:///repo/src/file%20with%20space.ts" },
+  );
+  assert.deepEqual(
+    targetRevealLocation({
+      id: "staged-rename",
+      kind: "staged-changes",
+      workspaceRoot: "/repo",
+      files: ["src/new.ts"],
+      metadata: { revealFiles: ["src/new.ts"] },
+    }),
+    { uri: "file:///repo/src/new.ts" },
+  );
+  assert.equal(
+    targetRevealLocation({
+      id: "staged-delete",
+      kind: "staged-changes",
+      workspaceRoot: "/repo",
+      files: ["src/deleted.ts"],
+      metadata: { revealFiles: [] },
+    }),
+    undefined,
   );
   assert.equal(
     targetRevealLocation({
@@ -50,6 +81,46 @@ test("targetRevealLocation opens source ranges and first staged file", () => {
     }),
     undefined,
   );
+});
+
+test("filterAnnotationsForTargets keeps only basket-backed annotations", () => {
+  const targets = [
+    { id: "src", kind: "source-range", uri: "file:///repo/a.ts", startLine: 10, endLine: 20 },
+    {
+      id: "staged",
+      kind: "staged-changes",
+      workspaceRoot: "/repo",
+      files: ["src/changed.ts", "src/deleted.ts"],
+      metadata: {
+        annotationLineRanges: [
+          { uri: "file:///repo/src/changed.ts", startLine: 1, endLine: 20 },
+        ],
+      },
+    },
+  ];
+  const result = filterAnnotationsForTargets([
+    { uri: "file:///repo/a.ts", startLine: 12, endLine: 13 },
+    { uri: "file:///repo/a.ts", startLine: 999999, endLine: 1000000 },
+    { uri: "file:///repo/src/changed.ts", startLine: 3, endLine: 4 },
+    { uri: "file:///repo/src/changed.ts", startLine: 4, endLine: 1000 },
+    { uri: "file:///outside.ts", startLine: 1, endLine: 1 },
+  ], targets);
+  assert.equal(result.annotations.length, 2);
+  assert.equal(result.dropped, 3);
+  assert.deepEqual(result.annotations.map((a) => a.targetId), ["src", "staged"]);
+});
+
+test("filterAnnotationsForTargets falls back to file URI for diff targets without hunk metadata", () => {
+  const result = filterAnnotationsForTargets([
+    { uri: "file:///repo/src/changed.ts", startLine: 999999, endLine: 1000000 },
+  ], [{
+    id: "staged",
+    kind: "staged-changes",
+    workspaceRoot: "/repo",
+    files: ["src/changed.ts"],
+  }]);
+  assert.equal(result.annotations.length, 1);
+  assert.equal(result.dropped, 0);
 });
 
 test("parseAnnotationsFromAnswer tags annotations as AI with model", () => {

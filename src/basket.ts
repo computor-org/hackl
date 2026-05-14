@@ -1,4 +1,6 @@
 import type * as vscodeTypes from "vscode";
+import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import { getVscode } from "./vscodeShim";
 
 type Listener<T> = (value: T) => void;
@@ -77,6 +79,12 @@ export interface CommitTarget extends BaseTarget {
 
 export interface BasketSnapshot {
   targets: HacklTarget[];
+}
+
+export interface AnnotationLineRange {
+  uri: string;
+  startLine: number;
+  endLine: number;
 }
 
 const MAX_TEXT_CHARS = 4000;
@@ -262,9 +270,11 @@ function findMarkdownSection(document: vscodeTypes.TextDocument, cursorLine: num
 export function createStagedChangesTarget(args: {
   workspaceRoot: string;
   files: string[];
+  revealFiles?: string[];
   diff: string;
 }): StagedChangesTarget {
   const { diff, truncated } = truncateDiff(args.diff);
+  const metadata = diffTargetMetadata(args.workspaceRoot, diff, args.revealFiles);
   return {
     id: newId("staged"),
     addedAt: Date.now(),
@@ -273,6 +283,7 @@ export function createStagedChangesTarget(args: {
     files: args.files,
     diff,
     diffTruncated: truncated,
+    metadata,
   };
 }
 
@@ -310,9 +321,11 @@ export function createCommitTarget(args: {
   sha: string;
   subject: string;
   files: string[];
+  revealFiles?: string[];
   diff: string;
 }): CommitTarget {
   const { diff, truncated } = truncateDiff(args.diff);
+  const metadata = diffTargetMetadata(args.workspaceRoot, diff, args.revealFiles);
   return {
     id: newId("commit"),
     addedAt: Date.now(),
@@ -323,7 +336,46 @@ export function createCommitTarget(args: {
     files: args.files,
     diff,
     diffTruncated: truncated,
+    metadata,
   };
+}
+
+function diffTargetMetadata(
+  workspaceRoot: string,
+  diff: string,
+  revealFiles?: string[],
+): Record<string, unknown> | undefined {
+  const annotationLineRanges = annotationLineRangesFromDiff(workspaceRoot, diff);
+  if (!revealFiles && annotationLineRanges.length === 0) return undefined;
+  return {
+    ...(revealFiles ? { revealFiles } : {}),
+    ...(annotationLineRanges.length > 0 ? { annotationLineRanges } : {}),
+  };
+}
+
+export function annotationLineRangesFromDiff(workspaceRoot: string, diff: string): AnnotationLineRange[] {
+  const ranges: AnnotationLineRange[] = [];
+  let uri: string | undefined;
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("+++ ")) {
+      const file = line.slice(4).trim();
+      uri = file === "/dev/null" ? undefined : diffFileUri(workspaceRoot, file);
+      continue;
+    }
+    if (!uri || !line.startsWith("@@ ")) continue;
+    const match = /\+(\d+)(?:,(\d+))?/.exec(line);
+    if (!match) continue;
+    const startLine = Number(match[1]);
+    const count = Number(match[2] ?? "1");
+    if (!Number.isFinite(startLine) || !Number.isFinite(count) || count < 1) continue;
+    ranges.push({ uri, startLine, endLine: startLine + count - 1 });
+  }
+  return ranges;
+}
+
+function diffFileUri(workspaceRoot: string, file: string): string {
+  const withoutPrefix = file.replace(/^[ab]\//, "");
+  return pathToFileURL(path.resolve(workspaceRoot, withoutPrefix)).toString();
 }
 
 export function describeTarget(target: HacklTarget): string {

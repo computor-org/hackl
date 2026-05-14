@@ -32,7 +32,7 @@ import {
   describeTarget,
 } from "./basket";
 import { HacklAnnotation, AnnotationController, parseAnnotationsFromAnswer } from "./annotations";
-import { resolveTargetIdFor, targetRevealLocation } from "./targetResolve";
+import { filterAnnotationsForTargets, targetRevealLocation } from "./targetResolve";
 import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
 import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./hacklSession";
 import { handleAnnotationReply, handleDeleteAnnotationThread } from "./annotationCommands";
@@ -363,11 +363,12 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   let createdAnnotations: HacklAnnotation[] = [];
   if (createAnnotations && annotationController) {
     const parsed = parseAnnotationsFromAnswer(answer.content, defaultUriForAnnotations(targets), { aiModel: target.model });
-    const withTargetIds = parsed.annotations.map((c) => ({ ...c, targetId: resolveTargetIdFor(c, targets) }));
-    createdAnnotations = annotationController.addBatch(withTargetIds);
+    const valid = filterAnnotationsForTargets(parsed.annotations, targets);
+    createdAnnotations = annotationController.addBatch(valid.annotations);
+    const dropped = parsed.dropped.length + valid.dropped;
     if (createdAnnotations.length > 0) {
       result.annotations = createdAnnotations;
-      const dropSuffix = parsed.dropped.length > 0 ? ` · ${parsed.dropped.length} dropped` : "";
+      const dropSuffix = dropped > 0 ? ` · ${dropped} dropped` : "";
       vscode.window.setStatusBarMessage(
         `Hackl: ${createdAnnotations.length} annotation${createdAnnotations.length === 1 ? "" : "s"}${dropSuffix}`,
         3000,
@@ -381,7 +382,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       );
     } else {
       vscode.window.setStatusBarMessage(
-        `Hackl: 0 annotations kept (${parsed.dropped.length} dropped) — showing raw answer.`,
+        `Hackl: 0 annotations kept (${dropped} dropped) — showing raw answer.`,
         5000,
       );
     }

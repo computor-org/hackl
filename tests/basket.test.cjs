@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { BasketService, truncate, describeTarget } = require("../dist/basket.js");
+const { BasketService, annotationLineRangesFromDiff, createStagedChangesTarget, truncate, describeTarget } = require("../dist/basket.js");
 const { buildHacklMessages } = require("../dist/prompt.js");
 const { parseAnnotationsFromAnswer } = require("../dist/annotations.js");
 
@@ -107,6 +107,29 @@ test("buildHacklMessages handles staged-diff target", () => {
   assert.match(body, /truncated=no/);
   assert.match(body, /workspace=\/r/);
   assert.match(body, /a\.ts uri=file:\/\/\/r\/a\.ts/);
+});
+
+test("createStagedChangesTarget stores visible diff hunk ranges for annotation validation", () => {
+  const diff = [
+    "diff --git a/src/a.ts b/src/a.ts",
+    "--- a/src/a.ts",
+    "+++ b/src/a.ts",
+    "@@ -1,2 +10,4 @@",
+    " x",
+    "+y",
+    "diff --git a/src/deleted.ts b/src/deleted.ts",
+    "--- a/src/deleted.ts",
+    "+++ /dev/null",
+    "@@ -1,2 +0,0 @@",
+    "-gone",
+  ].join("\n");
+  assert.deepEqual(annotationLineRangesFromDiff("/repo", diff), [
+    { uri: "file:///repo/src/a.ts", startLine: 10, endLine: 13 },
+  ]);
+  const target = createStagedChangesTarget({ workspaceRoot: "/repo", files: ["src/a.ts"], diff });
+  assert.deepEqual(target.metadata.annotationLineRanges, [
+    { uri: "file:///repo/src/a.ts", startLine: 10, endLine: 13 },
+  ]);
 });
 
 test("buildHacklMessages appends annotation output instructions when createAnnotations is true", () => {
