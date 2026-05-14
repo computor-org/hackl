@@ -128,6 +128,45 @@ export class AnnotationController {
     return Array.from(this.threads.values()).map((entry) => entry.comment);
   }
 
+  /**
+   * Reveal a thread in its editor and put the cursor in the reply input so the
+   * user can start typing immediately. Uses CommentThread.reveal — present at
+   * runtime since VS Code 1.85, even though it is not yet in the stable
+   * @types/vscode 1.106 typings — and falls back to focusing the comment
+   * widget on the thread's line.
+   */
+  async focusThreadReply(annotationId: string): Promise<void> {
+    const entry = this.threads.get(annotationId);
+    if (!entry) return;
+    const { thread, comment } = entry;
+    try {
+      const uri = this.vscode.Uri.parse(comment.uri);
+      const doc = await this.vscode.workspace.openTextDocument(uri);
+      const editor = await this.vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
+      const line = Math.max(0, comment.startLine - 1);
+      const pos = new this.vscode.Position(line, 0);
+      editor.selection = new this.vscode.Selection(pos, pos);
+      editor.revealRange(new this.vscode.Range(pos, pos), this.vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    } catch (error) {
+      this.debug?.("annotations.focusThreadReply.openFailed", { id: annotationId, error: String(error) });
+    }
+    const reveal = (thread as unknown as { reveal?: (opts: unknown) => Thenable<void> }).reveal;
+    if (typeof reveal === "function") {
+      try {
+        // CommentThreadFocus.Reply = 1
+        await reveal.call(thread, { focus: 1 });
+        return;
+      } catch (error) {
+        this.debug?.("annotations.focusThreadReply.revealFailed", { id: annotationId, error: String(error) });
+      }
+    }
+    try {
+      await this.vscode.commands.executeCommand("workbench.action.focusCommentOnCurrentLine");
+    } catch (error) {
+      this.debug?.("annotations.focusThreadReply.commandFailed", { id: annotationId, error: String(error) });
+    }
+  }
+
   addBatch(inputs: Array<Omit<HacklAnnotation, "id" | "status" | "createdAt"> & { status?: AnnotationStatus; createdAt?: number }>): HacklAnnotation[] {
     const created: HacklAnnotation[] = [];
     for (const input of inputs) {

@@ -595,6 +595,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
         `Hackl: ${createdAnnotations.length} annotation${createdAnnotations.length === 1 ? "" : "s"}${dropSuffix}`,
         3000,
       );
+      void annotationController.focusThreadReply(createdAnnotations[0].id);
     } else if (parsed.blocks === 0 || parsed.parseErrors > 0) {
       vscode.window.setStatusBarMessage("Hackl could not create annotations. Showing the raw answer.", 5000);
     } else {
