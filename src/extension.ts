@@ -218,6 +218,10 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
         `Reply attached to context from ${vscode.workspace.asRelativePath(reply.thread.uri, false)}:${(reply.thread.range?.start.line ?? 0) + 1}`,
       );
     }),
+    vscode.commands.registerCommand("hackl.addAnnotationNote", async () => {
+      annotationController?.noteThreadFocused();
+      await vscode.commands.executeCommand("workbench.action.addComment");
+    }),
     vscode.commands.registerCommand("hackl.deleteAnnotationThread", (thread: vscode.CommentThread) => {
       if (!basketService || !annotationController) return;
       handleDeleteAnnotationThread(thread, basketService, annotationController);

@@ -57,6 +57,12 @@
         "icon": "$(arrow-up)"
       },
       {
+        "command": "hackl.addAnnotationNote",
+        "title": "Add Annotation Note",
+        "category": "Hackl",
+        "icon": "$(comment-add)"
+      },
+      {
         "command": "hackl.deleteAnnotationThread",
         "title": "Delete Annotation Thread",
         "category": "Hackl",

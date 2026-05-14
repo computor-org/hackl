@@ -29,9 +29,16 @@ test("context command titles use user-facing context wording", () => {
   const manifest = readManifest();
   assert.equal(command(manifest, "hackl.addSelectionToContext")?.title, "Add Selection");
   assert.equal(command(manifest, "hackl.addCurrentFileToContext")?.title, "Add Current File");
+  assert.equal(command(manifest, "hackl.addAnnotationNote")?.title, "Add Annotation Note");
   assert.equal(command(manifest, "hackl.addStagedChangesToContext")?.title, "Add Staged Changes");
   assert.equal(command(manifest, "hackl.clearContext")?.title, "Clear Context");
   assert.equal(command(manifest, "hackl.reviewStagedChanges")?.title, "Review Staged Changes");
+});
+
+test("annotation note command stays out of the editor context menu", () => {
+  const manifest = readManifest();
+  const item = manifest.contributes.menus["editor/context"].find((entry) => entry.command === "hackl.addAnnotationNote");
+  assert.equal(item, undefined);
 });
 
 test("comment editor enter submits, shift-enter inserts newline, escape dismisses empty draft", () => {
