@@ -76,7 +76,7 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           <button id="attach" class="tool-button" type="button" title="Add current selection (Ctrl+Alt+A)" aria-label="Add current selection">
             <span class="codicon codicon-add" aria-hidden="true"></span>
           </button>
-          <button id="annotations-toggle" class="tool-button" type="button" title="Also produce line-anchored comments (requires a text-file target in the basket)" aria-label="Create annotations" aria-pressed="false">
+          <button id="annotations-toggle" class="tool-button hidden-unavailable" type="button" title="Also produce line-anchored comments (requires a text-file target in the basket)" aria-label="Create annotations" aria-pressed="false" disabled>
             <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
           </button>
           <button id="annotations-discard" class="tool-button" type="button" title="Discard the last batch of AI annotations (Ctrl+Alt+Z)" aria-label="Discard last annotations" hidden>

@@ -24,23 +24,12 @@ class SimpleEmitter<T> {
 export type HacklTarget =
   | SourceRangeTarget
   | StagedChangesTarget
-  | DiffRangeTarget
   | CommitTarget
-  | MarkdownSectionTarget
-  | DiagnosticTarget;
+  | MarkdownSectionTarget;
 
 export interface BaseTarget {
   id: string;
   addedAt: number;
-  metadata?: Record<string, unknown>;
-}
-
-export interface ReviewContext {
-  source?: string;
-  role?: string;
-  externalIds?: Record<string, string>;
-  rubricUri?: string;
-  policyHints?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 
@@ -76,16 +65,6 @@ export interface StagedChangesTarget extends BaseTarget {
   diffTruncated: boolean;
 }
 
-export interface DiffRangeTarget extends BaseTarget {
-  kind: "diff-range";
-  workspaceRoot: string;
-  base: string;
-  head: string;
-  files: string[];
-  diff: string;
-  diffTruncated: boolean;
-}
-
 export interface CommitTarget extends BaseTarget {
   kind: "commit";
   workspaceRoot: string;
@@ -96,20 +75,8 @@ export interface CommitTarget extends BaseTarget {
   diffTruncated: boolean;
 }
 
-export interface DiagnosticTarget extends BaseTarget {
-  kind: "diagnostic";
-  uri: string;
-  relativePath: string;
-  message: string;
-  severity: string;
-  startLine: number;
-  endLine: number;
-  source?: string;
-}
-
 export interface BasketSnapshot {
   targets: HacklTarget[];
-  reviewContext?: ReviewContext;
 }
 
 const MAX_TEXT_CHARS = 4000;
@@ -133,25 +100,13 @@ export function truncateDiff(diff: string): { diff: string; truncated: boolean }
 
 export class BasketService {
   private targets: HacklTarget[] = [];
-  private reviewContext: ReviewContext | undefined;
   private readonly emitter = new SimpleEmitter<BasketSnapshot>();
   readonly onDidChange = this.emitter.event;
 
   snapshot(): BasketSnapshot {
     return {
       targets: [...this.targets],
-      reviewContext: this.reviewContext,
     };
-  }
-
-  setReviewContext(context: ReviewContext | undefined): void {
-    if (sameReviewContext(this.reviewContext, context)) return;
-    this.reviewContext = context;
-    this.fire();
-  }
-
-  getReviewContext(): ReviewContext | undefined {
-    return this.reviewContext;
   }
 
   add(target: HacklTarget): void {
@@ -215,12 +170,6 @@ export class BasketService {
   dispose(): void {
     this.emitter.dispose();
   }
-}
-
-function sameReviewContext(a: ReviewContext | undefined, b: ReviewContext | undefined): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export function createSourceRangeTarget(editor: vscodeTypes.TextEditor): SourceRangeTarget | undefined {
@@ -387,11 +336,7 @@ export function describeTarget(target: HacklTarget): string {
     }
     case "staged-changes":
       return `staged diff: ${target.files.length} file${target.files.length === 1 ? "" : "s"}`;
-    case "diff-range":
-      return `diff ${target.base}..${target.head}: ${target.files.length} files`;
     case "commit":
       return `commit ${target.sha.slice(0, 7)} ${target.subject}`;
-    case "diagnostic":
-      return `${target.relativePath}:${target.startLine} (${target.severity})`;
   }
 }

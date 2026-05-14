@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { HacklTarget, ReviewContext } from "./basket";
+import type { HacklTarget } from "./basket";
 import type { HacklReviewComment } from "./reviewComments";
 import type { PromptMode } from "./prompt";
 
@@ -12,8 +12,6 @@ export interface HacklSessionRecord {
   model?: string;
   gitHead?: string;
   targets: HacklTarget[];
-  context?: ReviewContext;
-  questions?: string[];
   answer?: string;
   comments: HacklReviewComment[];
 }

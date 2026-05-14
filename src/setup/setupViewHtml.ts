@@ -1,15 +1,18 @@
 import * as vscode from "vscode";
+import { randomBytes } from "node:crypto";
 
-export function renderSetupHtml(webview: vscode.Webview): string {
-  const nonce = getNonce();
+export function renderSetupHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+  const nonce = randomBytes(16).toString("hex");
+  const css = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "setup", "main.css"));
+  const js = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "setup", "main.js"));
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hackl — Setup</title>
-  <style>${STYLES}</style>
+  <link rel="stylesheet" href="${css}">
 </head>
 <body>
   <div class="wrap">
@@ -90,86 +93,7 @@ ollama pull qwen3-coder:30b   # or gemma3:12b</code></pre>
 
     <p class="footer">Hackl never starts a server. You run the model; Hackl connects to it.</p>
   </div>
-  <script nonce="${nonce}">${SCRIPT}</script>
+  <script nonce="${nonce}" src="${js}"></script>
 </body>
 </html>`;
 }
-
-function getNonce(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let nonce = "";
-  for (let i = 0; i < 32; i++) nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-  return nonce;
-}
-
-const STYLES = `
-  body { font-family: var(--vscode-font-family, system-ui); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; }
-  .wrap { padding: 14px 14px 24px; max-width: 100%; }
-  .status { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 4px; margin-bottom: 12px; background: var(--vscode-editorWidget-background); }
-  .pill { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-  .status-ok .pill { background: rgba(60, 180, 100, 0.25); color: #4ade80; }
-  .status-none .pill { background: rgba(220, 60, 60, 0.22); color: #f87171; }
-  .row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-  .profile { font-size: 11px; color: var(--vscode-descriptionForeground); }
-  .card { background: var(--vscode-editorWidget-background, transparent); border: 1px solid var(--vscode-panel-border, transparent); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; }
-  .card summary { cursor: pointer; font-size: 13px; }
-  .card[open] summary { margin-bottom: 8px; }
-  .card ol { margin: 6px 0 8px 18px; padding: 0; }
-  .card li { margin: 3px 0; font-size: 12px; }
-  .card pre { background: var(--vscode-textCodeBlock-background); padding: 8px 10px; border-radius: 4px; overflow-x: auto; font-size: 11px; margin: 6px 0; }
-  .card code { font-family: var(--vscode-editor-font-family, monospace); }
-  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  button { background: var(--vscode-button-secondaryBackground, transparent); color: var(--vscode-button-secondaryForeground, var(--vscode-foreground)); border: 1px solid var(--vscode-panel-border, var(--vscode-foreground)); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
-  button:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground)); }
-  button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: transparent; }
-  button.primary:hover { background: var(--vscode-button-hoverBackground); }
-  a { color: var(--vscode-textLink-foreground); }
-  button.linklike { background: none; border: none; padding: 0; color: var(--vscode-textLink-foreground); text-decoration: underline; cursor: pointer; font: inherit; }
-  button.linklike:hover { color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground)); }
-  .hint { font-size: 11px; color: var(--vscode-descriptionForeground); }
-  .footer { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 18px; }
-  .tiers { display: block; margin: 8px 0 14px; font-size: 12px; }
-  .tiers table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-  .tiers th, .tiers td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--vscode-panel-border, transparent); font-size: 11px; }
-  .tiers th { font-weight: 600; color: var(--vscode-descriptionForeground); }
-`;
-
-const SCRIPT = `
-  const vscode = acquireVsCodeApi();
-  function setStatus(state, text) {
-    const el = document.getElementById('status');
-    el.className = 'status status-' + state;
-    el.querySelector('.pill').textContent = state === 'ok' ? 'connected' : state === 'none' ? 'no server' : 'probing';
-    document.getElementById('status-text').textContent = text;
-  }
-  document.getElementById('refresh').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
-  for (const btn of document.querySelectorAll('button[data-set]')) {
-    btn.addEventListener('click', () => vscode.postMessage({ type: 'setEndpoint', endpoint: btn.dataset.set }));
-  }
-  for (const btn of document.querySelectorAll('button[data-doc]')) {
-    btn.addEventListener('click', () => vscode.postMessage({ type: 'openDoc', doc: btn.dataset.doc }));
-  }
-  for (const a of document.querySelectorAll('[data-link]')) {
-    a.addEventListener('click', (e) => { e.preventDefault(); vscode.postMessage({ type: 'openLink', href: a.dataset.link }); });
-  }
-  function focusProfile(profile) {
-    document.getElementById('profile').textContent = profile;
-    if (profile === 'lmstudio' || profile === 'llamacpp' || profile === 'ollama') {
-      const target = document.getElementById(profile);
-      if (target) target.open = true;
-    }
-  }
-  window.addEventListener('message', (e) => {
-    const m = e.data;
-    if (m.type === 'status') {
-      if (m.connected) {
-        const ctx = m.ctx ? ' · ' + Math.floor(m.ctx / 1024) + 'k ctx' : '';
-        setStatus('ok', m.endpoint + ' · ' + (m.model || 'model') + ctx);
-      } else {
-        setStatus('none', 'No local server detected on any candidate endpoint.');
-      }
-      if (m.profile) focusProfile(m.profile);
-    }
-  });
-  vscode.postMessage({ type: 'ready' });
-`;

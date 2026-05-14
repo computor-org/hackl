@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { BasketService, truncate, describeTarget } = require("../dist/basket.js");
-const { splitMultiQuestion, buildHacklMessages } = require("../dist/prompt.js");
+const { buildHacklMessages } = require("../dist/prompt.js");
 const { parseReviewCommentsFromAnswer } = require("../dist/reviewComments.js");
 
 function makeSourceTarget(overrides = {}) {
@@ -66,33 +66,20 @@ test("describeTarget produces compact labels", () => {
   );
 });
 
-test("splitMultiQuestion detects numbered and bulleted lists", () => {
-  assert.deepEqual(splitMultiQuestion("just one"), ["just one"]);
-  assert.deepEqual(splitMultiQuestion("1. a\n2. b"), ["a", "b"]);
-  assert.deepEqual(splitMultiQuestion("- a\n- b"), ["a", "b"]);
-  assert.deepEqual(splitMultiQuestion(""), []);
-});
-
-test("buildHacklMessages includes targets and questions when supplied", () => {
+test("buildHacklMessages includes targets when supplied", () => {
   const messages = buildHacklMessages(
-    "1. is it stable?\n2. is it tested?",
+    "explain",
     "ctx",
     [],
     "ask",
-    {
-      targets: [makeSourceTarget()],
-      questions: ["is it stable?", "is it tested?"],
-    },
+    { targets: [makeSourceTarget()] },
   );
   const body = messages[messages.length - 1].content;
   assert.match(body, /basket:/);
   assert.match(body, /id=src-1 src a\.ts:1-5/);
-  assert.match(body, /questions:/);
-  assert.match(body, /Q1: is it stable\?/);
-  assert.match(body, /Q2: is it tested\?/);
 });
 
-test("buildHacklMessages handles staged-diff target with multiple questions", () => {
+test("buildHacklMessages handles staged-diff target", () => {
   const staged = {
     id: "staged-1",
     addedAt: 1,
@@ -102,20 +89,9 @@ test("buildHacklMessages handles staged-diff target with multiple questions", ()
     diff: "diff --git a/a.ts b/a.ts\n@@\n-x\n+y",
     diffTruncated: false,
   };
-  const messages = buildHacklMessages(
-    "1. correctness?\n2. tests?",
-    "[no editor context]",
-    [],
-    "ask",
-    {
-      targets: [staged],
-      questions: ["correctness?", "tests?"],
-    },
-  );
+  const messages = buildHacklMessages("review", "[no editor context]", [], "ask", { targets: [staged] });
   const body = messages[messages.length - 1].content;
   assert.match(body, /staged-diff files=2/);
-  assert.match(body, /Q1: correctness\?/);
-  assert.match(body, /Q2: tests\?/);
 });
 
 test("buildHacklMessages appends annotation output instructions when createAnnotations is true", () => {

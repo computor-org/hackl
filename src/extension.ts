@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { ChatMessage, createOpenAICompatibleBackend } from "./chatClient";
-import { ChatPanel } from "./chatPanel";
 import {
   ApprovalRequester,
   BasketBridge,
@@ -18,7 +17,7 @@ import {
   requiresNonLocalEndpointApproval,
   resolveChatTarget,
 } from "./localServers";
-import { buildHacklMessages, PromptMode, splitMultiQuestion } from "./prompt";
+import { buildHacklMessages, PromptMode } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
@@ -28,7 +27,6 @@ import {
   BasketService,
   BasketSnapshot,
   HacklTarget,
-  ReviewContext,
   createMarkdownSectionTarget,
   createSourceRangeTarget,
   describeTarget,
@@ -40,7 +38,6 @@ import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./ha
 import { handleReviewReply, handleDeleteReviewThread } from "./reviewCommands";
 import { readHacklConfig, hasUserConfigured } from "./config";
 
-let chatPanel: ChatPanel | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let basketService: BasketService | undefined;
 let reviewController: ReviewCommentController | undefined;
@@ -53,13 +50,6 @@ export interface HacklApi {
   addTarget(target: HacklTarget): void;
   removeTarget(id: string): void;
   clearBasket(): void;
-  setReviewContext(context: ReviewContext | undefined): void;
-  getReviewContext(): ReviewContext | undefined;
-  addReviewComment(comment: Omit<HacklReviewComment, "id" | "status" | "createdAt"> & {
-    status?: HacklReviewComment["status"];
-    createdAt?: number;
-  }): HacklReviewComment;
-  clearReviewComments(): void;
   onDidChangeBasket: vscode.Event<BasketSnapshot>;
   onDidFinishSession: vscode.Event<HacklSessionRecord>;
   openChat(): Thenable<void>;
@@ -82,10 +72,6 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       await vscode.commands.executeCommand("workbench.view.extension.hackl");
       chatViewProvider.show();
       chatViewProvider.focusInput();
-    }),
-    vscode.commands.registerCommand("hackl.chatEditor", () => {
-      openChatPanel(context, basketBridge);
-      chatPanel?.focusInput();
     }),
     vscode.commands.registerCommand("hackl.openSetupGuide", () => {
       SetupPanel.show(context, runProbe, setEndpoint);
@@ -209,13 +195,6 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     addTarget: (target) => basketService!.add(target),
     removeTarget: (id) => basketService!.remove(id),
     clearBasket: () => basketService!.clear(),
-    setReviewContext: (ctx) => basketService!.setReviewContext(ctx),
-    getReviewContext: () => basketService!.getReviewContext(),
-    addReviewComment: (comment) => reviewController!.add({
-      ...comment,
-      authorType: comment.authorType ?? "human",
-    }),
-    clearReviewComments: () => reviewController!.clear(),
     onDidChangeBasket: basketService.onDidChange,
     onDidFinishSession: sessionFinishedEmitter.event,
     openChat: () => vscode.commands.executeCommand("hackl.chat"),
@@ -298,7 +277,6 @@ async function setEndpoint(endpoint: string): Promise<void> {
 }
 
 export function deactivate(): void {
-  chatPanel = undefined;
   statusBarItem = undefined;
   basketService = undefined;
   reviewController = undefined;
@@ -340,12 +318,8 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     createAnnotations,
   });
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
-  const questions = splitMultiQuestion(prompt);
-  const reviewContext = basketService?.getReviewContext();
   const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history, mode, {
     targets,
-    questions,
-    reviewContext,
     createAnnotations,
   });
   const inputTokens = estimateChatTokens(messages);
@@ -415,8 +389,6 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       endpoint: target.endpoint,
       model: target.model,
       targets,
-      reviewContext,
-      questions,
       answer: answer.content,
       comments: createdComments,
     });
@@ -440,8 +412,6 @@ async function emitHacklSession(input: {
   endpoint: string;
   model: string;
   targets: HacklTarget[];
-  reviewContext?: ReviewContext;
-  questions?: string[];
   answer: string;
   comments: HacklReviewComment[];
 }): Promise<void> {
@@ -452,8 +422,6 @@ async function emitHacklSession(input: {
     endpoint: input.endpoint,
     model: input.model,
     targets: input.targets,
-    context: input.reviewContext,
-    questions: input.questions && input.questions.length > 1 ? input.questions : undefined,
     answer: input.answer,
     comments: input.comments,
   };
@@ -532,11 +500,3 @@ async function getDetectedMaxContext(endpoint: string): Promise<number | undefin
   return detected;
 }
 
-function openChatPanel(context: vscode.ExtensionContext, basket?: BasketBridge): void {
-  if (!chatPanel) {
-    chatPanel = new ChatPanel(context, answerPrompt, currentChatState, () => {
-      chatPanel = undefined;
-    }, basket);
-  }
-  chatPanel.reveal();
-}

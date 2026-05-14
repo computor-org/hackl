@@ -19,7 +19,11 @@ export class SetupPanel {
       SetupPanel.viewType,
       "Hackl — Setup",
       vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: false },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: false,
+        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "media", "setup")],
+      },
     );
     SetupPanel.current = new SetupPanel(panel, context, runProbe, setEndpoint);
   }
@@ -30,11 +34,11 @@ export class SetupPanel {
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
-    _context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly runProbe: ProbeRunner,
     private readonly setEndpoint: EndpointSetter,
   ) {
-    panel.webview.html = renderSetupHtml(panel.webview);
+    panel.webview.html = renderSetupHtml(panel.webview, context.extensionUri);
     panel.webview.onDidReceiveMessage(async (msg) => {
       switch (msg?.type) {
         case "ready":

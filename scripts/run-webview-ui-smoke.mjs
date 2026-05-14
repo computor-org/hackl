@@ -55,6 +55,38 @@ try {
 
   await page.setContent(`${vscodeApiShim}${html}`, { waitUntil: "load" });
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "ready"), diagnostics);
+
+  // Send button carries the mode label
+  assert.equal((await page.locator("#send-label").innerText()).trim(), "Ask");
+
+  // Annotations toggle hidden until an anchorable target lands in the basket
+  assert.equal(await page.locator("#annotations-toggle").isVisible(), false);
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "basket", targets: [{ id: "t-1", kind: "source-range", uri: "file:///x.ts", startLine: 1, endLine: 2 }] },
+    }));
+  });
+  await page.waitForFunction(() => !document.getElementById("annotations-toggle").classList.contains("hidden-unavailable"));
+  assert.equal(await page.locator("#annotations-toggle").isVisible(), true);
+
+  // Toggling annotations updates the send label
+  await page.locator("#annotations-toggle").click();
+  await page.waitForFunction(() => document.getElementById("send-label").textContent.includes("annotations"));
+  assert.match(await page.locator("#send-label").innerText(), /\+ annotations/);
+  await page.locator("#annotations-toggle").click();
+
+  // setPromptText populates the textarea
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "setPromptText", text: "preset" } }));
+  });
+  assert.equal(await page.locator("#prompt").inputValue(), "preset");
+  await page.locator("#prompt").fill("");
+
+  // Clear basket so subsequent prompts behave as before
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "basket", targets: [] } }));
+  });
+
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", {
       data: {
@@ -72,7 +104,7 @@ try {
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "prompt"), diagnostics);
   assert.deepEqual(
     await page.evaluate(() => window.__hacklPosted.find((message) => message.type === "prompt")),
-    { type: "prompt", prompt: "Explain energy", mode: "ask" },
+    { type: "prompt", prompt: "Explain energy", mode: "ask", createAnnotations: false },
   );
 
   await page.evaluate(() => {
@@ -124,7 +156,7 @@ try {
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Rename x to y"), diagnostics);
   assert.deepEqual(
     await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Rename x to y")),
-    { type: "prompt", prompt: "Rename x to y", mode: "edit" },
+    { type: "prompt", prompt: "Rename x to y", mode: "edit", createAnnotations: false },
   );
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", { data: { type: "answer", text: "Renamed." } }));
@@ -137,7 +169,7 @@ try {
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Update the call sites"), diagnostics);
   assert.deepEqual(
     await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Update the call sites")),
-    { type: "prompt", prompt: "Update the call sites", mode: "work" },
+    { type: "prompt", prompt: "Update the call sites", mode: "work", createAnnotations: false },
   );
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", { data: { type: "answer", text: "Updated." } }));
@@ -150,7 +182,7 @@ try {
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Run the checks"), diagnostics);
   assert.deepEqual(
     await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Run the checks")),
-    { type: "prompt", prompt: "Run the checks", mode: "agent" },
+    { type: "prompt", prompt: "Run the checks", mode: "agent", createAnnotations: false },
   );
 
   await page.evaluate(() => {
@@ -245,6 +277,9 @@ function mimeType(file) {
   if (file.endsWith(".css")) return "text/css";
   if (file.endsWith(".js")) return "text/javascript";
   if (file.endsWith(".ttf")) return "font/ttf";
+  if (file.endsWith(".woff")) return "font/woff";
   if (file.endsWith(".woff2")) return "font/woff2";
+  if (file.endsWith(".svg")) return "image/svg+xml";
+  if (file.endsWith(".json")) return "application/json";
   return "application/octet-stream";
 }
