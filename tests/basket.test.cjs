@@ -52,6 +52,18 @@ test("describeTarget produces compact labels", () => {
   assert.equal(describeTarget(makeSourceTarget()), "a.ts:1-5");
   assert.equal(
     describeTarget({
+      id: "staged-1",
+      addedAt: 0,
+      kind: "staged-changes",
+      workspaceRoot: "/r",
+      files: ["a.ts", "b.ts"],
+      diff: "",
+      diffTruncated: true,
+    }),
+    "staged diff: 2 files (truncated)",
+  );
+  assert.equal(
+    describeTarget({
       id: "commit-1",
       addedAt: 0,
       kind: "commit",
@@ -60,9 +72,9 @@ test("describeTarget produces compact labels", () => {
       subject: "fix x",
       files: ["a"],
       diff: "",
-      diffTruncated: false,
+      diffTruncated: true,
     }),
-    "commit deadbee fix x",
+    "commit deadbee fix x (diff truncated)",
   );
 });
 
@@ -92,6 +104,7 @@ test("buildHacklMessages handles staged-diff target", () => {
   const messages = buildHacklMessages("review", "[no editor context]", [], "ask", { targets: [staged] });
   const body = messages[messages.length - 1].content;
   assert.match(body, /staged-diff files=2/);
+  assert.match(body, /truncated=no/);
   assert.match(body, /workspace=\/r/);
   assert.match(body, /a\.ts uri=file:\/\/\/r\/a\.ts/);
 });
@@ -142,6 +155,31 @@ test("parseAnnotationsFromAnswer accepts legacy annotation block tags", () => {
   assert.equal(parsed.annotations[0].startLine, 3);
   assert.equal(parsed.annotations[1].uri, "file:///review.ts");
   assert.equal(parsed.annotations[1].endLine, 7);
+});
+
+test("parseAnnotationsFromAnswer recovers common local-model JSON wrappers", () => {
+  const answer = [
+    "```hackl-annotations",
+    "json",
+    JSON.stringify({
+      annotations: [
+        { uri: "file:///wrapped.ts", startLine: 8, severity: "suggestion", message: "wrapped" },
+      ],
+    }),
+    "```",
+    "```hackl-annotations",
+    "Here are the annotations:",
+    JSON.stringify([{ uri: "file:///prose.ts", line: 2, message: "prose" }]),
+    "Done.",
+    "```",
+  ].join("\n");
+  const parsed = parseAnnotationsFromAnswer(answer);
+  assert.equal(parsed.parseErrors, 0);
+  assert.equal(parsed.annotations.length, 2);
+  assert.equal(parsed.annotations[0].uri, "file:///wrapped.ts");
+  assert.equal(parsed.annotations[0].severity, "suggestion");
+  assert.equal(parsed.annotations[1].uri, "file:///prose.ts");
+  assert.equal(parsed.annotations[1].startLine, 2);
 });
 
 test("parseAnnotationsFromAnswer reports dropped entries and parse errors", () => {

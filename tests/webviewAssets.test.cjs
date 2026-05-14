@@ -28,4 +28,5 @@ test("main.js still wires the key element ids the HTML shell renders", () => {
   for (const id of ["form", "prompt", "thread", "send", "annotations-toggle", "annotations-discard", "mode-button", "basket-list"]) {
     assert.match(src, new RegExp(`"${id}"`), `main.js missing id "${id}"`);
   }
+  assert.match(src, /diffTruncated/);
 });

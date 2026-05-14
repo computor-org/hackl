@@ -335,8 +335,8 @@ export function describeTarget(target: HacklTarget): string {
       return `${target.relativePath}:${target.startLine}-${target.endLine}${heading}`;
     }
     case "staged-changes":
-      return `staged diff: ${target.files.length} file${target.files.length === 1 ? "" : "s"}`;
+      return `staged diff: ${target.files.length} file${target.files.length === 1 ? "" : "s"}${target.diffTruncated ? " (truncated)" : ""}`;
     case "commit":
-      return `commit ${target.sha.slice(0, 7)} ${target.subject}`;
+      return `commit ${target.sha.slice(0, 7)} ${target.subject}${target.diffTruncated ? " (diff truncated)" : ""}`;
   }
 }

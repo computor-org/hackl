@@ -88,9 +88,22 @@ export class AnnotationController {
     return Array.from(this.threads.values()).map((entry) => entry.comment);
   }
 
+  addBatch(inputs: Array<Omit<HacklAnnotation, "id" | "status" | "createdAt"> & { status?: AnnotationStatus; createdAt?: number }>): HacklAnnotation[] {
+    const created: HacklAnnotation[] = [];
+    for (const input of inputs) {
+      const dup = this.findDuplicate(input);
+      const comment = this.add(input);
+      if (!dup) created.push(comment);
+    }
+    if (created.length > 0) {
+      this.batches.push(created.map((comment) => comment.id));
+    }
+    return created;
+  }
+
   add(input: Omit<HacklAnnotation, "id" | "status" | "createdAt"> & { status?: AnnotationStatus; createdAt?: number }): HacklAnnotation {
-    const dup = this.findByLocation(input.uri, input.startLine, input.endLine);
-    if (dup && dup.message === input.message && dup.severity === input.severity && dup.authorType === input.authorType) {
+    const dup = this.findDuplicate(input);
+    if (dup) {
       return dup;
     }
     counter += 1;
@@ -134,6 +147,14 @@ export class AnnotationController {
     thread.comments = [vscodeComment];
     this.threads.set(id, { thread, comment });
     return comment;
+  }
+
+  private findDuplicate(input: Pick<HacklAnnotation, "uri" | "startLine" | "endLine" | "message" | "severity" | "authorType">): HacklAnnotation | undefined {
+    const dup = this.findByLocation(input.uri, input.startLine, input.endLine);
+    if (dup && dup.message === input.message && dup.severity === input.severity && dup.authorType === input.authorType) {
+      return dup;
+    }
+    return undefined;
   }
 
   registerHumanComment(thread: vscodeTypes.CommentThread, message: string): HacklAnnotation {
@@ -235,17 +256,18 @@ export function parseAnnotationsFromAnswer(
   let blocks = 0;
   let parseErrors = 0;
   let match: RegExpExecArray | null;
+  ANNOTATION_BLOCK_RE.lastIndex = 0;
   while ((match = ANNOTATION_BLOCK_RE.exec(answer)) !== null) {
     blocks += 1;
     let json: unknown;
     try {
-      json = JSON.parse(match[1]);
+      json = parseAnnotationJson(match[1]);
     } catch {
       parseErrors += 1;
       dropped.push({ reason: "invalid-json", raw: match[1].slice(0, 200) });
       continue;
     }
-    const items = Array.isArray(json) ? json : [json];
+    const items = annotationItems(json);
     for (const raw of items) {
       const item = raw as Record<string, unknown>;
       const uri = typeof item.uri === "string" ? item.uri : defaultUri;
@@ -276,6 +298,42 @@ export function parseAnnotationsFromAnswer(
     }
   }
   return { annotations, blocks, parseErrors, dropped };
+}
+
+function parseAnnotationJson(raw: string): unknown {
+  const trimmed = raw.trim();
+  const withoutLanguageLine = trimmed.replace(/^(?:json|javascript|js)\s*\r?\n/i, "").trim();
+  const candidates = [trimmed, withoutLanguageLine, extractJsonValue(withoutLanguageLine)]
+    .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function extractJsonValue(text: string): string | undefined {
+  const arrayStart = text.indexOf("[");
+  const objectStart = text.indexOf("{");
+  const starts = [arrayStart, objectStart].filter((n) => n >= 0);
+  if (starts.length === 0) return undefined;
+  const start = Math.min(...starts);
+  const end = text[start] === "[" ? text.lastIndexOf("]") : text.lastIndexOf("}");
+  if (end <= start) return undefined;
+  return text.slice(start, end + 1);
+}
+
+function annotationItems(json: unknown): unknown[] {
+  if (Array.isArray(json)) return json;
+  if (json && typeof json === "object") {
+    const wrapped = (json as { annotations?: unknown }).annotations;
+    if (Array.isArray(wrapped)) return wrapped;
+  }
+  return [json];
 }
 
 function normalizeSeverity(value: unknown): AnnotationSeverity {

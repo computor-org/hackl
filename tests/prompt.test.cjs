@@ -137,9 +137,9 @@ test("buildHacklMessages formats commit target file URI limits", () => {
     ],
   });
   const body = messages.at(-1).content;
-  assert.match(body, /commit 1234567890ab "fix" files=21 workspace=\/repo/);
+  assert.match(body, /commit 1234567890ab "fix" files=21 truncated=yes workspace=\/repo/);
   assert.match(body, /src\/0\.ts uri=file:\/\/\/repo\/src\/0\.ts/);
   assert.match(body, /fileUris=\[[\s\S]*, \.\.\.\]/);
   assert.match(body, /\.\.\.\(diff truncated\)/);
-  assert.match(body, /commit abcdef123456 "empty" files=0 workspace=\/repo\n```diff/);
+  assert.match(body, /commit abcdef123456 "empty" files=0 truncated=no workspace=\/repo\n```diff/);
 });

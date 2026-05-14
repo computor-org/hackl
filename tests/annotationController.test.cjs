@@ -96,6 +96,26 @@ test("AnnotationController.add dedupes by location + message + severity + author
   });
 });
 
+test("AnnotationController.addBatch records only newly created annotations", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    const first = { uri: "file:///x.ts", startLine: 1, endLine: 1, severity: "note", message: "same", authorType: "ai" };
+    const second = { uri: "file:///x.ts", startLine: 2, endLine: 2, severity: "warning", message: "new", authorType: "ai" };
+
+    assert.equal(controller.addBatch([first]).length, 1);
+    assert.equal(controller.addBatch([first]).length, 0);
+    assert.equal(controller.addBatch([second]).length, 1);
+    assert.equal(controller.list().length, 2);
+
+    assert.equal(controller.discardLastBatch(), 1);
+    assert.deepEqual(controller.list().map((a) => a.message), ["same"]);
+    assert.equal(controller.discardLastBatch(), 1);
+    assert.equal(controller.list().length, 0);
+  });
+});
+
 test("AnnotationController.registerHumanComment uses annotation ids", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {

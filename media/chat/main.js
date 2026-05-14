@@ -367,8 +367,12 @@
       const heading = target.headingPath && target.headingPath.length ? " # " + target.headingPath.join(" › ") : "";
       return target.relativePath + ":" + target.startLine + "-" + target.endLine + heading;
     }
-    if (target.kind === "staged-changes") return "staged diff: " + (target.files ? target.files.length : 0) + " files";
-    if (target.kind === "commit") return "commit " + String(target.sha || "").slice(0, 7) + " " + (target.subject || "");
+    if (target.kind === "staged-changes") {
+      return "staged diff: " + (target.files ? target.files.length : 0) + " files" + (target.diffTruncated ? " (truncated)" : "");
+    }
+    if (target.kind === "commit") {
+      return "commit " + String(target.sha || "").slice(0, 7) + " " + (target.subject || "") + (target.diffTruncated ? " (diff truncated)" : "");
+    }
     return target.kind;
   }
 

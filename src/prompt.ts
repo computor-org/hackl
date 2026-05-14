@@ -102,13 +102,13 @@ function formatTarget(target: HacklTarget): string {
     }
     case "staged-changes": {
       const files = formatWorkspaceFiles(target.workspaceRoot, target.files);
-      const head = `- id=${target.id} staged-diff files=${target.files.length} workspace=${target.workspaceRoot}${files}`;
+      const head = `- id=${target.id} staged-diff files=${target.files.length} truncated=${target.diffTruncated ? "yes" : "no"} workspace=${target.workspaceRoot}${files}`;
       const trunc = target.diffTruncated ? "\n...(diff truncated)" : "";
       return `${head}\n\`\`\`diff\n${target.diff}${trunc}\n\`\`\``;
     }
     case "commit": {
       const files = formatWorkspaceFiles(target.workspaceRoot, target.files);
-      const head = `- id=${target.id} commit ${target.sha.slice(0, 12)} "${target.subject}" files=${target.files.length} workspace=${target.workspaceRoot}${files}`;
+      const head = `- id=${target.id} commit ${target.sha.slice(0, 12)} "${target.subject}" files=${target.files.length} truncated=${target.diffTruncated ? "yes" : "no"} workspace=${target.workspaceRoot}${files}`;
       const trunc = target.diffTruncated ? "\n...(diff truncated)" : "";
       return `${head}\n\`\`\`diff\n${target.diff}${trunc}\n\`\`\``;
     }

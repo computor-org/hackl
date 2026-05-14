@@ -32,7 +32,7 @@ import {
   describeTarget,
 } from "./basket";
 import { HacklAnnotation, AnnotationController, parseAnnotationsFromAnswer } from "./annotations";
-import { resolveTargetIdFor } from "./targetResolve";
+import { resolveTargetIdFor, targetRevealLocation } from "./targetResolve";
 import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
 import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./hacklSession";
 import { handleAnnotationReply, handleDeleteAnnotationThread } from "./annotationCommands";
@@ -157,17 +157,21 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     vscode.commands.registerCommand("hackl.revealTarget", async (id: string) => {
       const target = basketService!.list().find((t) => t.id === id);
       if (!target) return;
-      const uri = (target as { uri?: string }).uri;
-      const startLine = (target as { startLine?: number }).startLine;
-      const endLine = (target as { endLine?: number }).endLine;
-      if (!uri) return;
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(uri));
-      const editor = await vscode.window.showTextDocument(doc, { preview: false });
-      if (startLine !== undefined) {
-        const start = new vscode.Position(Math.max(0, startLine - 1), 0);
-        const end = new vscode.Position(Math.max(0, (endLine ?? startLine) - 1), 0);
-        editor.selection = new vscode.Selection(start, end);
-        editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+      const location = targetRevealLocation(target);
+      if (!location) return;
+      try {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(location.uri));
+        const editor = await vscode.window.showTextDocument(doc, { preview: false });
+        if (location.startLine !== undefined) {
+          const start = new vscode.Position(Math.max(0, location.startLine - 1), 0);
+          const end = new vscode.Position(Math.max(0, (location.endLine ?? location.startLine) - 1), 0);
+          editor.selection = new vscode.Selection(start, end);
+          editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+        }
+      } catch (error) {
+        vscode.window.showWarningMessage(
+          `Hackl: could not reveal ${describeTarget(target)} (${error instanceof Error ? error.message : String(error)}).`,
+        );
       }
     }),
     vscode.commands.registerCommand("hackl.reviewStagedChanges", async () => {
@@ -360,9 +364,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   if (createAnnotations && annotationController) {
     const parsed = parseAnnotationsFromAnswer(answer.content, defaultUriForAnnotations(targets), { aiModel: target.model });
     const withTargetIds = parsed.annotations.map((c) => ({ ...c, targetId: resolveTargetIdFor(c, targets) }));
-    annotationController.beginBatch();
-    createdAnnotations = withTargetIds.map((c) => annotationController!.add(c));
-    annotationController.recordBatch(createdAnnotations.map((c) => c.id));
+    createdAnnotations = annotationController.addBatch(withTargetIds);
     if (createdAnnotations.length > 0) {
       result.annotations = createdAnnotations;
       const dropSuffix = parsed.dropped.length > 0 ? ` · ${parsed.dropped.length} dropped` : "";

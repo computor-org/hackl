@@ -8,7 +8,7 @@ const path = require("node:path");
 const { BasketService } = require("../dist/basket.js");
 const { parseAnnotationsFromAnswer } = require("../dist/annotations.js");
 const { newHacklSessionId, persistHacklSession } = require("../dist/hacklSession.js");
-const { resolveTargetIdFor } = require("../dist/targetResolve.js");
+const { resolveTargetIdFor, targetRevealLocation } = require("../dist/targetResolve.js");
 
 test("resolveTargetIdFor prefers an enclosing range, falls back to same uri", () => {
   const targets = [
@@ -21,6 +21,36 @@ test("resolveTargetIdFor prefers an enclosing range, falls back to same uri", ()
   assert.equal(resolveTargetIdFor({ uri: "file:///z.ts", startLine: 1, endLine: 1 }, targets), undefined);
 });
 
+test("targetRevealLocation opens source ranges and first staged file", () => {
+  assert.deepEqual(
+    targetRevealLocation({
+      id: "src-1",
+      kind: "source-range",
+      uri: "file:///repo/a.ts",
+      startLine: 3,
+      endLine: 6,
+    }),
+    { uri: "file:///repo/a.ts", startLine: 3, endLine: 6 },
+  );
+  assert.deepEqual(
+    targetRevealLocation({
+      id: "staged-1",
+      kind: "staged-changes",
+      workspaceRoot: "/repo",
+      files: ["src/a.ts", "src/b.ts"],
+    }),
+    { uri: "file:///repo/src/a.ts" },
+  );
+  assert.equal(
+    targetRevealLocation({
+      id: "commit-1",
+      kind: "commit",
+      workspaceRoot: "/repo",
+      files: [],
+    }),
+    undefined,
+  );
+});
 
 test("parseAnnotationsFromAnswer tags annotations as AI with model", () => {
   const answer = [
