@@ -26,6 +26,18 @@ test("context command titles use user-facing context wording", () => {
   assert.equal(command(manifest, "hackl.addCurrentFileToContext")?.title, "Add Current File");
   assert.equal(command(manifest, "hackl.addStagedChangesToContext")?.title, "Add Staged Changes");
   assert.equal(command(manifest, "hackl.clearContext")?.title, "Clear Context");
+  assert.equal(command(manifest, "hackl.reviewStagedChanges")?.title, "Review Staged Changes");
+});
+
+test("comment editor enter submits and shift-enter inserts newline", () => {
+  const manifest = readManifest();
+  const enter = manifest.contributes.keybindings.find((item) => item.key === "enter" && item.command === "editor.action.submitComment");
+  const newline = manifest.contributes.keybindings.find((item) => item.key === "shift+enter" && item.command === "type");
+  assert.ok(enter);
+  assert.match(enter.when, /commentEditorFocused/);
+  assert.match(enter.when, /!commentIsEmpty/);
+  assert.ok(newline);
+  assert.deepEqual(newline.args, { text: "\n" });
 });
 
 test("annotation reply is the only custom comment editor action", () => {

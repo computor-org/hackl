@@ -25,7 +25,7 @@ test("media/chat/main.css exists and contains expected rules", () => {
 test("main.js still wires the key element ids the HTML shell renders", () => {
   const file = path.join(root, "media/chat/main.js");
   const src = fs.readFileSync(file, "utf8");
-  for (const id of ["form", "prompt", "thread", "send", "annotations-toggle", "annotations-discard", "mode-button", "basket-list", "basket-add-file"]) {
+  for (const id of ["form", "prompt", "thread", "send", "annotations-discard", "mode-button", "basket-list", "basket-add"]) {
     assert.match(src, new RegExp(`"${id}"`), `main.js missing id "${id}"`);
   }
   assert.match(src, /diffTruncated/);
@@ -37,12 +37,24 @@ test("chat UI uses context wording instead of visible basket wording", () => {
   const html = fs.readFileSync(htmlFile, "utf8");
   const js = fs.readFileSync(jsFile, "utf8");
   assert.match(html, />Context</);
-  assert.match(html, /Add current file/);
+  assert.match(html, /Attach context/);
   assert.match(html, /Clear context/);
   assert.doesNotMatch(html, /Targets</);
   assert.doesNotMatch(html, /Clear basket/);
   assert.doesNotMatch(html, /in the basket/);
   assert.doesNotMatch(js, /Review the basket/);
+});
+
+test("chat UI uses attach context menu instead of annotation toggle", () => {
+  const htmlFile = path.join(root, "src/chatHtml.ts");
+  const jsFile = path.join(root, "media/chat/main.js");
+  const html = fs.readFileSync(htmlFile, "utf8");
+  const js = fs.readFileSync(jsFile, "utf8");
+  assert.match(html, /title="Attach context"/);
+  assert.match(js, /"hackl\.attachContext"/);
+  assert.doesNotMatch(html, /annotations-toggle/);
+  assert.doesNotMatch(js, /annotationsToggle/);
+  assert.doesNotMatch(js, /setCreateAnnotations/);
 });
 
 test("connect hint follows explicit connection state instead of model text", () => {

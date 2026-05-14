@@ -57,14 +57,8 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
       <header class="basket-header">
         <span class="basket-title">Context</span>
         <span id="basket-count" class="basket-count"></span>
-        <button id="basket-add" class="basket-action" type="button" title="Add selection" aria-label="Add selection">
+        <button id="basket-add" class="basket-action" type="button" title="Attach context" aria-label="Attach context">
           <span class="codicon codicon-add" aria-hidden="true"></span>
-        </button>
-        <button id="basket-add-file" class="basket-action" type="button" title="Add current file" aria-label="Add current file">
-          <span class="codicon codicon-file-code" aria-hidden="true"></span>
-        </button>
-        <button id="basket-add-staged" class="basket-action" type="button" title="Add staged changes" aria-label="Add staged changes">
-          <span class="codicon codicon-git-commit" aria-hidden="true"></span>
         </button>
         <button id="basket-clear" class="basket-action" type="button" title="Clear context" aria-label="Clear context">
           <span class="codicon codicon-clear-all" aria-hidden="true"></span>
@@ -76,11 +70,8 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
       <div class="compose">
         <textarea id="prompt" placeholder="Message Hackl" rows="1"></textarea>
         <div class="compose-toolbar">
-          <button id="attach" class="tool-button" type="button" title="Add selection (Ctrl+Alt+A)" aria-label="Add selection">
+          <button id="attach" class="tool-button" type="button" title="Attach context" aria-label="Attach context">
             <span class="codicon codicon-add" aria-hidden="true"></span>
-          </button>
-          <button id="annotations-toggle" class="tool-button hidden-unavailable" type="button" title="Also produce line annotations (requires attached context)" aria-label="Create annotations" aria-pressed="false" disabled>
-            <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
           </button>
           <button id="annotations-discard" class="tool-button" type="button" title="Discard the last batch of AI annotations (Ctrl+Alt+Z)" aria-label="Discard last annotations" hidden>
             <span class="codicon codicon-discard" aria-hidden="true"></span>

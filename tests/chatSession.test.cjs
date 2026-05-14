@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   ChatSession,
+  DEFAULT_ANNOTATION_CONTEXT_PROMPT,
   DEFAULT_ANNOTATION_PROMPT,
   DEFAULT_REVIEW_PROMPT,
   parseSlashCommand,
@@ -55,6 +56,30 @@ test("ChatSession accepts empty prompts when annotations are requested", async (
   assert.deepEqual(posted.map((message) => message.type), ["status", "answer"]);
 });
 
+test("ChatSession accepts empty prompts when annotation context is attached", async () => {
+  const calls = [];
+  const posted = [];
+  const target = { id: "ann", kind: "source-range", metadata: { note: "please clarify" } };
+  const basket = {
+    snapshot: () => ({ targets: [target] }),
+    onDidChange: () => ({ dispose() {} }),
+    remove: () => undefined,
+    clear: () => undefined,
+  };
+  const session = new ChatSession(async ({ prompt, targets, options }) => {
+    calls.push({ prompt, targets, createAnnotations: options.createAnnotations });
+    return "answer";
+  }, basket);
+
+  await session.handle({ type: "prompt", prompt: "   " }, (message) => {
+    posted.push(message);
+    return Promise.resolve(true);
+  });
+
+  assert.deepEqual(calls, [{ prompt: DEFAULT_ANNOTATION_CONTEXT_PROMPT, targets: [target], createAnnotations: false }]);
+  assert.deepEqual(posted.map((message) => message.type), ["status", "answer"]);
+});
+
 test("parseSlashCommand recognizes only exact review command", () => {
   assert.deepEqual(parseSlashCommand("/review"), {
     kind: "review",
@@ -75,9 +100,31 @@ test("parseSlashCommand recognizes only exact review command", () => {
   });
 });
 
+test("ChatSession treats non-exact review text as normal chat", async () => {
+  const calls = [];
+  const session = new ChatSession(async ({ prompt, mode, options }) => {
+    calls.push({ prompt, mode, createAnnotations: options.createAnnotations });
+    return "answer";
+  });
+
+  await session.handle({ type: "prompt", prompt: "/review file", mode: "work" }, () => Promise.resolve(true));
+  await session.handle({ type: "prompt", prompt: "review this", mode: "edit" }, () => Promise.resolve(true));
+
+  assert.deepEqual(calls, [
+    { prompt: "/review file", mode: "work", createAnnotations: false },
+    { prompt: "review this", mode: "edit", createAnnotations: false },
+  ]);
+});
+
 test("ChatSession /review forces Ask mode and annotations", async () => {
   const calls = [];
-  const target = { id: "src", kind: "source-range" };
+  const target = {
+    id: "src",
+    kind: "source-range",
+    relativePath: "src/a.ts",
+    startLine: 2,
+    endLine: 8,
+  };
   const posted = [];
   const session = new ChatSession(
     async ({ prompt, mode, options, targets }) => {
@@ -99,7 +146,27 @@ test("ChatSession /review forces Ask mode and annotations", async () => {
     createAnnotations: true,
     targets: [target],
   }]);
-  assert.deepEqual(posted.map((message) => message.type), ["status", "answer"]);
+  assert.deepEqual(posted.map((message) => message.type), ["status", "status", "answer"]);
+  assert.match(posted[1].text, /Reviewing:\n- src/);
+});
+
+test("ChatSession /review reports missing review targets", async () => {
+  const posted = [];
+  const session = new ChatSession(
+    async () => "answer",
+    undefined,
+    async () => ({ error: "Stage changes, attach context, or open a file first." }),
+  );
+
+  await session.handle({ type: "prompt", prompt: "/review", mode: "work" }, (message) => {
+    posted.push(message);
+    return Promise.resolve(true);
+  });
+
+  assert.deepEqual(posted, [
+    { type: "status", text: "Preprocessing..." },
+    { type: "error", text: "Stage changes, attach context, or open a file first." },
+  ]);
 });
 
 test("ChatSession replays and clears history", async () => {

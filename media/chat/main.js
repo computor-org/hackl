@@ -13,11 +13,8 @@
   const basketList = document.getElementById("basket-list");
   const basketCount = document.getElementById("basket-count");
   const basketAdd = document.getElementById("basket-add");
-  const basketAddFile = document.getElementById("basket-add-file");
-  const basketAddStaged = document.getElementById("basket-add-staged");
   const basketClear = document.getElementById("basket-clear");
   const attachButton = document.getElementById("attach");
-  const annotationsToggle = document.getElementById("annotations-toggle");
   const modeButton = document.getElementById("mode-button");
   const modeMenu = document.getElementById("mode-menu");
   const modeLabel = document.getElementById("mode-label");
@@ -28,10 +25,9 @@
   let assistantDraft;
   let isBusy = false;
   let selectedMode = "ask";
-  let annotationsOn = false;
-  let annotationsAvailable = false;
+  let annotationContextAvailable = false;
   const pendingQueue = [];
-  const annotationOnlyPrompt = "Review the attached context and produce Hackl annotations.";
+  const annotationContextPrompt = "Address the attached annotation comments.";
 
   installMath(md);
   autoResize();
@@ -42,20 +38,20 @@
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const text = prompt.value.trim();
-    const promptText = text || (annotationsOn && annotationsAvailable ? annotationOnlyPrompt : "");
+    const promptText = text || (annotationContextAvailable ? annotationContextPrompt : "");
     if (!promptText) return;
     const entry = appendUser(promptText);
     prompt.value = "";
     autoResize();
     focusPrompt();
     if (isBusy) {
-      const item = { text: promptText, mode: selectedMode, createAnnotations: annotationsOn, entry };
+      const item = { text: promptText, mode: selectedMode, entry };
       pendingQueue.push(item);
       markQueued(entry, true, () => removeQueuedItem(item));
       updateSendState();
       return;
     }
-    sendPrompt(promptText, selectedMode, annotationsOn);
+    sendPrompt(promptText, selectedMode);
   });
 
   send.addEventListener("click", (event) => {
@@ -104,7 +100,7 @@
 
   if (attachButton) {
     attachButton.addEventListener("click", () => {
-      vscode.postMessage({ type: "runCommand", value: "hackl.addSelectionToContext" });
+      vscode.postMessage({ type: "runCommand", value: "hackl.attachContext" });
       focusPrompt();
     });
   }
@@ -116,18 +112,10 @@
     });
   }
 
-  if (annotationsToggle) {
-    annotationsToggle.addEventListener("click", () => {
-      if (annotationsToggle.disabled) return;
-      setAnnotations(!annotationsOn);
-      focusPrompt();
-    });
-  }
-
   function updateComboStrip() {
     if (send) {
       const tier = { ask: "read", edit: "read+edit", work: "read+edit+search", agent: "read+edit+search+cmd" }[selectedMode] || selectedMode;
-      send.title = "Send · " + selectedMode + " (" + tier + ")" + (annotationsOn ? " + annotations" : "");
+      send.title = "Send · " + selectedMode + " (" + tier + ")";
     }
   }
 
@@ -141,17 +129,7 @@
 
   if (basketAdd) {
     basketAdd.addEventListener("click", () => {
-      vscode.postMessage({ type: "runCommand", value: "hackl.addSelectionToContext" });
-    });
-  }
-  if (basketAddFile) {
-    basketAddFile.addEventListener("click", () => {
-      vscode.postMessage({ type: "runCommand", value: "hackl.addCurrentFileToContext" });
-    });
-  }
-  if (basketAddStaged) {
-    basketAddStaged.addEventListener("click", () => {
-      vscode.postMessage({ type: "runCommand", value: "hackl.addStagedChangesToContext" });
+      vscode.postMessage({ type: "runCommand", value: "hackl.attachContext" });
     });
   }
   if (basketClear) {
@@ -240,9 +218,6 @@
       prompt.focus();
       autoResize();
     }
-    if (message.type === "setCreateAnnotations") {
-      setAnnotations(Boolean(message.value));
-    }
     if (message.type === "focusInput") {
       requestAnimationFrame(() => {
         prompt.focus();
@@ -271,13 +246,12 @@
     }
   });
 
-  function sendPrompt(text, mode, createAnnotations) {
+  function sendPrompt(text, mode) {
     setBusy(true);
     vscode.postMessage({
       type: "prompt",
       prompt: text,
       mode: normalizeMode(mode),
-      createAnnotations: Boolean(createAnnotations),
     });
   }
 
@@ -285,39 +259,13 @@
     return ["edit", "work", "agent"].includes(mode) ? mode : "ask";
   }
 
-  function updateAnnotationsAvailable(targets) {
-    if (!annotationsToggle) return;
-    const anchorable = targets.some(canAnnotateTarget);
-    annotationsAvailable = anchorable;
-    annotationsToggle.disabled = !anchorable;
-    annotationsToggle.classList.toggle("hidden-unavailable", !anchorable);
-    if (!anchorable && annotationsOn) {
-      annotationsOn = false;
-      annotationsToggle.setAttribute("aria-pressed", "false");
-      updateComboStrip();
-    }
-    annotationsToggle.title = annotationsOn
-      ? "Annotations ON - model will also emit line annotations"
-      : "Also produce line annotations";
+  function updateAnnotationContextAvailable(targets) {
+    annotationContextAvailable = targets.some(hasAnnotationNote);
     updateSendState();
   }
 
-  function canAnnotateTarget(target) {
-    return target.kind === "source-range"
-      || target.kind === "markdown-section"
-      || target.kind === "staged-changes"
-      || target.kind === "commit";
-  }
-
-  function setAnnotations(value) {
-    if (!annotationsToggle || annotationsToggle.disabled) return;
-    annotationsOn = Boolean(value);
-    annotationsToggle.setAttribute("aria-pressed", String(annotationsOn));
-    annotationsToggle.title = annotationsOn
-      ? "Annotations ON - model will also emit line annotations"
-      : "Also produce line annotations";
-    updateComboStrip();
-    updateSendState();
+  function hasAnnotationNote(target) {
+    return Boolean(target && target.metadata && target.metadata.note);
   }
 
   function renderBasket(targets) {
@@ -326,7 +274,7 @@
     const hasTargets = targets.length > 0;
     basketSection.hidden = !hasTargets;
     if (basketCount) basketCount.textContent = hasTargets ? String(targets.length) : "";
-    updateAnnotationsAvailable(targets);
+    updateAnnotationContextAvailable(targets);
     for (const target of targets) {
       const item = document.createElement("li");
       item.className = "basket-item";
@@ -436,7 +384,7 @@
       return;
     }
     markQueued(next.entry, false);
-    sendPrompt(next.text, next.mode, next.createAnnotations);
+    sendPrompt(next.text, next.mode);
   }
 
   function markQueued(entry, queued, onRemove) {
@@ -548,10 +496,10 @@
     }
     send.classList.remove("stop");
     setSendIcon("arrow-up");
-    send.title = "Send (Enter)" + (annotationsOn ? " + annotations" : "");
+    send.title = "Send (Enter)";
     send.setAttribute("aria-label", "Send");
     const hasText = prompt.value.trim().length > 0;
-    send.disabled = !(hasText || (annotationsOn && annotationsAvailable));
+    send.disabled = !(hasText || annotationContextAvailable);
   }
 
   function setSendIcon(name) {

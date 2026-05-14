@@ -48,30 +48,38 @@ function freshReviewTargets() {
   return require("../dist/reviewTargets.js");
 }
 
-test("resolveReviewTargets returns attached context before editor selection", async () => {
+test("resolveReviewTargets reviews staged changes when present", async () => {
+  const staged = { id: "staged", kind: "staged-changes", files: ["a.ts"] };
+  await withVscode(makeVscode(makeEditor(false)), async () => {
+    const { resolveReviewTargets } = freshReviewTargets();
+    const result = await resolveReviewTargets({ list: () => [] }, async () => staged);
+    assert.deepEqual(result, [staged]);
+  });
+});
+
+test("resolveReviewTargets reviews attached context when nothing is staged", async () => {
   const attached = { id: "attached", kind: "source-range" };
   await withVscode(makeVscode(makeEditor(false)), async () => {
     const { resolveReviewTargets } = freshReviewTargets();
-    const result = await resolveReviewTargets({ list: () => [attached] });
+    const result = await resolveReviewTargets({ list: () => [attached] }, async () => ({ error: "No staged changes." }));
     assert.deepEqual(result, [attached]);
   });
 });
 
-test("resolveReviewTargets uses selection before current file", async () => {
+test("resolveReviewTargets reviews staged changes plus attached context", async () => {
+  const staged = { id: "staged", kind: "staged-changes", files: ["a.ts"] };
+  const attached = { id: "attached", kind: "source-range" };
   await withVscode(makeVscode(makeEditor(false)), async () => {
     const { resolveReviewTargets } = freshReviewTargets();
-    const result = await resolveReviewTargets({ list: () => [] });
-    assert.equal(result.length, 1);
-    assert.equal(result[0].kind, "source-range");
-    assert.match(result[0].id, /^src-/);
-    assert.equal(result[0].metadata, undefined);
+    const result = await resolveReviewTargets({ list: () => [attached] }, async () => staged);
+    assert.deepEqual(result, [staged, attached]);
   });
 });
 
 test("resolveReviewTargets falls back to current file", async () => {
   await withVscode(makeVscode(makeEditor(true)), async () => {
     const { resolveReviewTargets } = freshReviewTargets();
-    const result = await resolveReviewTargets({ list: () => [] });
+    const result = await resolveReviewTargets({ list: () => [] }, async () => ({ error: "No staged changes." }));
     assert.equal(result.length, 1);
     assert.equal(result[0].kind, "source-range");
     assert.match(result[0].id, /^file-/);
@@ -81,10 +89,20 @@ test("resolveReviewTargets falls back to current file", async () => {
   });
 });
 
+test("resolveReviewTargets uses current file instead of selection fallback", async () => {
+  await withVscode(makeVscode(makeEditor(false)), async () => {
+    const { resolveReviewTargets } = freshReviewTargets();
+    const result = await resolveReviewTargets({ list: () => [] }, async () => ({ error: "No staged changes." }));
+    assert.equal(result.length, 1);
+    assert.match(result[0].id, /^file-/);
+    assert.deepEqual(result[0].metadata, { scope: "current-file" });
+  });
+});
+
 test("resolveReviewTargets reports missing context", async () => {
   await withVscode(makeVscode(undefined), async () => {
     const { resolveReviewTargets } = freshReviewTargets();
-    const result = await resolveReviewTargets({ list: () => [] });
-    assert.deepEqual(result, { error: "Select code or attach context first." });
+    const result = await resolveReviewTargets({ list: () => [] }, async () => ({ error: "No staged changes." }));
+    assert.deepEqual(result, { error: "Stage changes, attach context, or open a file first." });
   });
 });

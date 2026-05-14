@@ -8,7 +8,7 @@ history.
 
 Hackl is built around four objects:
 
-- Basket: what Hackl should talk about.
+- Context: what Hackl should talk about.
 - Ask/Edit/Work/Agent: what Hackl may do.
 - Annotations: optional structured feedback anchored to source lines.
 - Git: the diff and history layer.
@@ -24,11 +24,10 @@ sign-in. Hosted APIs are not the product story.
 - Local Markdown, code, and LaTeX math rendering in chat.
 - Active editor metadata, cursor position, selection range, and capped selected
   text in the prompt.
-- Context basket targets for source ranges, staged changes, the last commit,
-  and Markdown sections.
+- Context targets for source ranges, staged changes, the last commit, and
+  Markdown sections.
 - Ask/Edit/Work/Agent modes with mode-specific tools.
-- Optional annotation generation independent of mode.
-- Staged review command that runs Ask with annotations over staged changes.
+- `/review`: pre-commit review, falling back to the current file.
 - Hackl session persistence under `.hackl/sessions/` for annotation runs.
 
 Not in scope:
@@ -59,18 +58,18 @@ Set `hackl.endpoint` to the server base URL, for example
 If `hackl.endpoint` is not localhost or loopback, Hackl asks before sending a
 prompt or selected context.
 
-## Basket
+## Context
 
-The basket is the explicit context for a chat turn. Hackl can include these
-target kinds:
+Context is the explicit scope for a chat turn. Hackl can include these target
+kinds:
 
 - `source-range`: selected code from an editor.
 - `staged-changes`: current Git index diff.
 - `commit`: last commit diff.
 - `markdown-section`: the Markdown section under the cursor.
 
-Add targets from the chat toolbar, editor context menu, command palette, or SCM
-title action. Basket labels are clickable and reveal the target in the editor.
+Attach context from the chat toolbar, editor context menu, command palette, or
+SCM title action. Context labels are clickable and reveal the target in the editor.
 Clearing chat does not clear Git history; Git remains the durable review layer.
 
 By default, Hackl does not send whole open files. It sends metadata and selected
@@ -96,33 +95,28 @@ Edit, Work, and Agent produce normal file edits. Review them with `git diff`.
 
 ## Annotations
 
-Annotations are optional structured feedback. They are not a mode. Turn on the
-annotations toggle when the basket contains a source or Markdown target.
-
-When annotations are enabled, Hackl asks the model for a fenced
-`hackl-annotations` JSON block. Valid entries become VS Code comment threads
-anchored to file lines. Invalid JSON, missing URIs, bad ranges, dropped entries,
-and missing annotation blocks are reported instead of silently ignored.
+Annotations are structured review feedback. `/review` asks the model for a
+fenced `hackl-annotations` JSON block. Valid entries become VS Code comment
+threads anchored to file lines. Invalid JSON, missing URIs, bad ranges, dropped
+entries, and missing annotation blocks are reported instead of silently ignored.
 
 Use `Hackl: Discard Last Annotations Batch` or `Ctrl+Alt+Z` to remove the most
 recent AI annotation batch. Use `Hackl: Clear Annotations` to clear all current
 annotation threads.
 
 Replies on annotation threads attach that source range and note back to the
-basket, then reopen chat for follow-up.
+context, then reopen chat for follow-up.
 
-## Staged Review
+## Review
 
-`Hackl: Review Staged Changes (Ask + Annotations)` is the Git review loop:
+`/review` reviews staged changes with any attached context. If nothing is staged
+or attached, it reviews the current file.
 
-1. Read staged changes from Git.
-2. Clear the basket.
-3. Add the staged diff target.
-4. Open chat with the review prompt prefilled.
-5. Enable annotations for line-anchored findings.
+`Hackl: Review Staged Changes` is the command-palette entry for the same
+pre-commit review loop.
 
-Stage first, run the command, send the prompt, inspect annotations, then use
-Git to amend, unstage, or commit.
+Stage first, run `/review`, inspect annotations, then use Git to amend, unstage,
+or commit.
 
 ## Sessions
 
@@ -141,10 +135,10 @@ startup.
 - `Hackl: Add Markdown Section to Context`
 - `Hackl: Add Staged Changes to Context`
 - `Hackl: Add Last Commit to Context`
-- `Hackl: Clear Context Basket`
+- `Hackl: Clear Context`
 - `Hackl: Clear Annotations`
 - `Hackl: Discard Last Annotations Batch`
-- `Hackl: Review Staged Changes (Ask + Annotations)`
+- `Hackl: Review Staged Changes`
 
 ## Settings
 
@@ -160,7 +154,7 @@ startup.
 
 Hackl keeps boundaries small:
 
-- `basket.ts`: target model and basket state.
+- `basket.ts`: internal context target model and state.
 - `prompt.ts`: Ask/Edit/Work/Agent prompt assembly.
 - `annotations.ts`: annotation parsing and VS Code comment threads.
 - `gitTargets.ts`: staged and commit targets.
@@ -168,7 +162,7 @@ Hackl keeps boundaries small:
 - `toolLoop.ts` and `workspaceTools.ts`: bounded model tools.
 - `extension.ts`: VS Code command wiring.
 
-The public extension API exposes basket operations and session events. It does
+The public extension API exposes context operations and session events. It does
 not expose a review-specific mode or context API.
 
 ## Development

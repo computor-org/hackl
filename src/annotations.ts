@@ -83,7 +83,7 @@ export class AnnotationController {
     this.controller = this.vscode.comments.createCommentController("hackl.annotations", "Hackl Annotations");
     this.controller.options = {
       prompt: "Comment",
-      placeHolder: "Comment. Enter submits, Ctrl+Enter for newline.",
+      placeHolder: "Comment. Enter submits, Shift+Enter for newline.",
     };
     const VscRange = this.vscode.Range;
     this.controller.commentingRangeProvider = {

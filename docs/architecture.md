@@ -5,7 +5,7 @@ The durable foundation is independent of the current chat surface:
 
 - `ChatBackend` owns the OpenAI-compatible `/chat/completions` contract.
 - `resolveChatTarget` owns endpoint discovery and loaded-model resolution.
-- `buildHacklMessages` owns prompt assembly from editor metadata, basket
+- `buildHacklMessages` owns prompt assembly from editor metadata, context
   targets, annotation options, and transcript.
 - `completeWithTools` owns the Qwen-friendly tool loop.
 - `ChatViewProvider` is the current UI shell only.
@@ -30,14 +30,14 @@ requires an alias, Hackl uses the first alias advertised by the gateway error.
 No hosted-provider adapters, API presets, custom history layer, or auto-approved
 command mode belong in this phase.
 
-## Basket, Context, And Tools
+## Context And Tools
 
 Hackl now keeps the default prompt small. A normal chat turn includes:
 
 - active/open file paths;
 - active cursor line and column;
 - selection range and selected text capped at 4000 characters;
-- explicit basket targets when present;
+- explicit context targets when present;
 - recent chat transcript;
 - a compact `HACKL_TOOL` contract.
 
@@ -55,12 +55,11 @@ Hackl has four modes:
 - Work: search, read, and edit without shell commands.
 - Agent: search, read, edit, and approved structured commands.
 
-Modes control capability only. Annotation generation is a separate request
-option. When enabled, Hackl asks for a `hackl-annotations` JSON block, parses it
-into VS Code comment threads, and persists the finished Hackl session under
-`.hackl/sessions/` when configured.
+Modes control capability only. `/review` asks for a `hackl-annotations` JSON
+block, parses it into VS Code comment threads, and persists the finished Hackl
+session under `.hackl/sessions/` when configured.
 
-Current basket target kinds are:
+Current context target kinds are:
 
 - `source-range`
 - `staged-changes`
@@ -141,8 +140,8 @@ The renderer should stay small and local:
 - gray reasoning display from `<think>` or reasoning deltas;
 - estimated input-token/context-window meter;
 - clear busy/error states, Enter-to-send, and transcript clearing;
-- compact basket controls;
-- annotation toggle and discard-last-annotations control;
+- compact context controls;
+- discard-last-annotations control;
 - future room for `@luna` and `@tutor`.
 
 Native VS Code chat remains a candidate once the product needs deeper built-in

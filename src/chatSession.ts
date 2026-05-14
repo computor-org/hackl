@@ -3,6 +3,7 @@ import type { BasketSnapshot, HacklTarget } from "./basket";
 import type { HacklAnnotation } from "./annotations";
 
 export const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
+  "hackl.attachContext",
   "hackl.addSelectionToContext",
   "hackl.addCurrentFileToContext",
   "hackl.addMarkdownSectionToContext",
@@ -33,6 +34,7 @@ export interface HacklRequestOptions {
 }
 
 export const DEFAULT_ANNOTATION_PROMPT = "Review the attached context and produce Hackl annotations.";
+export const DEFAULT_ANNOTATION_CONTEXT_PROMPT = "Address the attached annotation comments.";
 export const DEFAULT_REVIEW_PROMPT = "Review the selected context for correctness, regressions, missing tests, risky assumptions, unclear code, and maintainability. Add concise line-anchored annotations for concrete findings. Do not edit files.";
 
 export type ParsedCommand =
@@ -67,7 +69,6 @@ export type ChatOutgoingMessage =
   | { type: "basket"; targets: HacklTarget[] }
   | { type: "userPrompt"; text: string }
   | { type: "setPromptText"; text: string }
-  | { type: "setCreateAnnotations"; value: boolean }
   | ChatState
   | { type: "focusInput" };
 
@@ -210,9 +211,12 @@ export class ChatSession {
     post: ChatPost,
   ): Promise<void> {
     const parsed = parseSlashCommand(rawPrompt ?? "");
+    const hasAnnotationContext = hasAnnotationNoteTargets(this.basket?.snapshot().targets ?? []);
     const prompt = parsed.kind === "review"
       ? parsed.prompt
-      : rawPrompt?.trim() || (options.createAnnotations ? DEFAULT_ANNOTATION_PROMPT : "");
+      : rawPrompt?.trim()
+        || (options.createAnnotations ? DEFAULT_ANNOTATION_PROMPT : "")
+        || (hasAnnotationContext ? DEFAULT_ANNOTATION_CONTEXT_PROMPT : "");
     if (!prompt) {
       return;
     }
@@ -232,6 +236,9 @@ export class ChatSession {
         this.history.pop();
         await post({ type: "error", text: targets.error });
         return;
+      }
+      if (parsed.kind === "review") {
+        await post({ type: "status", text: describeReviewTargets(targets) });
       }
       const progress = (event: PromptProgress) => {
         if (controller.signal.aborted) return;
@@ -314,6 +321,32 @@ export class ChatSession {
     }
     this.approvals.clear();
   }
+}
+
+function hasAnnotationNoteTargets(targets: HacklTarget[]): boolean {
+  return targets.some((target) => Boolean((target.metadata as { note?: string } | undefined)?.note));
+}
+
+function describeReviewTargets(targets: HacklTarget[]): string {
+  const lines = ["Reviewing:"];
+  for (const target of targets) {
+    lines.push(`- ${describeReviewTarget(target)}`);
+  }
+  return lines.join("\n");
+}
+
+function describeReviewTarget(target: HacklTarget): string {
+  if (target.kind === "staged-changes") {
+    return `staged changes: ${target.files.length} file${target.files.length === 1 ? "" : "s"}`;
+  }
+  if (target.kind === "source-range") {
+    return `${target.relativePath} lines ${target.startLine}-${target.endLine}`;
+  }
+  if (target.kind === "markdown-section") {
+    const heading = target.headingPath.length ? ` section "${target.headingPath.join(" > ")}"` : "";
+    return `${target.relativePath}${heading} lines ${target.startLine}-${target.endLine}`;
+  }
+  return `commit ${target.sha.slice(0, 7)}: ${target.files.length} file${target.files.length === 1 ? "" : "s"}`;
 }
 
 function normalizeMode(mode: PromptMode | undefined): PromptMode {

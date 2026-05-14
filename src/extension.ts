@@ -99,6 +99,19 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       const uri = vscode.Uri.joinPath(context.extensionUri, "docs", file);
       await vscode.commands.executeCommand("markdown.showPreview", uri);
     }),
+    vscode.commands.registerCommand("hackl.attachContext", async () => {
+      const picked = await vscode.window.showQuickPick(
+        [
+          { label: "Selection", command: "hackl.addSelectionToContext" },
+          { label: "Current file", command: "hackl.addCurrentFileToContext" },
+          { label: "Staged changes", command: "hackl.addStagedChangesToContext" },
+          { label: "Last commit", command: "hackl.addLastCommitToContext" },
+          { label: "Markdown section", command: "hackl.addMarkdownSectionToContext" },
+        ],
+        { title: "Attach context", placeHolder: "Choose what Hackl should include" },
+      );
+      if (picked) await vscode.commands.executeCommand(picked.command);
+    }),
     vscode.commands.registerCommand("hackl.replyToAnnotationThread", async (reply: vscode.CommentReply) => {
       if (!basketService || !annotationController) return;
       await handleAnnotationReply(reply, basketService, annotationController);
@@ -200,16 +213,9 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       }
     }),
     vscode.commands.registerCommand("hackl.reviewStagedChanges", async () => {
-      const result = await buildStagedChangesTarget();
-      if ("error" in result) {
-        vscode.window.showWarningMessage(`Hackl: ${result.error}`);
-        return;
-      }
-      basketService!.clear();
-      basketService!.add(result);
       await vscode.commands.executeCommand("hackl.chat");
       chatViewProvider.setPromptText("/review");
-      chatViewProvider.notifyStatus("Attached staged changes. Press Send to run /review.");
+      chatViewProvider.notifyStatus("/review: staged changes plus attached context, else current file.");
     }),
   );
 
