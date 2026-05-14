@@ -20,6 +20,11 @@ test("annotation comment commands are not globally disabled", () => {
   }
 });
 
+test("Hackl activates immediately so editor comment ranges survive startup", () => {
+  const manifest = readManifest();
+  assert.deepEqual(manifest.activationEvents, ["onLanguage"]);
+});
+
 test("context command titles use user-facing context wording", () => {
   const manifest = readManifest();
   assert.equal(command(manifest, "hackl.addSelectionToContext")?.title, "Add Selection");

@@ -87,8 +87,11 @@ export class AnnotationController {
     };
     const VscRange = this.vscode.Range;
     this.controller.commentingRangeProvider = {
-      provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.Range[] {
-        return [new VscRange(0, 0, Math.max(0, document.lineCount - 1), 0)];
+      provideCommentingRanges(document: vscodeTypes.TextDocument): vscodeTypes.CommentingRanges {
+        return {
+          enableFileComments: false,
+          ranges: [new VscRange(0, 0, Math.max(0, document.lineCount - 1), 0)],
+        };
       },
     };
   }

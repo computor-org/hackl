@@ -81,6 +81,22 @@ test("AnnotationController.discardLastBatch removes only the most recent batch",
   });
 });
 
+test("AnnotationController provides editor line comment ranges without file comments", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    const provider = controller.controller.commentingRangeProvider;
+
+    const ranges = provider.provideCommentingRanges({ lineCount: 42 });
+
+    assert.equal(ranges.enableFileComments, false);
+    assert.equal(ranges.ranges.length, 1);
+    assert.deepEqual(ranges.ranges[0].start, { line: 0, character: 0 });
+    assert.deepEqual(ranges.ranges[0].end, { line: 41, character: 0 });
+  });
+});
+
 test("AnnotationController.add dedupes by location + message + severity + authorType", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
