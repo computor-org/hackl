@@ -106,18 +106,40 @@ async function firstRunPrompt(context: vscode.ExtensionContext): Promise<void> {
     }
     return;
   }
+  // BYO: if the user has configured an endpoint, or any local server is already
+  // answering, don't surface the install prompt at all.
+  const config = vscode.workspace.getConfiguration("hackl");
+  const configuredEndpoint = (config.get<string>("endpoint", "") || "").trim();
+  if (configuredEndpoint) return;
   const target = await resolveChatTarget({ endpoint: "", endpointConfigured: false }).catch(() => undefined);
-  if (target && target.model && target.model !== "local-model") {
-    return; // user has an external server running; don't nag.
-  }
+  if (target && target.model && target.model !== "local-model") return;
+
   const pick = await vscode.window.showInformationMessage(
-    "Hackl can install llama.cpp and run a local model tuned for your hardware.",
+    "Hackl can install llama.cpp and run a local model tuned for your hardware. You can also point it at an existing endpoint.",
     "Set up local model",
+    "Use my own endpoint",
     "Not now",
   );
   if (pick === "Set up local model") {
     openWizard(context, serverManager);
+  } else if (pick === "Use my own endpoint") {
+    await promptForBringYourOwnEndpoint();
   }
+}
+
+async function promptForBringYourOwnEndpoint(): Promise<void> {
+  const value = await vscode.window.showInputBox({
+    title: "Hackl: OpenAI-compatible endpoint",
+    prompt: "Base URL of an existing local server (e.g. http://localhost:1234/v1)",
+    placeHolder: "http://localhost:1234/v1",
+    validateInput: (v) => {
+      const trimmed = v.trim();
+      if (!trimmed) return "Enter a URL or cancel.";
+      try { new URL(trimmed); return null; } catch { return "Not a valid URL."; }
+    },
+  });
+  if (!value) return;
+  await vscode.workspace.getConfiguration("hackl").update("endpoint", value.trim(), vscode.ConfigurationTarget.Global);
 }
 
 export async function deactivate(): Promise<void> {

@@ -4,6 +4,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const http = require("node:http");
+const crypto = require("node:crypto");
 const { downloadFile, isCancellation } = require("../../dist/server/installer.js");
 
 test("downloadFile aborts when isCancelled returns true", async () => {
@@ -41,4 +42,45 @@ test("downloadFile aborts when isCancelled returns true", async () => {
   assert.ok(isCancellation(err), `expected cancellation, got ${err && err.message}`);
   // The partial file should NOT have been renamed to the final destination.
   assert.equal(fs.existsSync(dest), false);
+});
+
+test("downloadFile rejects on sha256 mismatch and deletes the partial file", async () => {
+  const payload = Buffer.from("hello hackl");
+  const srv = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-length": String(payload.length) });
+    res.end(payload);
+  });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const port = srv.address().port;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hackl-sha-"));
+  const dest = path.join(dir, "out.bin");
+  const sink = { message: () => undefined, fraction: () => undefined };
+  const bogusSha = "0".repeat(64);
+  let err;
+  try {
+    await downloadFile(`http://127.0.0.1:${port}/x`, dest, sink, fetch, bogusSha);
+  } catch (e) {
+    err = e;
+  }
+  srv.close();
+  assert.ok(err && /sha256 mismatch/i.test(err.message), `expected sha mismatch, got ${err && err.message}`);
+  assert.equal(fs.existsSync(dest), false);
+  assert.equal(fs.existsSync(dest + ".part"), false);
+});
+
+test("downloadFile passes on matching sha256", async () => {
+  const payload = Buffer.from("hello hackl");
+  const expected = crypto.createHash("sha256").update(payload).digest("hex");
+  const srv = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-length": String(payload.length) });
+    res.end(payload);
+  });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const port = srv.address().port;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hackl-sha-ok-"));
+  const dest = path.join(dir, "out.bin");
+  const sink = { message: () => undefined, fraction: () => undefined };
+  await downloadFile(`http://127.0.0.1:${port}/x`, dest, sink, fetch, expected);
+  srv.close();
+  assert.equal(fs.readFileSync(dest, "utf8"), "hello hackl");
 });

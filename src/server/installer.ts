@@ -10,6 +10,7 @@ export interface ReleaseAsset {
   name: string;
   browser_download_url: string;
   size: number;
+  digest?: string; // GitHub API: "sha256:<64-hex>"
 }
 
 export interface ReleaseInfo {
@@ -50,26 +51,42 @@ export function selectAsset(hw: HardwareProfile, assets: ReleaseAsset[]): Releas
   return undefined;
 }
 
+// Patterns target the May 2026 llama.cpp release naming
+// (`llama-<tag>-bin-<platform>-<backend>.{tar.gz,zip}`).
+// Order encodes backend preference per host.
 export function assetPatterns(hw: HardwareProfile): RegExp[] {
   const out: RegExp[] = [];
   if (hw.platform === "darwin") {
-    const arch = hw.arch === "arm64" ? "arm64" : "x64";
-    out.push(new RegExp(`macos-${arch}\\.zip$`, "i"));
+    if (hw.arch === "arm64") {
+      out.push(/bin-macos-arm64(?:-kleidiai)?\.tar\.gz$/i);
+    } else {
+      out.push(/bin-macos-x64\.tar\.gz$/i);
+    }
     return out;
   }
   if (hw.platform === "linux") {
-    if (hw.backend === "cuda") out.push(/ubuntu-x64-cuda(?!-dlls).*\.zip$/i);
-    if (hw.backend === "rocm") out.push(/ubuntu-x64-(hip|rocm).*\.zip$/i);
-    out.push(/ubuntu-x64-vulkan.*\.zip$/i);
-    out.push(/ubuntu-x64-cpu.*\.zip$/i);
-    if (hw.arch === "arm64") out.unshift(/linux-arm64.*\.zip$/i);
+    if (hw.arch === "arm64") {
+      out.push(/bin-ubuntu-vulkan-arm64\.tar\.gz$/i);
+      out.push(/bin-ubuntu-arm64\.tar\.gz$/i);
+      return out;
+    }
+    if (hw.backend === "rocm") out.push(/bin-ubuntu-rocm-[\d.]+-x64\.tar\.gz$/i);
+    // No CUDA-specific Linux archive in current releases; Vulkan covers NVIDIA fine.
+    if (hw.backend === "cuda" || hw.backend === "vulkan") {
+      out.push(/bin-ubuntu-vulkan-x64\.tar\.gz$/i);
+    }
+    out.push(/bin-ubuntu-x64\.tar\.gz$/i); // CPU fallback
     return out;
   }
   // win32
-  if (hw.backend === "cuda") out.push(/win-cuda-13.*\.zip$/i, /win-cuda-12.*\.zip$/i);
-  if (hw.backend === "rocm") out.push(/win-hip.*\.zip$/i);
-  out.push(/win-vulkan.*\.zip$/i);
-  out.push(/win-cpu.*\.zip$/i);
+  const winArch = hw.arch === "arm64" ? "arm64" : "x64";
+  if (hw.backend === "cuda") {
+    out.push(new RegExp(`bin-win-cuda-13[\\.\\d]*-${winArch}\\.zip$`, "i"));
+    out.push(new RegExp(`bin-win-cuda-12[\\.\\d]*-${winArch}\\.zip$`, "i"));
+  }
+  if (hw.backend === "rocm") out.push(new RegExp(`bin-win-hip[^.]*-${winArch}\\.zip$`, "i"));
+  out.push(new RegExp(`bin-win-vulkan-${winArch}\\.zip$`, "i"));
+  out.push(new RegExp(`bin-win-cpu-${winArch}\\.zip$`, "i"));
   return out;
 }
 
@@ -78,6 +95,7 @@ export async function downloadFile(
   destPath: string,
   progress: ProgressSink,
   fetchImpl: typeof fetch = fetch,
+  expectedSha256?: string,
 ): Promise<void> {
   const tmp = `${destPath}.part`;
   await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
@@ -120,6 +138,14 @@ export async function downloadFile(
       }
     }
     await new Promise<void>((resolve, reject) => out.end((err: unknown) => err ? reject(err) : resolve()));
+    if (expectedSha256) {
+      progress.message("Verifying sha256...");
+      const actual = await sha256File(tmp);
+      if (actual.toLowerCase() !== expectedSha256.toLowerCase()) {
+        await fs.promises.unlink(tmp).catch(() => undefined);
+        throw new Error(`sha256 mismatch: expected ${expectedSha256}, got ${actual}`);
+      }
+    }
     await fs.promises.rename(tmp, destPath);
   } catch (err) {
     out.destroy();
@@ -134,23 +160,30 @@ export async function sha256File(file: string): Promise<string> {
   return hash.digest("hex");
 }
 
-export async function extractZip(zipPath: string, destDir: string): Promise<void> {
+export async function extractArchive(archivePath: string, destDir: string): Promise<void> {
   await fs.promises.mkdir(destDir, { recursive: true });
+  const isTar = /\.tar\.gz$|\.tgz$|\.tar$/i.test(archivePath);
+  if (isTar) {
+    await runCmd("tar", ["-xf", archivePath, "-C", destDir]);
+    return;
+  }
   if (process.platform === "win32") {
     await runCmd("powershell", [
       "-NoProfile",
       "-Command",
-      `Expand-Archive -Path "${zipPath}" -DestinationPath "${destDir}" -Force`,
+      `Expand-Archive -Path "${archivePath}" -DestinationPath "${destDir}" -Force`,
     ]);
     return;
   }
-  // unzip is standard on macOS and most Linux distros; tar -xf as fallback.
   try {
-    await runCmd("unzip", ["-q", "-o", zipPath, "-d", destDir]);
+    await runCmd("unzip", ["-q", "-o", archivePath, "-d", destDir]);
   } catch {
-    await runCmd("tar", ["-xf", zipPath, "-C", destDir]);
+    await runCmd("tar", ["-xf", archivePath, "-C", destDir]);
   }
 }
+
+// Back-compat alias for older callers/tests.
+export const extractZip = extractArchive;
 
 export async function findLlamaServer(rootDir: string): Promise<string | undefined> {
   const name = process.platform === "win32" ? "llama-server.exe" : "llama-server";
@@ -199,18 +232,25 @@ export async function installLlamaCpp(opts: {
   if (existing) {
     return { binaryPath: existing, tag: release.tag_name, installDir: tagDir };
   }
-  const zipPath = path.join(opts.installRoot, "downloads", asset.name);
-  opts.progress.message(`Downloading ${asset.name}...`);
-  await downloadFile(asset.browser_download_url, zipPath, opts.progress, fetchImpl);
+  const archivePath = path.join(opts.installRoot, "downloads", asset.name);
+  const expectedSha = parseDigest(asset.digest);
+  opts.progress.message(`Downloading ${asset.name}${expectedSha ? "" : " (no sha256 published)"}...`);
+  await downloadFile(asset.browser_download_url, archivePath, opts.progress, fetchImpl, expectedSha);
   opts.progress.message("Extracting...");
-  await extractZip(zipPath, tagDir);
-  await fs.promises.unlink(zipPath).catch(() => undefined);
+  await extractArchive(archivePath, tagDir);
+  await fs.promises.unlink(archivePath).catch(() => undefined);
   const binary = await findLlamaServer(tagDir);
   if (!binary) throw new Error("llama-server binary not found in extracted archive");
   if (process.platform !== "win32") {
     await fs.promises.chmod(binary, 0o755).catch(() => undefined);
   }
   return { binaryPath: binary, tag: release.tag_name, installDir: tagDir };
+}
+
+export function parseDigest(digest: string | undefined): string | undefined {
+  if (!digest) return undefined;
+  const m = /^sha256:([0-9a-f]{64})$/i.exec(digest);
+  return m?.[1];
 }
 
 function formatBytes(n: number): string {

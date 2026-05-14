@@ -38,6 +38,12 @@ export function renderWizardHtml(webview: vscode.Webview): string {
       </div>
     </section>
 
+    <section class="card byo">
+      <header><h2>Already have a server?</h2></header>
+      <p class="lede">Hackl works with any OpenAI-compatible endpoint — LM Studio, Ollama, an existing llama.cpp, vLLM, etc. Point Hackl at it and skip this wizard.</p>
+      <div class="actions"><button id="byo" type="button">Use my own endpoint</button></div>
+    </section>
+
     <section class="card progress-card" id="progress-card" hidden>
       <header><h2>Setting up...</h2></header>
       <div class="progress-message" id="progress-message">Preparing...</div>
@@ -244,6 +250,9 @@ const WIZARD_SCRIPT = `
   });
   document.getElementById('cancel').addEventListener('click', () => {
     vscode.postMessage({ type: 'cancel' });
+  });
+  document.getElementById('byo').addEventListener('click', () => {
+    vscode.postMessage({ type: 'byo' });
   });
 
   window.addEventListener('message', (e) => {

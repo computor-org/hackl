@@ -22,6 +22,24 @@ export function openWizard(context: vscode.ExtensionContext, manager: ServerMana
   panel.onDidDispose(() => { active = undefined; });
 
   panel.webview.onDidReceiveMessage(async (msg) => {
+    if (msg?.type === "byo") {
+      const value = await vscode.window.showInputBox({
+        title: "Hackl: OpenAI-compatible endpoint",
+        prompt: "Base URL of an existing local server (e.g. http://localhost:1234/v1)",
+        placeHolder: "http://localhost:1234/v1",
+        validateInput: (v) => {
+          const t = v.trim();
+          if (!t) return "Enter a URL or cancel.";
+          try { new URL(t); return null; } catch { return "Not a valid URL."; }
+        },
+      });
+      if (value) {
+        await vscode.workspace.getConfiguration("hackl").update("endpoint", value.trim(), vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage(`Hackl will use ${value.trim()}.`);
+        panel.dispose();
+      }
+      return;
+    }
     if (msg?.type === "ready") {
       const status = await manager.getStatus();
       panel.webview.postMessage({

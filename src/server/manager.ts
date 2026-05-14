@@ -222,7 +222,7 @@ export class ServerManager {
 }
 
 export function autoStartEnabled(): boolean {
-  return vscode.workspace.getConfiguration("hackl").get<boolean>("localServer.autoStart", true);
+  return vscode.workspace.getConfiguration("hackl").get<boolean>("localServer.autoStart", false);
 }
 
 export function hasInitialSetup(context: vscode.ExtensionContext): boolean {

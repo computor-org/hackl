@@ -51,13 +51,7 @@ export async function ensureModelDownloaded(opts: {
   }
   const url = `${HF_BASE}/${opts.model.hfRepo}/resolve/main/${opts.model.ggufFile}`;
   opts.progress.message(`Downloading ${opts.model.ggufFile} from ${opts.model.hfRepo}...`);
-  await downloadFile(url, dest, opts.progress, opts.fetchImpl ?? fetch);
-  if (opts.model.sha256) {
-    const hash = await sha256File(dest);
-    if (hash !== opts.model.sha256) {
-      throw new Error(`Checksum mismatch for ${opts.model.ggufFile}`);
-    }
-  }
+  await downloadFile(url, dest, opts.progress, opts.fetchImpl ?? fetch, opts.model.sha256);
   return dest;
 }
 

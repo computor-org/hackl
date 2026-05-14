@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -151,8 +151,8 @@
         },
         "hackl.localServer.autoStart": {
           "type": "boolean",
-          "default": true,
-          "description": "When a local model has been configured, start the llama.cpp server automatically on activation and stop it on deactivation."
+          "default": false,
+          "description": "When a local model has been configured, start the llama.cpp server automatically on activation and stop it on deactivation. Off by default so the extension stays passive; flip on after first successful setup if you want it to come up with VS Code."
         },
         "hackl.localServer.port": {
           "type": "number",

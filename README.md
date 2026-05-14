@@ -21,9 +21,13 @@ Current:
   token/context budget indicator.
 - Command palette, editor context menu, and hotkey entry points.
 - Auto-discovery of common local OpenAI-compatible endpoints.
-- Built-in llama.cpp lifecycle: hardware probe, curated model catalog, setup
-  wizard with cancel, install/start/stop/swap from a webview, status bar item
-  with live tokens/s, `/props` ctx verification.
+- Optional, opt-in managed llama.cpp lifecycle: hardware probe, five-entry
+  curated GGUF catalog with sha256 verification, setup wizard with cancel and
+  a BYO-endpoint escape, install/start/stop/swap from a webview, status bar
+  item with live tokens/s, `/props` ctx verification. `autoStart` is `false`
+  by default; Hackl stays passive until you set it up.
+- llama.cpp release archives downloaded by the installer are verified against
+  the per-asset sha256 GitHub publishes in the Releases API.
 - Registered as a VS Code Language Model provider (vendor `hackl`) so Copilot
   Chat, Continue, and any `vscode.lm.selectChatModels()` consumer see the
   running model.
@@ -61,25 +65,40 @@ the prompt or selected context.
 
 ## Local model setup
 
-Run **Hackl: Set up local model** from the command palette (or accept the
-first-run prompt). The wizard probes your hardware and recommends one of:
+Hackl is BYO-first. If `hackl.endpoint` is set, or any OpenAI-compatible
+server is already answering on `localhost:8080` / `:1234`, the install path
+stays out of your way. The first-run prompt offers three explicit choices:
+**Set up local model**, **Use my own endpoint**, **Not now**.
 
-| Model                          | Size  | Best fit                  |
-|--------------------------------|-------|---------------------------|
-| Qwen3.5 4B (Instruct)          | 2.7 GB | 6–8 GB VRAM               |
-| Gemma 4 E4B (Instruct)         | 4.6 GB | 8–10 GB VRAM              |
-| Qwen3.5 9B (Instruct)          | 5.5 GB | 12–16 GB VRAM             |
-| Gemma 4 26B-A4B (MoE, UD-Q4_K_XL) | 15.8 GB | 24 GB VRAM or unified RAM |
-| Qwen3.6 35B-A3B (MoE, UD-Q4_K_XL) | 20.8 GB | 32 GB VRAM, or 16 GB with CPU-MoE |
+Run **Hackl: Set up local model** when you want the managed path. The wizard
+probes your hardware and recommends one of five curated models:
 
-All entries pull verified bartowski/unsloth GGUFs, run with KV cache `q8_0`,
-flash attention `auto` (CUDA/Metal/Vulkan), and MoE expert offload on tight
-VRAM. The wizard previews the exact `llama-server` flags before installing.
+| Model                              | Size    | sha256 verified | Best fit                          |
+|------------------------------------|---------|-----------------|-----------------------------------|
+| Qwen3.5 4B (Instruct)              | 2.7 GB  | yes             | 6–8 GB VRAM                       |
+| Gemma 4 E4B (Instruct)             | 4.6 GB  | yes             | 8–10 GB VRAM                      |
+| Qwen3.5 9B (Instruct)              | 5.5 GB  | yes             | 12–16 GB VRAM                     |
+| Gemma 4 26B-A4B (MoE, UD-Q4_K_XL)  | 15.8 GB | yes             | 24 GB VRAM or unified RAM         |
+| Qwen3.6 35B-A3B (MoE, UD-Q4_K_XL)  | 20.8 GB | yes             | 32 GB VRAM, or 16 GB with CPU-MoE |
+
+KV cache runs at `q8_0`, flash attention `auto` (CUDA/Metal/Vulkan), MoE
+expert offload kicks in on tight VRAM. The wizard previews the exact
+`llama-server` flags before installing.
+
+**Supply-chain hardening.** Every GGUF in the catalog is pinned to a sha256
+captured from HuggingFace's `x-linked-etag` (LFS sha256). Downloads abort and
+delete the partial file on mismatch. llama.cpp release archives are verified
+against the per-asset sha256 GitHub publishes in the Releases API `digest`
+field. If a release ever omits a digest, Hackl warns in the wizard and
+proceeds without verification — there is no silent fallback. The catalog is
+capped at five entries on purpose; if you need a different model, use the
+BYO endpoint path or point `hackl.endpoint` at a separately-run server.
 
 Settings:
 
-- `hackl.localServer.autoStart` (default `true`) — start/stop the server with
-  the extension lifecycle.
+- `hackl.localServer.autoStart` (default `false`) — flip on after a
+  successful setup if you want the server to come up with VS Code.
+  Conservative by default so the extension stays passive.
 - `hackl.localServer.port` (default `8080`) — preferred port; Hackl scans up
   to `port+19` if busy.
 

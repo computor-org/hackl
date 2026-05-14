@@ -1,56 +1,76 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { selectAsset, assetPatterns } = require("../../dist/server/installer.js");
+const { selectAsset, assetPatterns, parseDigest } = require("../../dist/server/installer.js");
 
-function asset(name) { return { name, browser_download_url: `https://x/${name}`, size: 1 }; }
+function asset(name, digest) {
+  return { name, browser_download_url: `https://x/${name}`, size: 1, digest };
+}
 
-test("Linux NVIDIA prefers cuda over vulkan and avoids cuda-dlls", () => {
+test("Linux NVIDIA picks the vulkan asset (current releases ship no Linux CUDA archive)", () => {
   const assets = [
-    asset("llama-1234-bin-ubuntu-x64-cuda-13.zip"),
-    asset("llama-1234-bin-ubuntu-x64-cuda-13-dlls.zip"),
-    asset("llama-1234-bin-ubuntu-x64-vulkan.zip"),
-    asset("llama-1234-bin-ubuntu-x64-cpu.zip"),
+    asset("llama-b9145-bin-ubuntu-vulkan-x64.tar.gz"),
+    asset("llama-b9145-bin-ubuntu-x64.tar.gz"),
+    asset("llama-b9145-bin-ubuntu-rocm-7.2-x64.tar.gz"),
   ];
   const hw = { platform: "linux", arch: "x64", backend: "cuda" };
   const picked = selectAsset(hw, assets);
-  assert.equal(picked.name, "llama-1234-bin-ubuntu-x64-cuda-13.zip");
+  assert.equal(picked.name, "llama-b9145-bin-ubuntu-vulkan-x64.tar.gz");
 });
 
-test("Linux without GPU tool falls through to vulkan then cpu", () => {
+test("Linux ROCm picks the rocm asset", () => {
   const assets = [
-    asset("llama-1234-bin-ubuntu-x64-vulkan.zip"),
-    asset("llama-1234-bin-ubuntu-x64-cpu.zip"),
+    asset("llama-b9145-bin-ubuntu-rocm-7.2-x64.tar.gz"),
+    asset("llama-b9145-bin-ubuntu-vulkan-x64.tar.gz"),
+    asset("llama-b9145-bin-ubuntu-x64.tar.gz"),
   ];
-  const hw = { platform: "linux", arch: "x64", backend: "vulkan" };
-  const picked = selectAsset(hw, assets);
-  assert.equal(picked.name, "llama-1234-bin-ubuntu-x64-vulkan.zip");
+  const hw = { platform: "linux", arch: "x64", backend: "rocm" };
+  assert.equal(selectAsset(hw, assets).name, "llama-b9145-bin-ubuntu-rocm-7.2-x64.tar.gz");
 });
 
-test("macOS arm64 picks the macos-arm64 asset", () => {
+test("Pure CPU Linux falls back to ubuntu-x64.tar.gz", () => {
   const assets = [
-    asset("llama-1234-bin-macos-arm64.zip"),
-    asset("llama-1234-bin-macos-x64.zip"),
+    asset("llama-b9145-bin-ubuntu-vulkan-x64.tar.gz"),
+    asset("llama-b9145-bin-ubuntu-x64.tar.gz"),
+  ];
+  const hw = { platform: "linux", arch: "x64", backend: "cpu" };
+  assert.equal(selectAsset(hw, assets).name, "llama-b9145-bin-ubuntu-x64.tar.gz");
+});
+
+test("macOS arm64 picks the macos-arm64 tar.gz", () => {
+  const assets = [
+    asset("llama-b9145-bin-macos-arm64.tar.gz"),
+    asset("llama-b9145-bin-macos-x64.tar.gz"),
   ];
   const hw = { platform: "darwin", arch: "arm64", backend: "metal" };
-  assert.equal(selectAsset(hw, assets).name, "llama-1234-bin-macos-arm64.zip");
+  assert.equal(selectAsset(hw, assets).name, "llama-b9145-bin-macos-arm64.tar.gz");
 });
 
-test("Windows CUDA falls back to cuda-12 if cuda-13 absent", () => {
+test("Windows CUDA prefers cuda-13 over cuda-12", () => {
   const assets = [
-    asset("llama-1234-bin-win-cuda-12.4.zip"),
-    asset("llama-1234-bin-win-vulkan.zip"),
+    asset("llama-b9145-bin-win-cuda-12.4-x64.zip"),
+    asset("llama-b9145-bin-win-cuda-13.1-x64.zip"),
+    asset("llama-b9145-bin-win-vulkan-x64.zip"),
   ];
   const hw = { platform: "win32", arch: "x64", backend: "cuda" };
-  assert.equal(selectAsset(hw, assets).name, "llama-1234-bin-win-cuda-12.4.zip");
+  assert.equal(selectAsset(hw, assets).name, "llama-b9145-bin-win-cuda-13.1-x64.zip");
 });
 
 test("No matching asset returns undefined", () => {
   const hw = { platform: "linux", arch: "x64", backend: "cuda" };
-  assert.equal(selectAsset(hw, [asset("unrelated.zip")]), undefined);
+  assert.equal(selectAsset(hw, [asset("unrelated.tar.gz")]), undefined);
 });
 
-test("assetPatterns puts arm64 first on linux-arm64", () => {
+test("assetPatterns puts vulkan-arm64 first for linux-arm64", () => {
   const hw = { platform: "linux", arch: "arm64", backend: "cpu" };
   const pats = assetPatterns(hw);
-  assert.ok(pats[0].test("llama-bin-linux-arm64.zip"));
+  assert.ok(pats[0].test("llama-b9145-bin-ubuntu-vulkan-arm64.tar.gz"));
+});
+
+test("parseDigest extracts sha256 hex and rejects malformed input", () => {
+  const hex = "a".repeat(64);
+  assert.equal(parseDigest("sha256:" + hex), hex);
+  assert.equal(parseDigest("sha256:" + hex.toUpperCase()), hex.toUpperCase());
+  assert.equal(parseDigest("md5:" + hex), undefined);
+  assert.equal(parseDigest("sha256:tooshort"), undefined);
+  assert.equal(parseDigest(undefined), undefined);
 });
