@@ -45,11 +45,30 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
         </div>
       </div>
     </main>
+    <section id="basket" class="basket" hidden>
+      <header class="basket-header">
+        <span class="basket-title">Targets</span>
+        <span id="basket-count" class="basket-count"></span>
+        <button id="basket-add" class="basket-action" type="button" title="Add current selection" aria-label="Add current selection">
+          <span class="codicon codicon-add" aria-hidden="true"></span>
+        </button>
+        <button id="basket-add-staged" class="basket-action" type="button" title="Add staged diff" aria-label="Add staged diff">
+          <span class="codicon codicon-git-commit" aria-hidden="true"></span>
+        </button>
+        <button id="basket-clear" class="basket-action" type="button" title="Clear basket" aria-label="Clear basket">
+          <span class="codicon codicon-clear-all" aria-hidden="true"></span>
+        </button>
+      </header>
+      <ul id="basket-list" class="basket-list"></ul>
+    </section>
     <form id="form">
       <div class="compose">
         <textarea id="prompt" placeholder="Message Hackl" rows="1"></textarea>
         <div class="compose-toolbar">
-          <button id="attach" class="tool-button" type="button" disabled title="Attach (coming soon)" aria-label="Attach">
+          <button id="annotate-toggle" class="tool-button" type="button" title="Toggle Annotation mode (Ctrl+Alt+M)" aria-label="Toggle Annotation mode" aria-pressed="false">
+            <span class="codicon codicon-pencil" aria-hidden="true"></span>
+          </button>
+          <button id="attach" class="tool-button" type="button" title="Add current selection (Ctrl+Alt+A)" aria-label="Add current selection">
             <span class="codicon codicon-add" aria-hidden="true"></span>
           </button>
           <div class="mode-dropdown">
@@ -59,6 +78,7 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
             </button>
             <div id="mode-menu" class="mode-menu" role="listbox" hidden>
               <button class="mode-option" type="button" role="option" data-value="ask" aria-selected="true">Ask</button>
+              <button class="mode-option" type="button" role="option" data-value="review" aria-selected="false">Review</button>
               <button class="mode-option" type="button" role="option" data-value="edit" aria-selected="false">Edit</button>
               <button class="mode-option" type="button" role="option" data-value="work" aria-selected="false">Work</button>
               <button class="mode-option" type="button" role="option" data-value="agent" aria-selected="false">Agent</button>
@@ -131,9 +151,170 @@ body {
   height: 100vh;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr auto auto;
   overflow: hidden;
 }
+
+.basket {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--hackl-border);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+
+.basket[hidden] { display: none; }
+
+.basket-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.basket-title {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+}
+
+.basket-count {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--hackl-surface);
+  color: var(--vscode-descriptionForeground);
+}
+
+.basket-count:empty { display: none; }
+
+.basket-action {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  cursor: pointer;
+}
+
+.basket-action:hover {
+  background: var(--hackl-surface-strong);
+  color: var(--vscode-foreground);
+}
+
+.basket-action .codicon { font-size: 12px; }
+
+.basket-action:first-of-type { margin-left: auto; }
+
+.basket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.basket-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--hackl-surface);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  color: var(--vscode-foreground);
+}
+
+.basket-item-kind {
+  font-size: 9.5px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hackl-accent) 22%, transparent);
+  color: var(--hackl-accent);
+}
+
+.basket-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.basket-remove {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.basket-remove:hover {
+  background: var(--hackl-surface-strong);
+  color: var(--vscode-foreground);
+}
+
+.basket-remove .codicon { font-size: 10px; }
+
+.basket-annotation-banner {
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--hackl-accent) 14%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--hackl-accent) 50%, var(--hackl-border));
+  color: var(--vscode-foreground);
+  font-size: 11px;
+}
+
+.review-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-item {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--hackl-border);
+  background: var(--hackl-surface);
+  font-size: 11.5px;
+}
+
+.review-item-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 2px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10.5px;
+  color: var(--vscode-descriptionForeground);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.review-sev-note { color: var(--vscode-descriptionForeground); }
+.review-sev-suggestion { color: var(--hackl-accent); }
+.review-sev-warning { color: var(--vscode-editorWarning-foreground, #cca700); }
+.review-sev-blocking { color: var(--vscode-errorForeground); }
+
 
 .topbar {
   display: flex;
@@ -906,6 +1087,14 @@ const clientScript = `
   const endpointStatus = document.getElementById("endpoint-status");
   const emptyState = document.getElementById("empty-state");
   const reasoningToggle = document.getElementById("reasoning-toggle");
+  const basketSection = document.getElementById("basket");
+  const basketList = document.getElementById("basket-list");
+  const basketCount = document.getElementById("basket-count");
+  const basketAdd = document.getElementById("basket-add");
+  const basketAddStaged = document.getElementById("basket-add-staged");
+  const basketClear = document.getElementById("basket-clear");
+  const annotateToggle = document.getElementById("annotate-toggle");
+  const attachButton = document.getElementById("attach");
   const modeButton = document.getElementById("mode-button");
   const modeMenu = document.getElementById("mode-menu");
   const modeLabel = document.getElementById("mode-label");
@@ -984,6 +1173,36 @@ const clientScript = `
     });
   }
 
+  if (annotateToggle) {
+    annotateToggle.addEventListener("click", () => {
+      vscode.postMessage({ type: "toggleAnnotation" });
+      focusPrompt();
+    });
+  }
+
+  if (attachButton) {
+    attachButton.addEventListener("click", () => {
+      vscode.postMessage({ type: "runCommand", value: "hackl.addSelectionToContext" });
+      focusPrompt();
+    });
+  }
+
+  if (basketAdd) {
+    basketAdd.addEventListener("click", () => {
+      vscode.postMessage({ type: "runCommand", value: "hackl.addSelectionToContext" });
+    });
+  }
+  if (basketAddStaged) {
+    basketAddStaged.addEventListener("click", () => {
+      vscode.postMessage({ type: "runCommand", value: "hackl.addStagedChangesToContext" });
+    });
+  }
+  if (basketClear) {
+    basketClear.addEventListener("click", () => {
+      vscode.postMessage({ type: "clearBasket" });
+    });
+  }
+
   if (modeButton && modeMenu) {
     modeButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1056,6 +1275,7 @@ const clientScript = `
     if (message.type === "status") showStatus(message.text);
     if (message.type === "metrics") updateMeter(message.inputTokens, message.maxContextTokens);
     if (message.type === "state") applyState(message);
+    if (message.type === "basket") renderBasket(message.targets || [], !!message.annotationMode);
     if (message.type === "focusInput") {
       requestAnimationFrame(() => {
         prompt.focus();
@@ -1068,6 +1288,9 @@ const clientScript = `
     if (message.type === "answer") {
       clearStatus();
       finishAssistant(message.text, message.reasoning || "");
+      if (Array.isArray(message.reviewComments) && message.reviewComments.length > 0) {
+        appendReviewComments(message.reviewComments);
+      }
       setBusy(false);
       drainQueue();
     }
@@ -1085,7 +1308,123 @@ const clientScript = `
   }
 
   function normalizeMode(mode) {
-    return ["edit", "work", "agent"].includes(mode) ? mode : "ask";
+    return ["edit", "work", "agent", "review"].includes(mode) ? mode : "ask";
+  }
+
+  function renderBasket(targets, annotationMode) {
+    if (!basketSection || !basketList) return;
+    if (annotateToggle) {
+      annotateToggle.setAttribute("aria-pressed", String(annotationMode));
+      annotateToggle.title = annotationMode
+        ? "Annotation mode ON — selecting code auto-adds to basket (Ctrl+Alt+M)"
+        : "Toggle Annotation mode (Ctrl+Alt+M)";
+    }
+    basketList.innerHTML = "";
+    const hasTargets = targets.length > 0;
+    basketSection.hidden = !hasTargets && !annotationMode;
+    if (basketCount) basketCount.textContent = hasTargets ? String(targets.length) : "";
+    if (annotationMode && !hasTargets) {
+      const banner = document.createElement("li");
+      banner.className = "basket-annotation-banner";
+      banner.textContent = "Annotation mode on. Select code in any editor to add it.";
+      basketList.appendChild(banner);
+      return;
+    }
+    for (const target of targets) {
+      const item = document.createElement("li");
+      item.className = "basket-item";
+      const kind = document.createElement("span");
+      kind.className = "basket-item-kind";
+      kind.textContent = kindShort(target.kind);
+      const label = document.createElement("span");
+      label.className = "basket-item-label";
+      label.textContent = describe(target);
+      label.title = describe(target);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "basket-remove";
+      remove.title = "Remove";
+      remove.setAttribute("aria-label", "Remove target");
+      const icon = document.createElement("span");
+      icon.className = "codicon codicon-close";
+      icon.setAttribute("aria-hidden", "true");
+      remove.appendChild(icon);
+      remove.addEventListener("click", () => {
+        vscode.postMessage({ type: "removeTarget", targetId: target.id });
+      });
+      item.appendChild(kind);
+      item.appendChild(label);
+      item.appendChild(remove);
+      basketList.appendChild(item);
+    }
+  }
+
+  function kindShort(kind) {
+    if (kind === "source-range") return "src";
+    if (kind === "markdown-section") return "md";
+    if (kind === "staged-changes") return "staged";
+    if (kind === "commit") return "commit";
+    if (kind === "diff-range") return "diff";
+    if (kind === "diagnostic") return "diag";
+    return kind;
+  }
+
+  function describe(target) {
+    if (target.kind === "source-range") return target.relativePath + ":" + target.startLine + "-" + target.endLine;
+    if (target.kind === "markdown-section") {
+      const heading = target.headingPath && target.headingPath.length ? " # " + target.headingPath.join(" › ") : "";
+      return target.relativePath + ":" + target.startLine + "-" + target.endLine + heading;
+    }
+    if (target.kind === "staged-changes") return "staged diff: " + (target.files ? target.files.length : 0) + " files";
+    if (target.kind === "commit") return "commit " + String(target.sha || "").slice(0, 7) + " " + (target.subject || "");
+    if (target.kind === "diff-range") return "diff " + target.base + ".." + target.head;
+    if (target.kind === "diagnostic") return target.relativePath + ":" + target.startLine;
+    return target.kind;
+  }
+
+  function appendReviewComments(comments) {
+    const list = document.createElement("ul");
+    list.className = "review-list";
+    for (const comment of comments) {
+      const item = document.createElement("li");
+      item.className = "review-item";
+      const head = document.createElement("div");
+      head.className = "review-item-head review-sev-" + comment.severity;
+      head.textContent = comment.severity + " · " + uriBasename(comment.uri) + ":" + comment.startLine;
+      const body = document.createElement("div");
+      body.textContent = comment.message;
+      item.appendChild(head);
+      item.appendChild(body);
+      if (comment.rationale) {
+        const rationale = document.createElement("div");
+        rationale.style.color = "var(--vscode-descriptionForeground)";
+        rationale.style.marginTop = "2px";
+        rationale.style.fontSize = "11px";
+        rationale.textContent = comment.rationale;
+        item.appendChild(rationale);
+      }
+      list.appendChild(item);
+    }
+    const wrap = document.createElement("section");
+    wrap.className = "entry assistant";
+    const label = document.createElement("div");
+    label.className = "role";
+    label.textContent = "Hackl · review";
+    wrap.appendChild(label);
+    wrap.appendChild(list);
+    thread.appendChild(wrap);
+    scrollThreadToBottom();
+  }
+
+  function uriBasename(uri) {
+    if (!uri) return "";
+    try {
+      const path = uri.split(/[?#]/)[0];
+      const parts = path.split("/");
+      return parts[parts.length - 1] || uri;
+    } catch {
+      return uri;
+    }
   }
 
   function drainQueue() {

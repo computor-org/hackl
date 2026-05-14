@@ -1,4 +1,6 @@
 import type { ConversationMessage, PromptMode } from "./prompt";
+import type { BasketSnapshot, HacklTarget } from "./basket";
+import type { HacklReviewComment } from "./reviewComments";
 
 export interface ChatIncomingMessage {
   type: string;
@@ -7,16 +9,18 @@ export interface ChatIncomingMessage {
   approvalId?: string;
   approved?: boolean;
   value?: unknown;
+  targetId?: string;
 }
 
 export type ChatOutgoingMessage =
-  | { type: "answer"; text: string; reasoning?: string }
+  | { type: "answer"; text: string; reasoning?: string; reviewComments?: HacklReviewComment[] }
   | ApprovalRequest
   | { type: "assistantDelta"; channel: "answer" | "reasoning"; text: string }
   | { type: "error" | "status"; text: string }
   | { type: "metrics"; inputTokens: number; maxContextTokens: number }
   | { type: "cleared" }
   | { type: "history"; entries: ConversationMessage[] }
+  | { type: "basket"; targets: HacklTarget[]; annotationMode: boolean }
   | ChatState
   | { type: "focusInput" };
 
@@ -34,6 +38,7 @@ export interface ApprovalRequest {
 export interface ChatAnswer {
   content: string;
   reasoning?: string;
+  reviewComments?: HacklReviewComment[];
 }
 
 export type PromptProgress =
@@ -51,24 +56,51 @@ export interface ChatState {
 
 export type ApprovalRequester = (request: Omit<ApprovalRequest, "type" | "id">) => Promise<boolean>;
 
+export type PromptHandler = (
+  prompt: string,
+  history: ConversationMessage[],
+  mode: PromptMode,
+  progress: (event: PromptProgress) => void,
+  requestApproval: ApprovalRequester,
+  signal?: AbortSignal,
+  targets?: HacklTarget[],
+) => Promise<ChatAnswer | string>;
+
+export interface BasketBridge {
+  snapshot(): BasketSnapshot;
+  onDidChange(listener: (snapshot: BasketSnapshot) => void): { dispose(): void };
+  remove(id: string): void;
+  clear(): void;
+  toggleAnnotation(): void;
+}
+
 export class ChatSession {
   private readonly history: ConversationMessage[] = [];
   private currentController: AbortController | undefined;
+  private basketSubscription: { dispose(): void } | undefined;
 
   constructor(
-    private readonly onPrompt: (
-      prompt: string,
-      history: ConversationMessage[],
-      mode: PromptMode,
-      progress: (event: PromptProgress) => void,
-      requestApproval: ApprovalRequester,
-      signal?: AbortSignal,
-    ) => Promise<ChatAnswer | string>,
+    private readonly onPrompt: PromptHandler,
+    private readonly basket?: BasketBridge,
   ) {}
+
+  dispose(): void {
+    this.basketSubscription?.dispose();
+    this.basketSubscription = undefined;
+  }
 
   async handle(message: ChatIncomingMessage, post: ChatPost): Promise<void> {
     if (message.type === "ready") {
       await post({ type: "history", entries: [...this.history] });
+      if (this.basket) {
+        if (!this.basketSubscription) {
+          this.basketSubscription = this.basket.onDidChange((snap) => {
+            void post({ type: "basket", targets: snap.targets, annotationMode: snap.annotationMode });
+          });
+        }
+        const snap = this.basket.snapshot();
+        await post({ type: "basket", targets: snap.targets, annotationMode: snap.annotationMode });
+      }
       return;
     }
     if (message.type === "clear") {
@@ -84,6 +116,18 @@ export class ChatSession {
     }
     if (message.type === "approvalResponse" && message.approvalId) {
       this.resolveApproval(message.approvalId, Boolean(message.approved));
+      return;
+    }
+    if (message.type === "removeTarget" && message.targetId) {
+      this.basket?.remove(message.targetId);
+      return;
+    }
+    if (message.type === "clearBasket") {
+      this.basket?.clear();
+      return;
+    }
+    if (message.type === "toggleAnnotation") {
+      this.basket?.toggleAnnotation();
       return;
     }
     if (message.type === "prompt") {
@@ -102,6 +146,7 @@ export class ChatSession {
     this.history.push({ role: "user", content: prompt });
     const controller = new AbortController();
     this.currentController = controller;
+    const targets = this.basket?.snapshot().targets ?? [];
     try {
       const progress = (event: PromptProgress) => {
         if (controller.signal.aborted) return;
@@ -110,14 +155,26 @@ export class ChatSession {
         }
       };
       const requestApproval = (request: Omit<ApprovalRequest, "type" | "id">) => this.requestApproval(request, post);
-      const rawAnswer = await this.onPrompt(prompt, previousHistory, mode, progress, requestApproval, controller.signal);
+      const rawAnswer = await this.onPrompt(
+        prompt,
+        previousHistory,
+        mode,
+        progress,
+        requestApproval,
+        controller.signal,
+        targets,
+      );
       if (controller.signal.aborted) {
         this.history.pop();
         return;
       }
       const answer = normalizeAnswer(rawAnswer);
       this.history.push({ role: "assistant", content: answer.content });
-      await post({ type: "answer", text: answer.content, reasoning: answer.reasoning });
+      const out: ChatOutgoingMessage = { type: "answer", text: answer.content, reasoning: answer.reasoning };
+      if (answer.reviewComments && answer.reviewComments.length > 0) {
+        (out as { reviewComments?: HacklReviewComment[] }).reviewComments = answer.reviewComments;
+      }
+      await post(out);
     } catch (error) {
       this.history.pop();
       if (controller.signal.aborted || isAbortError(error)) {
@@ -165,13 +222,10 @@ export class ChatSession {
 }
 
 function normalizeMode(mode: PromptMode | undefined): PromptMode {
-  if (mode === "agent") {
+  if (mode === "agent" || mode === "work" || mode === "edit" || mode === "review") {
     return mode;
   }
-  if (mode === "work") {
-    return "work";
-  }
-  return mode === "edit" ? "edit" : "ask";
+  return "ask";
 }
 
 function isAbortError(error: unknown): boolean {

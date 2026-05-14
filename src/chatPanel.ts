@@ -1,7 +1,14 @@
 import * as vscode from "vscode";
 import { renderChatHtml } from "./chatHtml";
-import { ApprovalRequester, ChatAnswer, ChatIncomingMessage, ChatOutgoingMessage, ChatSession, ChatState, PromptProgress } from "./chatSession";
-import type { ConversationMessage, PromptMode } from "./prompt";
+import {
+  BasketBridge,
+  ChatIncomingMessage,
+  ChatOutgoingMessage,
+  ChatSession,
+  ChatState,
+  PromptHandler,
+} from "./chatSession";
+import { isAllowedWebviewCommand } from "./chatView";
 
 export class ChatPanel {
   private readonly panel: vscode.WebviewPanel;
@@ -9,18 +16,12 @@ export class ChatPanel {
 
   constructor(
     context: vscode.ExtensionContext,
-    onPrompt: (
-      prompt: string,
-      history: ConversationMessage[],
-      mode: PromptMode,
-      progress: (event: PromptProgress) => void,
-      requestApproval: ApprovalRequester,
-      signal?: AbortSignal,
-    ) => Promise<ChatAnswer | string>,
+    onPrompt: PromptHandler,
     private readonly getState: () => Promise<ChatState>,
     onDispose: () => void,
+    basket?: BasketBridge,
   ) {
-    this.session = new ChatSession(onPrompt);
+    this.session = new ChatSession(onPrompt, basket);
     this.panel = vscode.window.createWebviewPanel(
       "hackl.chatEditor",
       "Hackl Chat",
@@ -39,9 +40,16 @@ export class ChatPanel {
       if (message.type === "ready") {
         await this.panel.webview.postMessage(await this.getState());
       }
+      if (message.type === "runCommand" && typeof message.value === "string" && isAllowedWebviewCommand(message.value)) {
+        await vscode.commands.executeCommand(message.value);
+        return;
+      }
       await this.session.handle(message, (response) => post(this.panel.webview, response));
     });
-    this.panel.onDidDispose(onDispose);
+    this.panel.onDidDispose(() => {
+      this.session.dispose();
+      onDispose();
+    });
   }
 
   reveal(): void {

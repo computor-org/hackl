@@ -1,7 +1,14 @@
 import * as vscode from "vscode";
 import { ChatMessage, createOpenAICompatibleBackend } from "./chatClient";
 import { ChatPanel } from "./chatPanel";
-import { ApprovalRequester, ChatAnswer, ChatState, PromptProgress } from "./chatSession";
+import {
+  ApprovalRequester,
+  BasketBridge,
+  ChatAnswer,
+  ChatState,
+  PromptProgress,
+} from "./chatSession";
+import type { ConversationMessage } from "./prompt";
 import { ChatViewProvider } from "./chatView";
 import { buildPromptContext, collectEditorContext } from "./context";
 import {
@@ -12,17 +19,53 @@ import {
   requiresNonLocalEndpointApproval,
   resolveChatTarget,
 } from "./localServers";
-import { buildHacklMessages, ConversationMessage, PromptMode } from "./prompt";
+import { buildHacklMessages, PromptMode, splitMultiQuestion } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
 import { createDebugLog, disposeDebugLog } from "./debugLog";
 import { SetupViewProvider } from "./setup/setupView";
+import {
+  BasketService,
+  BasketSnapshot,
+  HacklTarget,
+  ReviewContext,
+  createMarkdownSectionTarget,
+  createSourceRangeTarget,
+  describeTarget,
+} from "./basket";
+import { AnnotationModeController } from "./annotation";
+import { HacklReviewComment, ReviewCommentController, parseReviewCommentsFromAnswer } from "./reviewComments";
+import { buildLastCommitTarget, buildStagedChangesTarget } from "./gitTargets";
+import { ReviewSession, newReviewSessionId, persistReviewSession } from "./reviewSession";
 
 let chatPanel: ChatPanel | undefined;
 let setupProvider: SetupViewProvider | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
+let basketService: BasketService | undefined;
+let reviewController: ReviewCommentController | undefined;
+let reviewFinishedEmitter: vscode.EventEmitter<ReviewSession> | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
+
+export interface HacklApi {
+  readonly version: 1;
+  getBasket(): BasketSnapshot;
+  addTarget(target: HacklTarget): void;
+  removeTarget(id: string): void;
+  clearBasket(): void;
+  setReviewContext(context: ReviewContext | undefined): void;
+  getReviewContext(): ReviewContext | undefined;
+  setAnnotationMode(on: boolean): void;
+  isAnnotationMode(): boolean;
+  addReviewComment(comment: Omit<HacklReviewComment, "id" | "status" | "createdAt"> & {
+    status?: HacklReviewComment["status"];
+    createdAt?: number;
+  }): HacklReviewComment;
+  clearReviewComments(): void;
+  onDidChangeBasket: vscode.Event<BasketSnapshot>;
+  onDidFinishReview: vscode.Event<ReviewSession>;
+  openChat(): Thenable<void>;
+}
 
 interface ConfigInspection<T> {
   globalValue?: T;
@@ -33,12 +76,18 @@ interface ConfigInspection<T> {
   workspaceFolderLanguageValue?: T;
 }
 
-export function activate(context: vscode.ExtensionContext): void {
-  const chatViewProvider = new ChatViewProvider(context, answerPrompt, currentChatState);
+export function activate(context: vscode.ExtensionContext): HacklApi {
+  basketService = new BasketService();
+  const annotation = new AnnotationModeController(basketService);
+  reviewController = new ReviewCommentController();
+  reviewFinishedEmitter = new vscode.EventEmitter<ReviewSession>();
+  const basketBridge = makeBasketBridge(basketService, annotation);
+
+  const chatViewProvider = new ChatViewProvider(context, answerPrompt, currentChatState, basketBridge);
   setupProvider = new SetupViewProvider(context, runProbe, setEndpoint);
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
-  context.subscriptions.push(statusBarItem);
+  context.subscriptions.push(statusBarItem, basketService, annotation, reviewController, reviewFinishedEmitter);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
@@ -49,7 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
       chatViewProvider.focusInput();
     }),
     vscode.commands.registerCommand("hackl.chatEditor", () => {
-      openChatPanel(context);
+      openChatPanel(context, basketBridge);
       chatPanel?.focusInput();
     }),
     vscode.commands.registerCommand("hackl.openSetupGuide", async () => {
@@ -71,9 +120,95 @@ export function activate(context: vscode.ExtensionContext): void {
       const uri = vscode.Uri.joinPath(context.extensionUri, "docs", file);
       await vscode.commands.executeCommand("markdown.showPreview", uri);
     }),
+    vscode.commands.registerCommand("hackl.toggleAnnotationMode", () => {
+      annotation.toggle();
+    }),
+    vscode.commands.registerCommand("hackl.addSelectionToContext", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.selection.isEmpty) {
+        vscode.window.showInformationMessage("Hackl: select code in the editor first.");
+        return;
+      }
+      const target = createSourceRangeTarget(editor);
+      if (target) addAndReveal(basketService!, target, chatViewProvider);
+    }),
+    vscode.commands.registerCommand("hackl.addMarkdownSectionToContext", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showInformationMessage("Hackl: open a Markdown file first.");
+        return;
+      }
+      const target = createMarkdownSectionTarget(editor);
+      if (!target) {
+        vscode.window.showInformationMessage("Hackl: active document is not Markdown.");
+        return;
+      }
+      addAndReveal(basketService!, target, chatViewProvider);
+    }),
+    vscode.commands.registerCommand("hackl.clearContext", () => {
+      basketService!.clear();
+    }),
+    vscode.commands.registerCommand("hackl.addStagedChangesToContext", async () => {
+      const result = await buildStagedChangesTarget();
+      if ("error" in result) {
+        vscode.window.showWarningMessage(`Hackl: ${result.error}`);
+        return;
+      }
+      addAndReveal(basketService!, result, chatViewProvider);
+    }),
+    vscode.commands.registerCommand("hackl.addLastCommitToContext", async () => {
+      const result = await buildLastCommitTarget();
+      if ("error" in result) {
+        vscode.window.showWarningMessage(`Hackl: ${result.error}`);
+        return;
+      }
+      addAndReveal(basketService!, result, chatViewProvider);
+    }),
+    vscode.commands.registerCommand("hackl.clearReviewComments", () => {
+      reviewController?.clear();
+    }),
   );
 
   void refreshStatus();
+
+  const api: HacklApi = {
+    version: 1,
+    getBasket: () => basketService!.snapshot(),
+    addTarget: (target) => basketService!.add(target),
+    removeTarget: (id) => basketService!.remove(id),
+    clearBasket: () => basketService!.clear(),
+    setReviewContext: (ctx) => basketService!.setReviewContext(ctx),
+    getReviewContext: () => basketService!.getReviewContext(),
+    setAnnotationMode: (on) => {
+      if (basketService!.isAnnotationMode() !== on) annotation.toggle();
+    },
+    isAnnotationMode: () => basketService!.isAnnotationMode(),
+    addReviewComment: (comment) => reviewController!.add({
+      ...comment,
+      authorType: comment.authorType ?? "human",
+    }),
+    clearReviewComments: () => reviewController!.clear(),
+    onDidChangeBasket: basketService.onDidChange,
+    onDidFinishReview: reviewFinishedEmitter.event,
+    openChat: () => vscode.commands.executeCommand("hackl.chat"),
+  };
+  return api;
+}
+
+function makeBasketBridge(basket: BasketService, annotation: AnnotationModeController): BasketBridge {
+  return {
+    snapshot: () => basket.snapshot(),
+    onDidChange: (listener: (snap: BasketSnapshot) => void) => basket.onDidChange(listener),
+    remove: (id: string) => basket.remove(id),
+    clear: () => basket.clear(),
+    toggleAnnotation: () => annotation.toggle(),
+  };
+}
+
+function addAndReveal(basket: BasketService, target: HacklTarget, view: ChatViewProvider): void {
+  basket.add(target);
+  view.show();
+  vscode.window.setStatusBarMessage(`Hackl: added ${describeTarget(target)}`, 2000);
 }
 
 async function refreshStatus(): Promise<void> {
@@ -142,6 +277,8 @@ export function deactivate(): void {
   chatPanel = undefined;
   setupProvider = undefined;
   statusBarItem = undefined;
+  basketService = undefined;
+  reviewController = undefined;
   disposeDebugLog();
 }
 
@@ -152,6 +289,7 @@ async function answerPrompt(
   progress?: (event: PromptProgress) => void,
   requestApproval?: ApprovalRequester,
   signal?: AbortSignal,
+  targets: HacklTarget[] = [],
 ): Promise<ChatAnswer> {
   const startedAt = Date.now();
   progress?.({ type: "phase", text: "Preprocessing prompt..." });
@@ -183,9 +321,16 @@ async function answerPrompt(
     model: target.model,
     maxToolFileChars,
     enableThinking,
+    targets: targets.length,
   });
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
-  const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history, mode);
+  const questions = splitMultiQuestion(prompt);
+  const reviewContext = basketService?.getReviewContext();
+  const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history, mode, {
+    targets,
+    questions,
+    reviewContext,
+  });
   const inputTokens = estimateChatTokens(messages);
   debug?.("prompt.context", { inputTokens, maxContextTokens, messages: messages.length });
   progress?.({
@@ -197,12 +342,13 @@ async function answerPrompt(
   progress?.({ type: "phase", text: "Model request..." });
 
   const modelStartedAt = Date.now();
+  const allowEdits = mode === "edit" || mode === "work" || mode === "agent";
   const answer = await completeWithTools({
     backend: createOpenAICompatibleBackend({ ...target, enableThinking }),
     messages,
     runTool: createWorkspaceToolRunner({
       maxFileChars: maxToolFileChars,
-      allowEdits: mode === "edit" || mode === "work" || mode === "agent",
+      allowEdits,
       allowSearch: mode === "work" || mode === "agent",
       allowCommands: mode === "agent",
       requestApproval,
@@ -216,13 +362,82 @@ async function answerPrompt(
   });
   debug?.("prompt.answer", answer);
   progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
-  return answer;
+
+  const result: ChatAnswer = { content: answer.content, reasoning: answer.reasoning };
+  let createdComments: HacklReviewComment[] = [];
+  if (mode === "review" && reviewController) {
+    const parsed = parseReviewCommentsFromAnswer(answer.content, defaultUriForReview(targets), { aiModel: target.model });
+    createdComments = parsed.map((c) => reviewController!.add(c));
+    if (createdComments.length > 0) {
+      result.reviewComments = createdComments;
+      vscode.window.setStatusBarMessage(`Hackl: ${createdComments.length} review comment${createdComments.length === 1 ? "" : "s"}`, 3000);
+    }
+  }
+  if (mode === "review") {
+    await emitReviewSession({
+      mode,
+      endpoint: target.endpoint,
+      model: target.model,
+      targets,
+      reviewContext,
+      questions,
+      answer: answer.content,
+      comments: createdComments,
+    });
+  }
+  return result;
+}
+
+async function emitReviewSession(input: {
+  mode: PromptMode;
+  endpoint: string;
+  model: string;
+  targets: HacklTarget[];
+  reviewContext?: ReviewContext;
+  questions?: string[];
+  answer: string;
+  comments: HacklReviewComment[];
+}): Promise<void> {
+  const session: ReviewSession = {
+    id: newReviewSessionId(),
+    createdAt: new Date().toISOString(),
+    mode: input.mode,
+    endpoint: input.endpoint,
+    model: input.model,
+    targets: input.targets,
+    context: input.reviewContext,
+    questions: input.questions && input.questions.length > 1 ? input.questions : undefined,
+    answer: input.answer,
+    comments: input.comments,
+  };
+  reviewFinishedEmitter?.fire(session);
+  const config = vscode.workspace.getConfiguration("hackl");
+  if (!config.get<boolean>("persistReviews", true)) return;
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!root) return;
+  try {
+    await persistReviewSession(root, session);
+  } catch (error) {
+    // Persistence is best-effort; surface as a warning, not an error.
+    vscode.window.setStatusBarMessage(
+      `Hackl: failed to persist review (${error instanceof Error ? error.message : String(error)})`,
+      4000,
+    );
+  }
+}
+
+function defaultUriForReview(targets: HacklTarget[]): string | undefined {
+  for (const target of targets) {
+    if (target.kind === "source-range" || target.kind === "markdown-section") return target.uri;
+  }
+  return undefined;
 }
 
 function toolCallLimit(mode: PromptMode): number {
   if (mode === "agent") return 48;
   if (mode === "work") return 24;
   if (mode === "edit") return 12;
+  if (mode === "review") return 6;
   return 4;
 }
 
@@ -292,11 +507,11 @@ async function getDetectedMaxContext(endpoint: string): Promise<number | undefin
   return detected;
 }
 
-function openChatPanel(context: vscode.ExtensionContext): void {
+function openChatPanel(context: vscode.ExtensionContext, basket?: BasketBridge): void {
   if (!chatPanel) {
     chatPanel = new ChatPanel(context, answerPrompt, currentChatState, () => {
       chatPanel = undefined;
-    });
+    }, basket);
   }
   chatPanel.reveal();
 }

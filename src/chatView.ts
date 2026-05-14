@@ -1,7 +1,26 @@
 import * as vscode from "vscode";
 import { renderChatHtml } from "./chatHtml";
-import { ApprovalRequester, ChatAnswer, ChatIncomingMessage, ChatOutgoingMessage, ChatSession, ChatState, PromptProgress } from "./chatSession";
-import type { ConversationMessage, PromptMode } from "./prompt";
+import {
+  BasketBridge,
+  ChatIncomingMessage,
+  ChatOutgoingMessage,
+  ChatSession,
+  ChatState,
+  PromptHandler,
+} from "./chatSession";
+
+const ALLOWED_WEBVIEW_COMMANDS = new Set([
+  "hackl.addSelectionToContext",
+  "hackl.addMarkdownSectionToContext",
+  "hackl.addStagedChangesToContext",
+  "hackl.addLastCommitToContext",
+  "hackl.clearContext",
+  "hackl.toggleAnnotationMode",
+]);
+
+export function isAllowedWebviewCommand(command: string): boolean {
+  return ALLOWED_WEBVIEW_COMMANDS.has(command);
+}
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = "hackl.chatView";
@@ -11,17 +30,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    onPrompt: (
-      prompt: string,
-      history: ConversationMessage[],
-      mode: PromptMode,
-      progress: (event: PromptProgress) => void,
-      requestApproval: ApprovalRequester,
-      signal?: AbortSignal,
-    ) => Promise<ChatAnswer | string>,
+    onPrompt: PromptHandler,
     private readonly getState: () => Promise<ChatState>,
+    basket?: BasketBridge,
   ) {
-    this.session = new ChatSession(onPrompt);
+    this.session = new ChatSession(onPrompt, basket);
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -44,12 +57,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (message.type === "ready") {
         await webviewView.webview.postMessage(await this.getState());
       }
+      if (message.type === "runCommand" && typeof message.value === "string" && isAllowedWebviewCommand(message.value)) {
+        await vscode.commands.executeCommand(message.value);
+        return;
+      }
       await this.session.handle(message, (response) => post(webviewView.webview, response));
     });
     webviewView.onDidDispose(() => {
       if (this.view === webviewView) {
         this.view = undefined;
       }
+      this.session.dispose();
     });
   }
 

@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -23,6 +23,13 @@
     "onCommand:hackl.checkLocalServer",
     "onCommand:hackl.refreshEndpoint",
     "onCommand:hackl.openSetupDoc",
+    "onCommand:hackl.toggleAnnotationMode",
+    "onCommand:hackl.addSelectionToContext",
+    "onCommand:hackl.addMarkdownSectionToContext",
+    "onCommand:hackl.addStagedChangesToContext",
+    "onCommand:hackl.addLastCommitToContext",
+    "onCommand:hackl.clearContext",
+    "onCommand:hackl.clearReviewComments",
     "onView:hackl.chatView",
     "onView:hackl.setupView"
   ],
@@ -57,6 +64,43 @@
       {
         "command": "hackl.refreshEndpoint",
         "title": "Refresh Endpoint",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.toggleAnnotationMode",
+        "title": "Toggle Annotation Mode",
+        "category": "Hackl",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "hackl.addSelectionToContext",
+        "title": "Add Selection to Context",
+        "category": "Hackl",
+        "icon": "$(add)"
+      },
+      {
+        "command": "hackl.addMarkdownSectionToContext",
+        "title": "Add Markdown Section to Context",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.addStagedChangesToContext",
+        "title": "Add Staged Changes to Context",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.addLastCommitToContext",
+        "title": "Add Last Commit to Context",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.clearContext",
+        "title": "Clear Context Basket",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.clearReviewComments",
+        "title": "Clear Review Comments",
         "category": "Hackl"
       }
     ],
@@ -93,6 +137,17 @@
         "key": "ctrl+alt+h",
         "mac": "cmd+alt+h",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "hackl.addSelectionToContext",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "hackl.toggleAnnotationMode",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m"
       }
     ],
     "menus": {
@@ -103,9 +158,21 @@
           "when": "editorTextFocus"
         },
         {
-          "command": "hackl.chatEditor",
-          "group": "navigation@51",
+          "command": "hackl.addSelectionToContext",
+          "group": "navigation@52",
+          "when": "editorTextFocus && editorHasSelection"
+        },
+        {
+          "command": "hackl.toggleAnnotationMode",
+          "group": "navigation@53",
           "when": "editorTextFocus"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "hackl.addStagedChangesToContext",
+          "group": "navigation",
+          "when": "scmProvider == git"
         }
       ]
     },
@@ -145,6 +212,11 @@
           "type": "boolean",
           "default": false,
           "description": "Write Hackl prompt and tool-loop diagnostics to the Hackl Debug output channel and the VS Code Extension Host debug console."
+        },
+        "hackl.persistReviews": {
+          "type": "boolean",
+          "default": true,
+          "description": "Persist completed review sessions as JSON files under .hackl/reviews/ in the workspace root."
         }
       }
     },
