@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { buildBackend, normalizeBackendChoice } = require("../dist/backendRegistry.js");
+const { buildBackend, normalizeBackendChoice, pickAvailableModel } = require("../dist/backendRegistry.js");
 
 test("normalizeBackendChoice accepts {kind:'codex',model}", () => {
   assert.deepEqual(
@@ -21,6 +21,18 @@ test("normalizeBackendChoice rejects bad shapes", () => {
   assert.equal(normalizeBackendChoice(null), undefined);
   assert.equal(normalizeBackendChoice({ kind: "remote", model: "x" }), undefined);
   assert.equal(normalizeBackendChoice({ kind: "codex" }), undefined);
+});
+
+test("pickAvailableModel keeps the selected model when Codex still offers it", () => {
+  assert.equal(
+    pickAvailableModel(["gpt-5.5", "gpt-5.4-mini"], "gpt-5.4-mini"),
+    "gpt-5.4-mini",
+  );
+});
+
+test("pickAvailableModel falls back to the first available model", () => {
+  assert.equal(pickAvailableModel(["gpt-5.5", "gpt-5.4"], "old-model"), "gpt-5.5");
+  assert.equal(pickAvailableModel([], "old-model"), undefined);
 });
 
 test("buildBackend returns a backend for both kinds", () => {

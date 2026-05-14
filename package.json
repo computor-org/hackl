@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack local-first.",
-  "version": "0.0.51",
+  "version": "0.0.52",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -131,6 +131,16 @@
         "command": "hackl.showSetupHint",
         "title": "Show Setup Hint",
         "category": "Hackl"
+      },
+      {
+        "command": "hackl.submitFocusedCommentOnEnter",
+        "title": "Submit Annotation",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.dismissFocusedEmptyComment",
+        "title": "Dismiss Empty Annotation",
+        "category": "Hackl"
       }
     ],
     "viewsContainers": {
@@ -172,9 +182,9 @@
         "mac": "cmd+alt+z"
       },
       {
-        "command": "editor.action.submitComment",
+        "command": "hackl.submitFocusedCommentOnEnter",
         "key": "enter",
-        "when": "commentEditorFocused && !suggestWidgetVisible"
+        "when": "commentEditorFocused && !suggestWidgetVisible && !inlineSuggestionVisible"
       },
       {
         "command": "type",
@@ -183,6 +193,11 @@
         },
         "key": "shift+enter",
         "when": "commentEditorFocused && !suggestWidgetVisible"
+      },
+      {
+        "command": "hackl.dismissFocusedEmptyComment",
+        "key": "escape",
+        "when": "commentEditorFocused && commentIsEmpty"
       }
     ],
     "menus": {
@@ -201,6 +216,14 @@
         },
         {
           "command": "hackl.revealTarget",
+          "when": "false"
+        },
+        {
+          "command": "hackl.submitFocusedCommentOnEnter",
+          "when": "false"
+        },
+        {
+          "command": "hackl.dismissFocusedEmptyComment",
           "when": "false"
         }
       ],

@@ -171,6 +171,7 @@
         vscode.postMessage({ type: "setBackend", backendKind: kind, model: model });
         modelMenu.hidden = true;
         modelButton.setAttribute("aria-expanded", "false");
+        focusPrompt();
       });
       modelMenu.appendChild(btn);
     }

@@ -50,3 +50,9 @@ export function normalizeBackendChoice(value: unknown): BackendChoice | undefine
   const endpoint = typeof v.endpoint === "string" ? v.endpoint : undefined;
   return { kind, model, endpoint };
 }
+
+export function pickAvailableModel(models: readonly string[], preferred?: string): string | undefined {
+  const trimmed = preferred?.trim();
+  if (trimmed && models.includes(trimmed)) return trimmed;
+  return models[0];
+}

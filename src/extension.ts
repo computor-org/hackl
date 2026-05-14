@@ -9,7 +9,7 @@ import {
   PromptHandlerArgs,
 } from "./chatSession";
 import { ChatViewProvider } from "./chatView";
-import { BackendChoice, buildBackend, normalizeBackendChoice } from "./backendRegistry";
+import { BackendChoice, buildBackend, normalizeBackendChoice, pickAvailableModel } from "./backendRegistry";
 import { clearCodexDetectionCache, detectCodex, CodexDetection } from "./codexDetect";
 import { buildPromptContext, collectEditorContext } from "./context";
 import {
@@ -56,11 +56,19 @@ const SETUP_HINT_DISMISSED_KEY = "hackl.setupHintDismissed";
 
 function readBackendChoice(): BackendChoice | undefined {
   const raw = extensionContext?.globalState.get<unknown>(BACKEND_CHOICE_KEY);
-  return normalizeBackendChoice(raw);
+  const stored = normalizeBackendChoice(raw);
+  if (stored) return stored;
+  const model = readGlobalCodexModel();
+  return model ? { kind: "codex", model } : undefined;
 }
 
 async function writeBackendChoice(choice: BackendChoice | undefined): Promise<void> {
   await extensionContext?.globalState.update(BACKEND_CHOICE_KEY, choice);
+}
+
+function readGlobalCodexModel(): string | undefined {
+  const value = vscode.workspace.getConfiguration("hackl").inspect<string>("codex.model")?.globalValue;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function isSetupHintDismissed(): boolean {
@@ -281,6 +289,40 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
         n > 0 ? `Hackl: discarded ${n} annotation${n === 1 ? "" : "s"}` : "Hackl: no recent annotations to discard",
         2000,
       );
+    }),
+    vscode.commands.registerCommand("hackl.submitFocusedCommentOnEnter", async () => {
+      // VS Code's `editor.action.submitComment` calls
+      // CommentReplyWidget.submitComment(), which fires the default action
+      // contributed under `comments/commentThread/context`. For our controller
+      // that is `hackl.replyToAnnotationThread`. We just delegate. If VS Code
+      // ever changes the command id, we still want some keystroke to insert a
+      // newline rather than silently swallowing Enter — so we fall back to a
+      // plain newline insertion when the submit command throws.
+      try {
+        await vscode.commands.executeCommand("editor.action.submitComment");
+      } catch (error) {
+        activationDebug?.("annotations.submitOnEnter.failed", { error: String(error) });
+        await vscode.commands.executeCommand("type", { text: "\n" });
+      }
+    }),
+    vscode.commands.registerCommand("hackl.dismissFocusedEmptyComment", async () => {
+      // Escape on an empty draft reply: ask VS Code to hide/dispose the
+      // widget. `workbench.action.hideComment` is the bound Escape command on
+      // newer VS Code; we also defensively call `editor.action.cancelComment`
+      // and let the comment service tear down the draft thread.
+      const tried: string[] = [];
+      for (const id of ["workbench.action.hideComment", "editor.action.cancelComment"]) {
+        try {
+          await vscode.commands.executeCommand(id);
+          tried.push(id);
+          break;
+        } catch (error) {
+          activationDebug?.("annotations.dismissOnEscape.failed", { id, error: String(error) });
+        }
+      }
+      if (tried.length === 0) {
+        activationDebug?.("annotations.dismissOnEscape.noCommandWorked");
+      }
     }),
     vscode.commands.registerCommand("hackl.revealTarget", async (id: string) => {
       const target = basketService!.list().find((t) => t.id === id);
@@ -525,7 +567,11 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       return { content: "Codex is installed but not logged in. Run `codex login`, then try again." };
     }
     codexCommand = codexDetection.command;
-    target = { endpoint: "codex", model: stored!.model };
+    const model = pickAvailableModel(codexDetection.models, stored?.model ?? readGlobalCodexModel());
+    if (!model) {
+      return { content: "Codex is installed but no Codex models are available." };
+    }
+    target = { endpoint: "codex", model };
   } else {
     target = await resolveChatTarget({
       endpoint: cfg.endpoint,
@@ -748,7 +794,8 @@ function effectiveBackendChoice(
 ): BackendChoice {
   const stored = readBackendChoice();
   if (stored?.kind === "codex" && codex?.available && codex.authMode !== "none") {
-    return stored;
+    const model = pickAvailableModel(codex.models, stored.model);
+    if (model) return { kind: "codex", model };
   }
   if (stored?.kind === "local") {
     return { kind: "local", model: stored.model || probe?.model || "", endpoint: stored.endpoint ?? probe?.endpoint };

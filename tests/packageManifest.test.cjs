@@ -34,15 +34,19 @@ test("context command titles use user-facing context wording", () => {
   assert.equal(command(manifest, "hackl.reviewStagedChanges")?.title, "Review Staged Changes");
 });
 
-test("comment editor enter submits and shift-enter inserts newline", () => {
+test("comment editor enter submits, shift-enter inserts newline, escape dismisses empty draft", () => {
   const manifest = readManifest();
-  const enter = manifest.contributes.keybindings.find((item) => item.key === "enter" && item.command === "editor.action.submitComment");
+  const enter = manifest.contributes.keybindings.find((item) => item.key === "enter" && item.command === "hackl.submitFocusedCommentOnEnter");
   const newline = manifest.contributes.keybindings.find((item) => item.key === "shift+enter" && item.command === "type");
-  assert.ok(enter);
+  const escape = manifest.contributes.keybindings.find((item) => item.key === "escape" && item.command === "hackl.dismissFocusedEmptyComment");
+  assert.ok(enter, "Enter must dispatch hackl.submitFocusedCommentOnEnter");
   assert.match(enter.when, /commentEditorFocused/);
   assert.doesNotMatch(enter.when, /commentIsEmpty/);
-  assert.ok(newline);
+  assert.ok(newline, "Shift+Enter must insert a newline");
   assert.deepEqual(newline.args, { text: "\n" });
+  assert.ok(escape, "Escape must dispatch hackl.dismissFocusedEmptyComment");
+  assert.match(escape.when, /commentEditorFocused/);
+  assert.match(escape.when, /commentIsEmpty/);
 });
 
 test("annotation reply is the only custom comment editor action", () => {
