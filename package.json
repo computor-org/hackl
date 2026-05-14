@@ -191,6 +191,11 @@
         "when": "commentEditorFocused && !commentIsEmpty && !suggestWidgetVisible && !inlineSuggestionVisible"
       },
       {
+        "command": "editor.action.submitComment",
+        "key": "enter",
+        "when": "editorTextFocus && resourceScheme == commentsInput && !suggestWidgetVisible && !inlineSuggestionVisible"
+      },
+      {
         "command": "type",
         "args": {
           "text": "\n"
