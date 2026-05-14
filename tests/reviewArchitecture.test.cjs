@@ -8,7 +8,7 @@ const path = require("node:path");
 const { BasketService } = require("../dist/basket.js");
 const { buildHacklMessages } = require("../dist/prompt.js");
 const { parseReviewCommentsFromAnswer } = require("../dist/reviewComments.js");
-const { newReviewSessionId, persistReviewSession } = require("../dist/reviewSession.js");
+const { newHacklSessionId, persistHacklSession } = require("../dist/hacklSession.js");
 
 test("BasketService carries a generic reviewContext and fires only on change", () => {
   const basket = new BasketService();
@@ -23,7 +23,7 @@ test("BasketService carries a generic reviewContext and fires only on change", (
 });
 
 test("buildHacklMessages renders a neutral review context block", () => {
-  const messages = buildHacklMessages("review", "ctx", [], "review", {
+  const messages = buildHacklMessages("review", "ctx", [], "ask", {
     reviewContext: {
       source: "external-host",
       role: "reviewer",
@@ -54,13 +54,13 @@ test("parseReviewCommentsFromAnswer tags comments as AI with model", () => {
   assert.equal(parsed[0].aiModel, "qwen3");
 });
 
-test("persistReviewSession writes a JSON file under .hackl/reviews/", async () => {
+test("persistHacklSession writes a JSON file under .hackl/sessions/", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "hackl-rs-"));
   try {
     const session = {
-      id: newReviewSessionId(),
+      id: newHacklSessionId(),
       createdAt: new Date().toISOString(),
-      mode: "review",
+      mode: "ask",
       endpoint: "http://127.0.0.1:1234/v1",
       model: "test",
       targets: [],
@@ -69,12 +69,12 @@ test("persistReviewSession writes a JSON file under .hackl/reviews/", async () =
       answer: "done",
       comments: [],
     };
-    const file = await persistReviewSession(root, session);
+    const file = await persistHacklSession(root, session);
     assert.ok(file && fssync.existsSync(file));
     const written = JSON.parse(await fs.readFile(file, "utf8"));
     assert.equal(written.id, session.id);
     assert.equal(written.context.source, "external");
-    assert.match(file, /\.hackl\/reviews\//);
+    assert.match(file, /\.hackl\/sessions\//);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

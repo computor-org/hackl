@@ -23,45 +23,91 @@ Linux:
 Download the latest release for your platform from
 <https://github.com/ggml-org/llama.cpp/releases> or build from source.
 
-## 2. Start a server
+## 2. Pick a model tier and start a server
 
-Small model (~6 GB VRAM, 9B Q4_K_M):
+Three tiers, each with a Qwen pick and a Gemma alternative. Numbers are rough;
+your mileage varies with quantisation, context length, and GPU/CPU split.
+
+| Tier | RAM/VRAM | Qwen (default) | Gemma alternative |
+| ---- | -------- | -------------- | ----------------- |
+| S    | 4–8 GB   | Qwen3 4B-Instruct | Gemma 3n E2B-it |
+| M    | 12–16 GB | Qwen3 8B          | Gemma 3n E4B-it |
+| L    | 24 GB+   | Qwen3 14B (or 30B-A3B MoE) | Gemma 3 12B-it (27B-it if ≥30 GB) |
+
+### Tier S (4–8 GB)
 
 ```sh
 llama-server \
-  -hf bartowski/Qwen_Qwen3.5-9B-GGUF:Q4_K_M \
-  -c 32768 \
-  --cache-type-k q8_0 \
-  --cache-type-v q8_0 \
-  -ngl auto \
-  -fa on \
-  --alias qwen-local \
-  --jinja \
-  --host 127.0.0.1 \
-  --port 8080
+  -hf bartowski/Qwen_Qwen3-4B-Instruct-GGUF:Q4_K_M \
+  -c 16384 \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on \
+  --alias qwen-local --jinja \
+  --host 127.0.0.1 --port 8080
 ```
 
-Large agentic model (~22 GB weights, 35B-A3B):
+Gemma alternative:
 
 ```sh
 llama-server \
-  -hf unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_XL \
+  -hf ggml-org/gemma-3n-E2B-it-GGUF:Q4_0 \
+  -c 16384 \
+  -ngl auto -fa on \
+  --alias gemma-local --jinja \
+  --host 127.0.0.1 --port 8080
+```
+
+### Tier M (12–16 GB)
+
+```sh
+llama-server \
+  -hf bartowski/Qwen_Qwen3-8B-GGUF:Q4_K_M \
+  -c 32768 \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on \
+  --alias qwen-local --jinja \
+  --host 127.0.0.1 --port 8080
+```
+
+Gemma alternative:
+
+```sh
+llama-server \
+  -hf ggml-org/gemma-3n-E4B-it-GGUF:Q4_0 \
+  -c 32768 \
+  -ngl auto -fa on \
+  --alias gemma-local --jinja \
+  --host 127.0.0.1 --port 8080
+```
+
+### Tier L (24 GB+)
+
+```sh
+llama-server \
+  -hf unsloth/Qwen3-30B-A3B-GGUF:UD-Q4_K_XL \
   -c 65536 \
-  --cache-type-k q8_0 \
-  --cache-type-v q8_0 \
-  -ngl auto \
-  -fa on \
-  --alias qwen-local \
-  --jinja \
-  --host 127.0.0.1 \
-  --port 8080
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on \
+  --alias qwen-local --jinja \
+  --host 127.0.0.1 --port 8080
+```
+
+Gemma alternative (12B fits ~12 GB VRAM; 27B fits ~22 GB VRAM at Q4):
+
+```sh
+llama-server \
+  -hf bartowski/gemma-3-12b-it-GGUF:Q4_K_M \
+  -c 32768 \
+  -ngl auto -fa on \
+  --alias gemma-local --jinja \
+  --host 127.0.0.1 --port 8080
 ```
 
 Web UI: <http://127.0.0.1:8080/>.
 
 ## 3. Point Hackl at it
 
-Either click **Set endpoint to :8080/v1** in the Hackl setup view, or:
+Either click **Set endpoint to :8080/v1** in the Hackl setup panel, or:
 
 ```jsonc
 // settings.json
@@ -75,15 +121,16 @@ Run `Hackl: Check Local Server` to confirm.
 
 ## Tuning notes
 
-- Lower `-c` if the model does not fit; raise toward 64k or 128k only after
-  the model is stable.
+- Lower `-c` if the model does not fit; raise toward 64k or 128k only after the
+  model is stable.
 - `q8_0` KV cache is a good long-context compromise.
 - `-ngl auto` asks llama.cpp to place what fits on GPU.
-- On MoE models, partial CPU expert placement with `--n-cpu-moe N` can help
-  fit limited VRAM; tune `N` per hardware.
+- On MoE models (e.g. Qwen3-30B-A3B), partial CPU expert placement with
+  `--n-cpu-moe N` can help fit limited VRAM; tune `N` per hardware.
 - `--no-webui` disables the browser UI.
 
 ## Sources
 
 - llama.cpp server: <https://github.com/ggml-org/llama.cpp/tree/master/tools/server>
 - Qwen on llama.cpp: <https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html>
+- Gemma 3n: <https://ai.google.dev/gemma/docs/gemma-3n>

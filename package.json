@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -29,8 +29,9 @@
     "onCommand:hackl.addLastCommitToContext",
     "onCommand:hackl.clearContext",
     "onCommand:hackl.clearReviewComments",
-    "onView:hackl.chatView",
-    "onView:hackl.setupView"
+    "onCommand:hackl.reviewStagedChanges",
+    "onCommand:hackl.revealTarget",
+    "onView:hackl.chatView"
   ],
   "main": "./dist/extension.js",
   "bin": {
@@ -107,8 +108,19 @@
       },
       {
         "command": "hackl.clearReviewComments",
-        "title": "Clear Review Comments",
+        "title": "Clear Annotations",
         "category": "Hackl"
+      },
+      {
+        "command": "hackl.reviewStagedChanges",
+        "title": "Review Staged Changes (Ask + Annotations)",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.revealTarget",
+        "title": "Reveal Target",
+        "category": "Hackl",
+        "enablement": "false"
       }
     ],
     "viewsContainers": {
@@ -128,13 +140,6 @@
           "name": "Chat",
           "icon": "media/hackl.svg",
           "contextualTitle": "Hackl Chat"
-        },
-        {
-          "id": "hackl.setupView",
-          "type": "webview",
-          "name": "Setup",
-          "icon": "media/hackl.svg",
-          "contextualTitle": "Hackl Setup"
         }
       ]
     },
@@ -224,10 +229,10 @@
           "default": false,
           "description": "Write Hackl prompt and tool-loop diagnostics to the Hackl Debug output channel and the VS Code Extension Host debug console."
         },
-        "hackl.persistReviews": {
+        "hackl.persistSessions": {
           "type": "boolean",
           "default": true,
-          "description": "Persist completed review sessions as JSON files under .hackl/reviews/ in the workspace root."
+          "description": "Persist completed Hackl sessions (when annotations are requested) as JSON files under .hackl/sessions/ in the workspace root."
         }
       }
     },

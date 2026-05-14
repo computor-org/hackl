@@ -92,10 +92,40 @@ test("buildHacklMessages includes targets and questions when supplied", () => {
   assert.match(body, /Q2: is it tested\?/);
 });
 
-test("buildHacklMessages selects review system prompt for review mode", () => {
-  const messages = buildHacklMessages("review please", "ctx", [], "review");
-  assert.match(messages[0].content, /Local code reviewer/);
-  assert.match(messages[0].content, /hackl-review/);
+test("buildHacklMessages handles staged-diff target with multiple questions", () => {
+  const staged = {
+    id: "staged-1",
+    addedAt: 1,
+    kind: "staged-changes",
+    workspaceRoot: "/r",
+    files: ["a.ts", "b.ts"],
+    diff: "diff --git a/a.ts b/a.ts\n@@\n-x\n+y",
+    diffTruncated: false,
+  };
+  const messages = buildHacklMessages(
+    "1. correctness?\n2. tests?",
+    "[no editor context]",
+    [],
+    "ask",
+    {
+      targets: [staged],
+      questions: ["correctness?", "tests?"],
+    },
+  );
+  const body = messages[messages.length - 1].content;
+  assert.match(body, /staged-diff files=2/);
+  assert.match(body, /Q1: correctness\?/);
+  assert.match(body, /Q2: tests\?/);
+});
+
+test("buildHacklMessages appends annotation output instructions when createAnnotations is true", () => {
+  const messages = buildHacklMessages("explain", "ctx", [], "ask", {
+    createAnnotations: true,
+  });
+  const body = messages[messages.length - 1].content;
+  assert.match(body, /annotations requested/);
+  assert.match(body, /hackl-review/);
+  assert.match(messages[0].content, /Local code helper/);
 });
 
 test("parseReviewCommentsFromAnswer extracts JSON from fenced blocks", () => {

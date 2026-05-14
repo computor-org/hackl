@@ -4,7 +4,7 @@ import type { HacklTarget, ReviewContext } from "./basket";
 import type { HacklReviewComment } from "./reviewComments";
 import type { PromptMode } from "./prompt";
 
-export interface ReviewSession {
+export interface HacklSessionRecord {
   id: string;
   createdAt: string;
   mode: PromptMode;
@@ -20,17 +20,17 @@ export interface ReviewSession {
 
 let counter = 0;
 
-export function newReviewSessionId(): string {
+export function newHacklSessionId(): string {
   counter += 1;
-  return `rs-${Date.now().toString(36)}-${counter.toString(36)}`;
+  return `hs-${Date.now().toString(36)}-${counter.toString(36)}`;
 }
 
-export async function persistReviewSession(
+export async function persistHacklSession(
   workspaceRoot: string,
-  session: ReviewSession,
+  session: HacklSessionRecord,
 ): Promise<string | undefined> {
   if (!workspaceRoot) return undefined;
-  const dir = path.join(workspaceRoot, ".hackl", "reviews");
+  const dir = path.join(workspaceRoot, ".hackl", "sessions");
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${session.id}.json`);
   await fs.writeFile(file, JSON.stringify(session, null, 2), "utf8");

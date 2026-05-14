@@ -34,6 +34,11 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
       <button id="clear" class="icon-button" type="button" title="Clear transcript" aria-label="Clear transcript"><span class="codicon codicon-clear-all" aria-hidden="true"></span></button>
     </header>
     <main id="thread" aria-live="polite">
+      <div id="connect-hint" class="connect-hint" hidden>
+        <span class="codicon codicon-plug" aria-hidden="true"></span>
+        <span>No local model detected. Start one (LM Studio, llama.cpp, Ollama) and point Hackl at it.</span>
+        <button id="open-setup" type="button">Open setup</button>
+      </div>
       <div id="empty-state" class="empty-state">
         <div class="empty-mark" aria-hidden="true"></div>
         <div class="empty-title">Hi. How can I help?</div>
@@ -68,6 +73,9 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           <button id="attach" class="tool-button" type="button" title="Add current selection (Ctrl+Alt+A)" aria-label="Add current selection">
             <span class="codicon codicon-add" aria-hidden="true"></span>
           </button>
+          <button id="annotations-toggle" class="tool-button" type="button" title="Also produce line-anchored comments" aria-label="Create annotations" aria-pressed="false">
+            <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
+          </button>
           <div class="mode-dropdown">
             <button id="mode-button" class="mode-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Mode">
               <span id="mode-label">Ask</span>
@@ -75,7 +83,6 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
             </button>
             <div id="mode-menu" class="mode-menu" role="listbox" hidden>
               <button class="mode-option" type="button" role="option" data-value="ask" aria-selected="true">Ask</button>
-              <button class="mode-option" type="button" role="option" data-value="review" aria-selected="false">Review</button>
               <button class="mode-option" type="button" role="option" data-value="edit" aria-selected="false">Edit</button>
               <button class="mode-option" type="button" role="option" data-value="work" aria-selected="false">Work</button>
               <button class="mode-option" type="button" role="option" data-value="agent" aria-selected="false">Agent</button>
@@ -247,6 +254,18 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.basket-item-label:hover {
+  color: var(--hackl-accent);
+  text-decoration: underline;
 }
 
 .basket-remove {
@@ -697,6 +716,34 @@ h1 {
   font-size: 12px;
 }
 
+.connect-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--vscode-inputValidation-warningBackground, #4d3e15) 60%, transparent);
+  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--hackl-border));
+  color: var(--vscode-foreground);
+  font-size: 12px;
+}
+
+.connect-hint button {
+  margin-left: auto;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.connect-hint button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1082,6 +1129,7 @@ const clientScript = `
   const basketAddStaged = document.getElementById("basket-add-staged");
   const basketClear = document.getElementById("basket-clear");
   const attachButton = document.getElementById("attach");
+  const annotationsToggle = document.getElementById("annotations-toggle");
   const modeButton = document.getElementById("mode-button");
   const modeMenu = document.getElementById("mode-menu");
   const modeLabel = document.getElementById("mode-label");
@@ -1090,6 +1138,7 @@ const clientScript = `
   let assistantDraft;
   let isBusy = false;
   let selectedMode = "ask";
+  let annotationsOn = false;
   const pendingQueue = [];
 
   installMath(md);
@@ -1107,13 +1156,13 @@ const clientScript = `
     autoResize();
     focusPrompt();
     if (isBusy) {
-      const item = { text, mode: selectedMode, entry };
+      const item = { text, mode: selectedMode, createAnnotations: annotationsOn, entry };
       pendingQueue.push(item);
       markQueued(entry, true, () => removeQueuedItem(item));
       updateSendState();
       return;
     }
-    sendPrompt(text, selectedMode);
+    sendPrompt(text, selectedMode, annotationsOn);
   });
 
   send.addEventListener("click", (event) => {
@@ -1163,6 +1212,24 @@ const clientScript = `
   if (attachButton) {
     attachButton.addEventListener("click", () => {
       vscode.postMessage({ type: "runCommand", value: "hackl.addSelectionToContext" });
+      focusPrompt();
+    });
+  }
+
+  const openSetupBtn = document.getElementById("open-setup");
+  if (openSetupBtn) {
+    openSetupBtn.addEventListener("click", () => {
+      vscode.postMessage({ type: "runCommand", value: "hackl.openSetupGuide" });
+    });
+  }
+
+  if (annotationsToggle) {
+    annotationsToggle.addEventListener("click", () => {
+      annotationsOn = !annotationsOn;
+      annotationsToggle.setAttribute("aria-pressed", String(annotationsOn));
+      annotationsToggle.title = annotationsOn
+        ? "Annotations ON — model will also emit anchored comments"
+        : "Also produce line-anchored comments";
       focusPrompt();
     });
   }
@@ -1256,6 +1323,7 @@ const clientScript = `
     if (message.type === "metrics") updateMeter(message.inputTokens, message.maxContextTokens);
     if (message.type === "state") applyState(message);
     if (message.type === "basket") renderBasket(message.targets || []);
+    if (message.type === "userPrompt") appendUser(message.text || "");
     if (message.type === "focusInput") {
       requestAnimationFrame(() => {
         prompt.focus();
@@ -1282,13 +1350,18 @@ const clientScript = `
     }
   });
 
-  function sendPrompt(text, mode) {
+  function sendPrompt(text, mode, createAnnotations) {
     setBusy(true);
-    vscode.postMessage({ type: "prompt", prompt: text, mode: normalizeMode(mode) });
+    vscode.postMessage({
+      type: "prompt",
+      prompt: text,
+      mode: normalizeMode(mode),
+      createAnnotations: Boolean(createAnnotations),
+    });
   }
 
   function normalizeMode(mode) {
-    return ["edit", "work", "agent", "review"].includes(mode) ? mode : "ask";
+    return ["edit", "work", "agent"].includes(mode) ? mode : "ask";
   }
 
   function renderBasket(targets) {
@@ -1303,10 +1376,14 @@ const clientScript = `
       const kind = document.createElement("span");
       kind.className = "basket-item-kind";
       kind.textContent = kindShort(target.kind);
-      const label = document.createElement("span");
+      const label = document.createElement("button");
+      label.type = "button";
       label.className = "basket-item-label";
       label.textContent = describe(target);
-      label.title = describe(target);
+      label.title = describe(target) + " — click to reveal";
+      label.addEventListener("click", () => {
+        vscode.postMessage({ type: "revealTarget", targetId: target.id });
+      });
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "basket-remove";
@@ -1402,7 +1479,7 @@ const clientScript = `
       return;
     }
     markQueued(next.entry, false);
-    sendPrompt(next.text, next.mode);
+    sendPrompt(next.text, next.mode, next.createAnnotations);
   }
 
   function markQueued(entry, queued, onRemove) {
@@ -1464,6 +1541,14 @@ const clientScript = `
       reasoningToggle.setAttribute("aria-pressed", String(message.enableThinking));
     }
     updateEndpointStatus(message);
+    updateConnectHint(message);
+  }
+
+  function updateConnectHint(message) {
+    const hint = document.getElementById("connect-hint");
+    if (!hint) return;
+    const needsConnect = !message.model && !message.endpointApprovalRequired;
+    hint.hidden = !needsConnect;
   }
 
   function updateEndpointStatus(message) {

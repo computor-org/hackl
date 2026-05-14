@@ -5,6 +5,7 @@ export type ReviewStatus = "open" | "resolved" | "dismissed";
 
 export interface HacklReviewComment {
   id: string;
+  targetId?: string;
   uri: string;
   startLine: number;
   endLine: number;
@@ -49,6 +50,7 @@ export class ReviewCommentController {
     const id = `rev-${Date.now().toString(36)}-${counter.toString(36)}`;
     const comment: HacklReviewComment = {
       id,
+      targetId: input.targetId,
       status: input.status ?? "open",
       uri: input.uri,
       startLine: input.startLine,

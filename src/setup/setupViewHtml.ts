@@ -23,12 +23,24 @@ export function renderSetupHtml(webview: vscode.Webview): string {
       <span class="profile">Profile: <span id="profile">auto</span></span>
     </div>
 
+    <div class="tiers">
+      <strong>Model tiers</strong>
+      <table>
+        <thead><tr><th>Tier</th><th>RAM/VRAM</th><th>Qwen</th><th>Gemma</th></tr></thead>
+        <tbody>
+          <tr><td>S</td><td>4–8 GB</td><td><code>Qwen3 4B-Instruct</code></td><td><code>Gemma 3n E2B-it</code></td></tr>
+          <tr><td>M</td><td>12–16 GB</td><td><code>Qwen3 8B</code></td><td><code>Gemma 3n E4B-it</code></td></tr>
+          <tr><td>L</td><td>24 GB+</td><td><code>Qwen3 14B</code> / <code>Qwen3-30B-A3B</code></td><td><code>Gemma 3 12B-it</code> / <code>27B-it</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <details id="lmstudio" class="card">
       <summary><strong>LM Studio</strong> · easy</summary>
       <ol>
         <li>Install <a href="#" data-link="https://lmstudio.ai/">LM Studio</a> and open it once.</li>
-        <li>Search a Q4 GGUF: <code>Qwen3.5-4B-GGUF</code>, <code>Qwen3.5-9B-GGUF</code>, or <code>Qwen3.6-35B-A3B-GGUF</code>.</li>
-        <li>Load the model.</li>
+        <li>Search a GGUF matching your tier (see table above).</li>
+        <li>Load the model and try a quick chat in LM Studio's UI.</li>
         <li>Open <em>Developer</em> → start the local server.</li>
         <li>Point Hackl at it:</li>
       </ol>
@@ -43,12 +55,16 @@ export function renderSetupHtml(webview: vscode.Webview): string {
       <p>Install:</p>
       <pre><code>brew install llama.cpp           # macOS
 winget install llama.cpp         # Windows
-# Linux: download from github.com/ggml-org/llama.cpp/releases</code></pre>
-      <p>Run a server (9B):</p>
+# Linux: github.com/ggml-org/llama.cpp/releases</code></pre>
+      <p>Tier M (Qwen 8B):</p>
       <pre><code>llama-server \\
-  -hf bartowski/Qwen_Qwen3.5-9B-GGUF:Q4_K_M \\
+  -hf bartowski/Qwen_Qwen3-8B-GGUF:Q4_K_M \\
   -c 32768 --cache-type-k q8_0 --cache-type-v q8_0 \\
   -ngl auto -fa on --alias qwen-local --jinja \\
+  --host 127.0.0.1 --port 8080</code></pre>
+      <p>Tier M (Gemma 3n E4B):</p>
+      <pre><code>llama-server -hf ggml-org/gemma-3n-E4B-it-GGUF:Q4_0 \\
+  -c 32768 -ngl auto -fa on --jinja \\
   --host 127.0.0.1 --port 8080</code></pre>
       <div class="actions">
         <button data-set="http://127.0.0.1:8080/v1" type="button">Set endpoint to :8080/v1</button>
@@ -59,7 +75,12 @@ winget install llama.cpp         # Windows
     <details id="ollama" class="card">
       <summary><strong>Ollama</strong> · alternative</summary>
       <pre><code>ollama serve
-ollama pull qwen3:8b</code></pre>
+# Tier S
+ollama pull qwen3:4b      # or gemma3n:e2b
+# Tier M
+ollama pull qwen3:8b      # or gemma3n:e4b
+# Tier L
+ollama pull qwen3-coder:30b   # or gemma3:12b</code></pre>
       <p class="hint">Ollama exposes <code>/v1</code> on port 11434 but has model-name and <code>/props</code> quirks.</p>
       <div class="actions">
         <button data-set="http://127.0.0.1:11434/v1" type="button">Set endpoint to :11434/v1</button>
@@ -105,6 +126,10 @@ const STYLES = `
   a { color: var(--vscode-textLink-foreground); }
   .hint { font-size: 11px; color: var(--vscode-descriptionForeground); }
   .footer { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 18px; }
+  .tiers { display: block; margin: 8px 0 14px; font-size: 12px; }
+  .tiers table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .tiers th, .tiers td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--vscode-panel-border, transparent); font-size: 11px; }
+  .tiers th { font-weight: 600; color: var(--vscode-descriptionForeground); }
 `;
 
 const SCRIPT = `

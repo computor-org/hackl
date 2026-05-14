@@ -3,7 +3,7 @@ import type { HacklTarget, ReviewContext } from "./basket";
 import { ASK_TOOL_INSTRUCTIONS, EDIT_TOOL_INSTRUCTIONS, WORK_TOOL_INSTRUCTIONS, AGENT_TOOL_INSTRUCTIONS } from "./tools";
 
 export type ConversationMessage = Pick<ChatMessage, "role" | "content">;
-export type PromptMode = "ask" | "review" | "edit" | "work" | "agent";
+export type PromptMode = "ask" | "edit" | "work" | "agent";
 
 const ASK_SYSTEM_PROMPT = [
   "Hackl. Local code helper. Terse. No edits. No long think.",
@@ -13,13 +13,10 @@ const ASK_SYSTEM_PROMPT = [
   ASK_TOOL_INSTRUCTIONS,
 ].join("\n");
 
-const REVIEW_SYSTEM_PROMPT = [
-  "Hackl. Local code reviewer. Terse. No edits.",
-  "Produce review comments, not prose. Each comment anchors to one target file and line range.",
-  "Output one fenced block ```hackl-review with a JSON array of comments. Outside that block, write at most one short summary line.",
-  "Comment fields: uri (string, copy from target), startLine (int, 1-based), endLine (int, 1-based), severity (note|suggestion|warning|blocking), message (string), rationale (string, optional).",
-  "Prefer actionable comments. Avoid duplicates. Skip cosmetic nits unless asked.",
-  ASK_TOOL_INSTRUCTIONS,
+const ANNOTATION_OUTPUT_INSTRUCTIONS = [
+  "annotations requested: in addition to your chat answer, emit one fenced block ```hackl-review containing a JSON array of comments.",
+  "Each comment: { uri (copy from a target), startLine (1-based int), endLine (1-based int), severity (note|suggestion|warning|blocking), message, rationale? }.",
+  "Anchor each comment to one target's uri and lines. Prefer actionable, non-duplicate comments. If you have nothing concrete to anchor, emit an empty array.",
 ].join("\n");
 
 const EDIT_SYSTEM_PROMPT = [
@@ -49,6 +46,7 @@ export interface BuildOptions {
   targets?: HacklTarget[];
   questions?: string[];
   reviewContext?: ReviewContext;
+  createAnnotations?: boolean;
 }
 
 export function buildHacklMessages(
@@ -80,6 +78,9 @@ export function composeUserBody(prompt: string, contextText: string, options: Bu
     const lines = ["questions:"];
     options.questions.forEach((q, i) => lines.push(`Q${i + 1}: ${q.trim()}`));
     sections.push(lines.join("\n"));
+  }
+  if (options.createAnnotations) {
+    sections.push(ANNOTATION_OUTPUT_INSTRUCTIONS);
   }
   sections.push(prompt);
   return sections.join("\n\n");
@@ -170,8 +171,6 @@ function systemPrompt(mode: PromptMode): string {
       return WORK_SYSTEM_PROMPT;
     case "edit":
       return EDIT_SYSTEM_PROMPT;
-    case "review":
-      return REVIEW_SYSTEM_PROMPT;
     default:
       return ASK_SYSTEM_PROMPT;
   }

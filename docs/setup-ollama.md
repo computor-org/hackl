@@ -22,20 +22,35 @@ The default OpenAI-compatible base URL is:
 http://127.0.0.1:11434/v1
 ```
 
-## 2. Pull a model
+## 2. Pull a model tier
+
+Three tiers, each with a Qwen pick and a Gemma alternative.
+
+| Tier | RAM/VRAM | Qwen (default) | Gemma alternative |
+| ---- | -------- | -------------- | ----------------- |
+| S    | 4–8 GB   | `qwen3:4b`     | `gemma3n:e2b`     |
+| M    | 12–16 GB | `qwen3:8b`     | `gemma3n:e4b`     |
+| L    | 24 GB+   | `qwen3-coder:30b` (MoE) | `gemma3:12b` (27b if ≥30 GB) |
 
 ```sh
+# Tier S
+ollama pull qwen3:4b
+ollama pull gemma3n:e2b
+
+# Tier M
 ollama pull qwen3:8b
-# or
+ollama pull gemma3n:e4b
+
+# Tier L
 ollama pull qwen3-coder:30b
+ollama pull gemma3:12b
 ```
 
-Ollama model names have their own namespace. Use whatever `ollama list` shows
-as the model id when talking to the API.
+Use whatever `ollama list` shows as the model id when talking to the API.
 
 ## 3. Point Hackl at it
 
-Either click **Set endpoint to :11434/v1** in the Hackl setup view, or:
+Either click **Set endpoint to :11434/v1** in the Hackl setup panel, or:
 
 ```jsonc
 // settings.json
@@ -50,3 +65,4 @@ Run `Hackl: Check Local Server` to confirm.
 ## Sources
 
 - Ollama OpenAI compatibility: <https://github.com/ollama/ollama/blob/main/docs/openai.md>
+- Ollama model library: <https://ollama.com/library>

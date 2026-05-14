@@ -5,22 +5,37 @@ import { renderSetupHtml } from "./setupViewHtml";
 type ProbeRunner = () => Promise<ProbeResult[]>;
 type EndpointSetter = (endpoint: string) => Promise<void>;
 
-export class SetupViewProvider implements vscode.WebviewViewProvider {
-  static readonly viewType = "hackl.setupView";
+export class SetupPanel {
+  static readonly viewType = "hackl.setupPanel";
+  private static current: SetupPanel | undefined;
 
-  private view?: vscode.WebviewView;
+  static show(context: vscode.ExtensionContext, runProbe: ProbeRunner, setEndpoint: EndpointSetter): void {
+    if (SetupPanel.current) {
+      SetupPanel.current.panel.reveal();
+      void SetupPanel.current.postStatus();
+      return;
+    }
+    const panel = vscode.window.createWebviewPanel(
+      SetupPanel.viewType,
+      "Hackl — Setup",
+      vscode.ViewColumn.Active,
+      { enableScripts: true, retainContextWhenHidden: false },
+    );
+    SetupPanel.current = new SetupPanel(panel, context, runProbe, setEndpoint);
+  }
 
-  constructor(
-    private readonly context: vscode.ExtensionContext,
+  static refresh(): void {
+    void SetupPanel.current?.postStatus();
+  }
+
+  private constructor(
+    private readonly panel: vscode.WebviewPanel,
+    _context: vscode.ExtensionContext,
     private readonly runProbe: ProbeRunner,
     private readonly setEndpoint: EndpointSetter,
-  ) {}
-
-  resolveWebviewView(view: vscode.WebviewView): void {
-    this.view = view;
-    view.webview.options = { enableScripts: true };
-    view.webview.html = renderSetupHtml(view.webview);
-    view.webview.onDidReceiveMessage(async (msg) => {
+  ) {
+    panel.webview.html = renderSetupHtml(panel.webview);
+    panel.webview.onDidReceiveMessage(async (msg) => {
       switch (msg?.type) {
         case "ready":
         case "refresh":
@@ -45,15 +60,9 @@ export class SetupViewProvider implements vscode.WebviewViewProvider {
           break;
       }
     });
-    view.onDidDispose(() => { this.view = undefined; });
-  }
-
-  async reveal(): Promise<void> {
-    await vscode.commands.executeCommand(`${SetupViewProvider.viewType}.focus`);
-  }
-
-  refresh(): void {
-    void this.postStatus();
+    panel.onDidDispose(() => {
+      if (SetupPanel.current === this) SetupPanel.current = undefined;
+    });
   }
 
   private profile(): string {
@@ -61,10 +70,9 @@ export class SetupViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async postStatus(): Promise<void> {
-    if (!this.view) return;
     const probes = await this.runProbe();
     const ok = probes.find((p) => p.ok);
-    await this.view.webview.postMessage({
+    await this.panel.webview.postMessage({
       type: "status",
       connected: !!ok,
       endpoint: ok?.endpoint,

@@ -10,6 +10,11 @@ export interface ChatIncomingMessage {
   approved?: boolean;
   value?: unknown;
   targetId?: string;
+  createAnnotations?: boolean;
+}
+
+export interface HacklRequestOptions {
+  createAnnotations?: boolean;
 }
 
 export type ChatOutgoingMessage =
@@ -21,6 +26,7 @@ export type ChatOutgoingMessage =
   | { type: "cleared" }
   | { type: "history"; entries: ConversationMessage[] }
   | { type: "basket"; targets: HacklTarget[] }
+  | { type: "userPrompt"; text: string }
   | ChatState
   | { type: "focusInput" };
 
@@ -64,6 +70,7 @@ export type PromptHandler = (
   requestApproval: ApprovalRequester,
   signal?: AbortSignal,
   targets?: HacklTarget[],
+  options?: HacklRequestOptions,
 ) => Promise<ChatAnswer | string>;
 
 export interface BasketBridge {
@@ -71,6 +78,7 @@ export interface BasketBridge {
   onDidChange(listener: (snapshot: BasketSnapshot) => void): { dispose(): void };
   remove(id: string): void;
   clear(): void;
+  reveal?(id: string): void;
 }
 
 export class ChatSession {
@@ -86,6 +94,16 @@ export class ChatSession {
   dispose(): void {
     this.basketSubscription?.dispose();
     this.basketSubscription = undefined;
+  }
+
+  async runDirect(
+    prompt: string,
+    mode: PromptMode,
+    options: HacklRequestOptions,
+    post: ChatPost,
+  ): Promise<void> {
+    await post({ type: "userPrompt", text: prompt });
+    await this.handlePrompt(prompt, mode, options, post);
   }
 
   async handle(message: ChatIncomingMessage, post: ChatPost): Promise<void> {
@@ -121,16 +139,30 @@ export class ChatSession {
       this.basket?.remove(message.targetId);
       return;
     }
+    if (message.type === "revealTarget" && message.targetId) {
+      this.basket?.reveal?.(message.targetId);
+      return;
+    }
     if (message.type === "clearBasket") {
       this.basket?.clear();
       return;
     }
     if (message.type === "prompt") {
-      await this.handlePrompt(message.prompt, normalizeMode(message.mode), post);
+      await this.handlePrompt(
+        message.prompt,
+        normalizeMode(message.mode),
+        { createAnnotations: Boolean(message.createAnnotations) },
+        post,
+      );
     }
   }
 
-  private async handlePrompt(rawPrompt: string | undefined, mode: PromptMode, post: ChatPost): Promise<void> {
+  private async handlePrompt(
+    rawPrompt: string | undefined,
+    mode: PromptMode,
+    options: HacklRequestOptions,
+    post: ChatPost,
+  ): Promise<void> {
     const prompt = rawPrompt?.trim();
     if (!prompt) {
       return;
@@ -158,6 +190,7 @@ export class ChatSession {
         requestApproval,
         controller.signal,
         targets,
+        options,
       );
       if (controller.signal.aborted) {
         this.history.pop();
@@ -217,7 +250,7 @@ export class ChatSession {
 }
 
 function normalizeMode(mode: PromptMode | undefined): PromptMode {
-  if (mode === "agent" || mode === "work" || mode === "edit" || mode === "review") {
+  if (mode === "agent" || mode === "work" || mode === "edit") {
     return mode;
   }
   return "ask";

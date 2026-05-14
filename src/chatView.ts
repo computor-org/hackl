@@ -15,6 +15,7 @@ const ALLOWED_WEBVIEW_COMMANDS = new Set([
   "hackl.addStagedChangesToContext",
   "hackl.addLastCommitToContext",
   "hackl.clearContext",
+  "hackl.openSetupGuide",
 ]);
 
 export function isAllowedWebviewCommand(command: string): boolean {
@@ -80,6 +81,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     } else {
       this.pendingFocus = true;
     }
+  }
+
+  submitPreset(prompt: string, mode: import("./prompt").PromptMode, options: { createAnnotations?: boolean }): Promise<void> {
+    return this.session.runDirect(prompt, mode, options, (response) => {
+      if (!this.view) return Promise.resolve(false);
+      return post(this.view.webview, response);
+    });
   }
 }
 
