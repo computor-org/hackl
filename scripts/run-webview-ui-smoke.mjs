@@ -164,15 +164,7 @@ try {
   });
 
   await page.locator("#mode-button").click();
-  assert.equal(await page.locator('.mode-option[data-value="yolo"]').isDisabled(), false);
-  await page.locator('.mode-option[data-value="yolo"]').click();
-  await page.locator("#prompt").fill("Do it without asking");
-  await page.keyboard.press("Enter");
-  await waitFor(page, () => window.__hacklPosted?.some((message) => message.prompt === "Do it without asking"), diagnostics);
-  assert.deepEqual(
-    await page.evaluate(() => window.__hacklPosted.find((message) => message.prompt === "Do it without asking")),
-    { type: "prompt", prompt: "Do it without asking", mode: "yolo" },
-  );
+  assert.deepEqual(await page.locator(".mode-option").allTextContents(), ["Ask", "Edit", "Work", "Agent"]);
 
   const promptBox = await page.locator("#prompt").boundingBox();
   const viewport = page.viewportSize();
