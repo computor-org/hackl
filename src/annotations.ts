@@ -162,32 +162,59 @@ export class AnnotationController {
   }
 
   /**
-   * Reveal a thread in its editor and put the cursor in the reply input so the
-   * user can start typing immediately. Uses CommentThread.reveal — present at
-   * runtime since VS Code 1.85, even though it is not yet in the stable
-   * @types/vscode 1.106 typings — and falls back to focusing the comment
-   * widget on the thread's line.
+   * Reveal a thread in its editor, plant the cursor on its line, and — when
+   * possible — land focus directly in the reply input so the user can type
+   * straight away.
+   *
+   * The reliable path is to pass `selection` to `showTextDocument`: VS Code
+   * applies it before returning the editor, so the cursor lands on the line
+   * even when the source of the call (our chat webview) currently owns
+   * focus. We then force focus onto the editor group, because a webview that
+   * holds focus is not automatically displaced by `preserveFocus: false`.
+   *
+   * For the reply input itself there is no public command. We try
+   * `CommentThread.reveal({focus: Reply})` — proposed API (see
+   * vscode.proposed.commentReveal.d.ts) — and fall back to
+   * `workbench.action.focusCommentOnCurrentLine`, which at least focuses the
+   * comment widget on the line we just moved to.
    */
   async focusThreadReply(annotationId: string): Promise<void> {
     const entry = this.threads.get(annotationId);
-    if (!entry) return;
+    if (!entry) {
+      this.debug?.("annotations.focusThreadReply.unknownId", { id: annotationId });
+      return;
+    }
     const { thread, comment } = entry;
+    const line = Math.max(0, comment.startLine - 1);
+    const pos = new this.vscode.Position(line, 0);
+    const selection = new this.vscode.Range(pos, pos);
     try {
       const uri = this.vscode.Uri.parse(comment.uri);
       const doc = await this.vscode.workspace.openTextDocument(uri);
-      const editor = await this.vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
-      const line = Math.max(0, comment.startLine - 1);
-      const pos = new this.vscode.Position(line, 0);
-      editor.selection = new this.vscode.Selection(pos, pos);
-      editor.revealRange(new this.vscode.Range(pos, pos), this.vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+      await this.vscode.window.showTextDocument(doc, {
+        preview: false,
+        preserveFocus: false,
+        selection,
+      });
     } catch (error) {
       this.debug?.("annotations.focusThreadReply.openFailed", { id: annotationId, error: String(error) });
+      return;
     }
-    const reveal = (thread as unknown as { reveal?: (opts: unknown) => Thenable<void> }).reveal;
+    // Steal focus back from the chat webview. preserveFocus:false on
+    // showTextDocument doesn't actually displace a focused webview, so the
+    // editor would otherwise show the cursor without owning keyboard focus.
+    try {
+      await this.vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+    } catch (error) {
+      this.debug?.("annotations.focusThreadReply.focusEditorFailed", { id: annotationId, error: String(error) });
+    }
+    // Proposed API: lands focus inside the reply textarea. No-op on stable
+    // VS Code without --enable-proposed-api; that's fine, we fall through.
+    const reveal = (thread as unknown as { reveal?: (commentOrOptions?: unknown, options?: unknown) => Thenable<void> }).reveal;
     if (typeof reveal === "function") {
       try {
-        // CommentThreadFocus.Reply = 1
-        await reveal.call(thread, { focus: 1 });
+        await reveal.call(thread, undefined, { focus: 1 });
+        this.debug?.("annotations.focusThreadReply.revealed", { id: annotationId });
         return;
       } catch (error) {
         this.debug?.("annotations.focusThreadReply.revealFailed", { id: annotationId, error: String(error) });
