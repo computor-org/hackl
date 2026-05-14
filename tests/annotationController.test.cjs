@@ -118,17 +118,33 @@ test("AnnotationController does not provide comment ranges for comment input doc
   });
 });
 
-test("AnnotationController.refreshCommentingRanges replaces the provider", () => {
+test("AnnotationController.refreshCommentingRanges keeps a stable provider instance", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
     const controller = new AnnotationController();
     const first = controller.controller.commentingRangeProvider;
+    assert.equal(typeof first.provideCommentingRanges, "function");
+
+    controller.refreshCommentingRanges();
+    controller.refreshCommentingRanges();
+
+    assert.equal(controller.controller.commentingRangeProvider, first, "provider must not be replaced on refresh; reassigning causes the gutter strip to vanish");
+  });
+});
+
+test("AnnotationController.refreshCommentingRanges re-registers if controller drops the provider", () => {
+  const fake = makeFakeVscode();
+  withVscode(fake.vscode, () => {
+    const { AnnotationController } = freshControllerModule();
+    const controller = new AnnotationController();
+    const original = controller.controller.commentingRangeProvider;
+    // Simulate VS Code internally dropping the registration.
+    controller.controller.commentingRangeProvider = undefined;
 
     controller.refreshCommentingRanges();
 
-    assert.notEqual(controller.controller.commentingRangeProvider, first);
-    assert.equal(typeof controller.controller.commentingRangeProvider.provideCommentingRanges, "function");
+    assert.equal(controller.controller.commentingRangeProvider, original);
   });
 });
 

@@ -40,6 +40,7 @@ export class AnnotationController {
   private readonly vscode: typeof vscodeTypes;
   private debug: DebugLog | undefined;
   private batches: string[][] = [];
+  private commentingProvider: vscodeTypes.CommentingRangeProvider | undefined;
 
   beginBatch(): void {
     this.batches.push([]);
@@ -91,8 +92,18 @@ export class AnnotationController {
   }
 
   refreshCommentingRanges(): void {
-    this.debug?.("annotations.refreshCommentingRanges");
-    this.controller.commentingRangeProvider = this.createCommentingRangeProvider();
+    if (!this.commentingProvider) {
+      this.commentingProvider = this.createCommentingRangeProvider();
+    }
+    // Re-assign the same stable provider instance so VS Code re-registers it
+    // if some downstream event dropped it, without creating a new closure that
+    // could cause the gutter strip to flicker out.
+    if (this.controller.commentingRangeProvider !== this.commentingProvider) {
+      this.debug?.("annotations.refreshCommentingRanges.reassign");
+      this.controller.commentingRangeProvider = this.commentingProvider;
+    } else {
+      this.debug?.("annotations.refreshCommentingRanges.noop");
+    }
   }
 
   setDebugLog(debug: DebugLog | undefined): void {
