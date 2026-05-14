@@ -41,16 +41,11 @@ test("annotation note command stays out of the editor context menu", () => {
   assert.equal(item, undefined);
 });
 
-test("comment editor enter submits, shift-enter inserts newline, escape dismisses empty draft", () => {
+test("comment editor uses native submit keybinding and keeps escape for empty drafts", () => {
   const manifest = readManifest();
-  const enterBindings = manifest.contributes.keybindings.filter((item) => item.key === "enter" && item.command === "editor.action.submitComment");
-  const newline = manifest.contributes.keybindings.find((item) => item.key === "shift+enter" && item.command === "type");
   const escape = manifest.contributes.keybindings.find((item) => item.key === "escape" && item.command === "hackl.dismissFocusedEmptyComment");
-  assert.equal(enterBindings.length, 2, "Enter must dispatch VS Code's native comment submit command");
-  assert.ok(enterBindings.some((item) => /commentEditorFocused/.test(item.when)));
-  assert.ok(enterBindings.some((item) => /resourceScheme == commentsInput/.test(item.when)));
-  assert.ok(newline, "Shift+Enter must insert a newline");
-  assert.deepEqual(newline.args, { text: "\n" });
+  assert.equal(manifest.contributes.keybindings.some((item) => item.key === "enter" && /comment/i.test(item.command)), false);
+  assert.equal(manifest.contributes.keybindings.some((item) => item.key === "shift+enter" && item.command === "type"), false);
   assert.ok(escape, "Escape must dispatch hackl.dismissFocusedEmptyComment");
   assert.match(escape.when, /commentEditorFocused/);
   assert.match(escape.when, /commentIsEmpty/);

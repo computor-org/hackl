@@ -186,24 +186,6 @@
         "mac": "cmd+alt+z"
       },
       {
-        "command": "editor.action.submitComment",
-        "key": "enter",
-        "when": "commentEditorFocused && !commentIsEmpty && !suggestWidgetVisible && !inlineSuggestionVisible"
-      },
-      {
-        "command": "editor.action.submitComment",
-        "key": "enter",
-        "when": "editorTextFocus && resourceScheme == commentsInput && !suggestWidgetVisible && !inlineSuggestionVisible"
-      },
-      {
-        "command": "type",
-        "args": {
-          "text": "\n"
-        },
-        "key": "shift+enter",
-        "when": "commentEditorFocused && !suggestWidgetVisible"
-      },
-      {
         "command": "hackl.dismissFocusedEmptyComment",
         "key": "escape",
         "when": "commentEditorFocused && commentIsEmpty"
