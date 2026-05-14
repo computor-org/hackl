@@ -82,8 +82,8 @@ export class AnnotationController {
     this.vscode = getVscode();
     this.controller = this.vscode.comments.createCommentController("hackl.annotations", "Hackl Annotations");
     this.controller.options = {
-      prompt: "Reply to Hackl",
-      placeHolder: "Reply to this annotation. Ctrl+Enter submits.",
+      prompt: "Comment",
+      placeHolder: "Comment. Enter submits, Ctrl+Enter for newline.",
     };
     const VscRange = this.vscode.Range;
     this.controller.commentingRangeProvider = {
