@@ -6,6 +6,7 @@ import { HardwareProfile, Recommendation, ModelFit, recommend, fitModel, llamaSe
 import { installLlamaCpp, ProgressSink } from "./installer";
 import { ensureModelDownloaded, inspectModel, ModelFileInfo } from "./modelStore";
 import { findFreePort, LlamaServer, ServerPhase } from "./process";
+import { detectMaxContextTokens } from "../localServers";
 
 interface PersistedState {
   modelId?: string;
@@ -32,6 +33,8 @@ export interface ManagerStatus {
   hardware?: HardwareProfile;
   recommendation?: Recommendation;
   modelFiles?: ModelFileInfo[];
+  lastTokensPerSecond?: number;
+  actualCtxSize?: number;
 }
 
 export class ServerManager {
@@ -40,6 +43,8 @@ export class ServerManager {
   private server?: LlamaServer;
   private state: PersistedState;
   private output: vscode.OutputChannel;
+  private lastTps?: number;
+  private actualCtxSize?: number;
   private readonly emitter = new vscode.EventEmitter<ManagerStatus>();
   readonly onStatusChanged = this.emitter.event;
 
@@ -82,6 +87,8 @@ export class ServerManager {
       hardware,
       recommendation,
       modelFiles,
+      lastTokensPerSecond: this.lastTps,
+      actualCtxSize: this.actualCtxSize,
     };
   }
 
@@ -129,10 +136,16 @@ export class ServerManager {
     const modelPath = path.join(this.modelsRoot(), model.id, model.ggufFile);
     const args = llamaServerArgs(model, fit, modelPath, port);
     this.output.appendLine(`[hackl] launching ${this.state.binaryPath} ${args.join(" ")}`);
+    this.lastTps = undefined;
+    this.actualCtxSize = undefined;
     const server = new LlamaServer({ binaryPath: this.state.binaryPath, args, port });
     server.on("log", (line) => this.output.appendLine(line));
     server.on("phase", (phase, detail) => {
       this.output.appendLine(`[hackl] phase=${phase}${detail ? ` (${detail})` : ""}`);
+      this.fireStatus();
+    });
+    server.on("tokensPerSecond", (tps: number) => {
+      this.lastTps = tps;
       this.fireStatus();
     });
     this.server = server;
@@ -143,6 +156,20 @@ export class ServerManager {
       throw err;
     }
     await this.persist();
+    void this.verifyCtx(server.endpoint, fit.ctxSize);
+  }
+
+  private async verifyCtx(endpoint: string, requested: number): Promise<void> {
+    try {
+      const actual = await detectMaxContextTokens(endpoint);
+      if (actual && Number.isFinite(actual)) {
+        this.actualCtxSize = actual;
+        if (actual !== requested) {
+          this.output.appendLine(`[hackl] context requested ${requested}, server reports ${actual}.`);
+        }
+        this.fireStatus();
+      }
+    } catch { /* probe is best-effort */ }
   }
 
   async stop(): Promise<void> {

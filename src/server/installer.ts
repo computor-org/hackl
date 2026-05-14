@@ -20,6 +20,15 @@ export interface ReleaseInfo {
 export interface ProgressSink {
   message: (text: string) => void;
   fraction?: (value: number) => void;
+  isCancelled?: () => boolean;
+}
+
+class CancellationError extends Error {
+  constructor() { super("Cancelled"); this.name = "CancellationError"; }
+}
+
+export function isCancellation(err: unknown): boolean {
+  return err instanceof Error && err.name === "CancellationError";
 }
 
 export async function fetchLatestRelease(fetchImpl: typeof fetch = fetch): Promise<ReleaseInfo> {
@@ -89,24 +98,33 @@ export async function downloadFile(
   const out = fs.createWriteStream(tmp, { flags: startByte > 0 ? "a" : "w" });
   let received = startByte;
   const reader = (body as unknown as { getReader: () => ReadableStreamDefaultReader<Uint8Array> }).getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      received += value.byteLength;
-      await new Promise<void>((resolve, reject) => {
-        out.write(value, (err) => err ? reject(err) : resolve());
-      });
-      if (total > 0) {
-        progress.fraction?.(Math.min(1, received / total));
-        progress.message(`${formatBytes(received)} / ${formatBytes(total)}`);
-      } else {
-        progress.message(`${formatBytes(received)} downloaded`);
+  try {
+    while (true) {
+      if (progress.isCancelled?.()) {
+        await reader.cancel().catch(() => undefined);
+        throw new CancellationError();
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        received += value.byteLength;
+        await new Promise<void>((resolve, reject) => {
+          out.write(value, (err) => err ? reject(err) : resolve());
+        });
+        if (total > 0) {
+          progress.fraction?.(Math.min(1, received / total));
+          progress.message(`${formatBytes(received)} / ${formatBytes(total)}`);
+        } else {
+          progress.message(`${formatBytes(received)} downloaded`);
+        }
       }
     }
+    await new Promise<void>((resolve, reject) => out.end((err: unknown) => err ? reject(err) : resolve()));
+    await fs.promises.rename(tmp, destPath);
+  } catch (err) {
+    out.destroy();
+    throw err;
   }
-  await new Promise<void>((resolve, reject) => out.end((err: unknown) => err ? reject(err) : resolve()));
-  await fs.promises.rename(tmp, destPath);
 }
 
 export async function sha256File(file: string): Promise<string> {
@@ -169,6 +187,7 @@ export async function installLlamaCpp(opts: {
   fetchImpl?: typeof fetch;
 }): Promise<InstallResult> {
   const fetchImpl = opts.fetchImpl ?? fetch;
+  if (opts.progress.isCancelled?.()) throw new CancellationError();
   opts.progress.message("Fetching latest llama.cpp release...");
   const release = await fetchLatestRelease(fetchImpl);
   const asset = selectAsset(opts.hw, release.assets);

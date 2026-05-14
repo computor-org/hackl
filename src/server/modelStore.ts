@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { ModelEntry } from "./catalog";
-import { downloadFile, sha256File, ProgressSink } from "./installer";
+import { downloadFile, sha256File, ProgressSink, isCancellation } from "./installer";
+export { isCancellation };
 
 const HF_BASE = "https://huggingface.co";
 

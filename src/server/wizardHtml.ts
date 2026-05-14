@@ -42,6 +42,9 @@ export function renderWizardHtml(webview: vscode.Webview): string {
       <header><h2>Setting up...</h2></header>
       <div class="progress-message" id="progress-message">Preparing...</div>
       <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+      <div class="actions">
+        <button id="cancel" type="button">Cancel</button>
+      </div>
     </section>
   </main>
   <script nonce="${nonce}">${WIZARD_SCRIPT}</script>
@@ -238,6 +241,9 @@ const WIZARD_SCRIPT = `
   document.getElementById('install').addEventListener('click', () => {
     if (!selectedId) return;
     vscode.postMessage({ type: 'install', modelId: selectedId });
+  });
+  document.getElementById('cancel').addEventListener('click', () => {
+    vscode.postMessage({ type: 'cancel' });
   });
 
   window.addEventListener('message', (e) => {

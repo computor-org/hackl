@@ -13,6 +13,7 @@ import { createDebugLog, disposeDebugLog } from "./debugLog";
 import { autoStartEnabled, hasInitialSetup, ServerManager } from "./server/manager";
 import { openWizard } from "./server/wizard";
 import { openManagePanel } from "./server/panel";
+import { registerLanguageModelProvider } from "./server/lmProvider";
 
 let chatPanel: ChatPanel | undefined;
 let serverManager: ServerManager | undefined;
@@ -42,8 +43,10 @@ export function activate(context: vscode.ExtensionContext): void {
       statusBarItem.text = "$(rocket) Hackl: set up";
       statusBarItem.tooltip = "Hackl local model not configured";
     } else if (status.phase === "ready") {
-      statusBarItem.text = `$(pulse) ${status.modelDisplayName ?? "Hackl"}`;
-      statusBarItem.tooltip = `Local model ready at ${status.endpoint}`;
+      const tps = status.lastTokensPerSecond ? ` · ${status.lastTokensPerSecond.toFixed(1)} t/s` : "";
+      statusBarItem.text = `$(pulse) ${status.modelDisplayName ?? "Hackl"}${tps}`;
+      const ctx = status.actualCtxSize ? `, ctx ${Math.floor(status.actualCtxSize / 1024)}k` : "";
+      statusBarItem.tooltip = `Local model ready at ${status.endpoint}${ctx}`;
     } else if (status.phase === "starting") {
       statusBarItem.text = "$(loading~spin) Hackl starting";
     } else if (status.phase === "error") {
@@ -55,6 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   context.subscriptions.push(
+    registerLanguageModelProvider(serverManager),
     serverManager.onStatusChanged(() => { void refreshStatus(); }),
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
     vscode.commands.registerCommand("hackl.chat", async () => {

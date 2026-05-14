@@ -34,9 +34,14 @@ export function openWizard(context: vscode.ExtensionContext, manager: ServerMana
       });
     } else if (msg?.type === "install" && typeof msg.modelId === "string") {
       const post = (m: object) => panel.webview.postMessage(m);
+      let cancelled = false;
+      const sub = panel.webview.onDidReceiveMessage((inner) => {
+        if (inner?.type === "cancel") cancelled = true;
+      });
       const sink = {
         message: (text: string) => post({ type: "progress", message: text }),
         fraction: (value: number) => post({ type: "progress", fraction: value }),
+        isCancelled: () => cancelled,
       };
       try {
         await manager.setup({ modelId: msg.modelId }, sink);
@@ -44,8 +49,16 @@ export function openWizard(context: vscode.ExtensionContext, manager: ServerMana
         vscode.window.showInformationMessage(`Hackl local model ready: ${msg.modelId}`);
         panel.dispose();
       } catch (err) {
-        post({ type: "progress", message: `Error: ${(err as Error).message}` });
-        vscode.window.showErrorMessage(`Hackl setup failed: ${(err as Error).message}`);
+        const e = err as Error;
+        if (e.name === "CancellationError") {
+          post({ type: "progress", message: "Cancelled." });
+          post({ type: "done" });
+        } else {
+          post({ type: "progress", message: `Error: ${e.message}` });
+          vscode.window.showErrorMessage(`Hackl setup failed: ${e.message}`);
+        }
+      } finally {
+        sub.dispose();
       }
     }
   });

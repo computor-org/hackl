@@ -22,7 +22,11 @@ Current:
 - Command palette, editor context menu, and hotkey entry points.
 - Auto-discovery of common local OpenAI-compatible endpoints.
 - Built-in llama.cpp lifecycle: hardware probe, curated model catalog, setup
-  wizard, install/start/stop/swap from a webview, status bar item.
+  wizard with cancel, install/start/stop/swap from a webview, status bar item
+  with live tokens/s, `/props` ctx verification.
+- Registered as a VS Code Language Model provider (vendor `hackl`) so Copilot
+  Chat, Continue, and any `vscode.lm.selectChatModels()` consumer see the
+  running model.
 
 Not current:
 

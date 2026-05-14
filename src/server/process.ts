@@ -7,7 +7,10 @@ export type ServerPhase = "idle" | "starting" | "ready" | "stopping" | "stopped"
 export interface ServerEvents {
   phase: (phase: ServerPhase, detail?: string) => void;
   log: (line: string) => void;
+  tokensPerSecond: (tps: number) => void;
 }
+
+const TPS_RE = /eval time\s*=\s*[\d.]+\s*ms\s*\/\s*\d+\s*(?:runs?|tokens?)[^()]*\(\s*[\d.]+\s*ms per token,\s*([\d.]+)\s*tokens per second/i;
 
 export interface LlamaServerOptions {
   binaryPath: string;
@@ -41,7 +44,13 @@ export class LlamaServer extends EventEmitter {
     const captureLine = (chunk: Buffer) => {
       const text = chunk.toString();
       for (const line of text.split(/\r?\n/)) {
-        if (line) this.emit("log", line);
+        if (!line) continue;
+        this.emit("log", line);
+        const m = TPS_RE.exec(line);
+        if (m) {
+          const tps = Number.parseFloat(m[1]);
+          if (Number.isFinite(tps) && tps > 0) this.emit("tokensPerSecond", tps);
+        }
       }
     };
     child.stdout?.on("data", captureLine);

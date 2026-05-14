@@ -68,6 +68,8 @@ const PANEL_SCRIPT = `
       ['Port', status.port || '—'],
       ['Backend', status.hardware ? status.hardware.backend : '—'],
       ['VRAM', status.hardware && status.hardware.vramTotalBytes ? formatBytes(status.hardware.vramTotalBytes) : '—'],
+      ['Context (live)', status.actualCtxSize ? (Math.floor(status.actualCtxSize / 1024) + 'k tokens') : '—'],
+      ['Generation', status.lastTokensPerSecond ? (status.lastTokensPerSecond.toFixed(1) + ' tokens/s') : '—'],
     ];
     document.getElementById('info').innerHTML = cells.map(([k,v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('');
   }

@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack with local AI.",
-  "version": "0.0.24",
+  "version": "0.0.25",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -163,6 +163,12 @@
         }
       }
     },
+    "languageModelChatProviders": [
+      {
+        "vendor": "hackl",
+        "displayName": "Hackl Local"
+      }
+    ],
     "walkthroughs": [
       {
         "id": "hackl.localModel",
