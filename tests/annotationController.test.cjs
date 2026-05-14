@@ -98,13 +98,11 @@ test("AnnotationController provides editor line comment ranges with file comment
     assert.equal(Array.isArray(result.ranges), true);
     assert.equal(result.ranges.length, 1);
     assert.deepEqual(result.ranges[0].start, { line: 0, character: 0 });
-    // Wide range covers the document; end line is at least lineCount so the
-    // last line is included.
-    assert.ok(result.ranges[0].end.line >= 42);
+    assert.deepEqual(result.ranges[0].end, { line: 41, character: 0 });
   });
 });
 
-test("AnnotationController never returns zero decorations for non-text schemes", () => {
+test("AnnotationController disables line ranges for non-text schemes", () => {
   const fake = makeFakeVscode();
   withVscode(fake.vscode, () => {
     const { AnnotationController } = freshControllerModule();
@@ -117,9 +115,6 @@ test("AnnotationController never returns zero decorations for non-text schemes",
       lineCount: 1,
     });
 
-    // ranges empty is fine, but enableFileComments must be true so VS Code's
-    // commenting range decoration count never drops to zero (which would
-    // otherwise trigger clearEditorListeners and the strip would not recover).
     assert.deepEqual(result.ranges, []);
     assert.equal(result.enableFileComments, true);
   });

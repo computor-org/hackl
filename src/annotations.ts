@@ -97,8 +97,8 @@ export class AnnotationController {
    * Reassigning `commentingRangeProvider` makes VS Code recompute comments by
    * disposing all mounted ReviewZoneWidgets. That steals focus from the native
    * gutter-plus "Start discussion" editor, so this method is intentionally
-   * idempotent. The provider itself returns a wide range with file comments
-   * enabled so the gutter strip remains armed without provider churn.
+   * idempotent. The provider itself returns a document range with file
+   * comments enabled so the gutter strip remains armed without provider churn.
    */
   refreshCommentingRanges(): void {
     if (this.commentingProvider) {
@@ -126,16 +126,9 @@ export class AnnotationController {
             scheme: document.uri?.scheme,
             languageId: document.languageId,
           });
-          // Returning an empty array (or {enableFileComments:false, ranges:[]})
-          // makes the controller's decoration count drop to zero for this
-          // editor and clears its listeners — once that happens the strip
-          // cannot recover. Keep enableFileComments=true so the count stays
-          // positive even for non-editor schemes.
           return { enableFileComments: true, ranges: [] };
         }
-        // Cover the entire document — even when lineCount is briefly 0 during
-        // load, return a wide range so the decoration count is never zero.
-        const lastLine = Math.max(1, document.lineCount);
+        const lastLine = Math.max(0, document.lineCount - 1);
         const ranges = [new VscRange(0, 0, lastLine, 0)];
         debug?.("annotations.provideCommentingRanges", {
           uri: document.uri.toString(),
