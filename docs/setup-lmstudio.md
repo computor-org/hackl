@@ -32,6 +32,15 @@ For inline autocomplete, prefer a FIM model on a second local server:
 | L | `Qwen2.5-Coder-14B-Instruct-GGUF` or `Qwen3-Coder-30B-A3B-Instruct-GGUF` Q4_K_M |
 | XL | `Qwen3-Coder-Next-GGUF` Q4_K_M |
 
+FIM needs a Coder model with infill tokens; a general chat model (Qwen3.5/3.6,
+Gemma) cannot do it. On a single 32 GB machine, pair them: chat/agent on a
+35B-A3B MoE (such as Qwen3.6 35B-A3B at IQ4) and FIM on Qwen2.5-Coder 7B. LM
+Studio serves one model at a time, so keep chat in LM Studio and run the FIM
+model on a separate llama.cpp server (see the llama.cpp guide). Both fit because
+the chat KV is small and the FIM window is tiny. Avoid a large dense Coder such
+as Codestral 22B in the FIM slot on a laptop: every token activates all weights,
+too slow for inline completion.
+
 ## 3. Start the local server
 
 In LM Studio, open the **Developer** (or **Local Server**) tab and start the

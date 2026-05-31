@@ -98,6 +98,12 @@ Preferred FIM tiers:
 - Server-class local host: Qwen3-Coder-Next Q4_K_M, served as a separate FIM
   endpoint.
 
+On a single 32 GB machine, pair the two: chat/agent on a 35B-A3B MoE (e.g.
+Qwen3.6 35B-A3B at IQ4) and FIM on Qwen2.5-Coder 7B. They fit together because
+the MoE chat KV is small and the FIM window is tiny. Prefer a small dense Coder
+or a low-active-param MoE for FIM; a large dense Coder such as Codestral 22B
+activates all weights per token and is too slow inline.
+
 For Qwen3-Coder-Next, do not enable thinking mode. The model is documented as
 non-thinking only and does not emit `<think></think>` blocks.
 

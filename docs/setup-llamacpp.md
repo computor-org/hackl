@@ -119,6 +119,16 @@ different port and point `hackl.autocomplete.endpoint` at it.
 | L    | 24 GB+   | Qwen2.5-Coder 14B or Qwen3-Coder 30B-A3B Q4_K_M |
 | XL   | 64 GB+   | Qwen3-Coder-Next Q4_K_M |
 
+FIM needs a Coder model with infill tokens. A general chat model (Qwen3.5/3.6,
+Gemma) cannot drive autocomplete, so the FIM slot is always a Coder.
+
+On a single 32 GB machine, run chat and FIM together: the chat server on `:8080`
+(a 35B-A3B MoE such as Qwen3.6 35B-A3B at IQ4 for headroom) and the Tier M FIM
+server below on `:8084`. Both fit because the 35B-A3B is hybrid-attention with a
+small KV and the FIM window is tiny. Do not use a large dense Coder such as
+Codestral 22B for FIM on a laptop: every token activates all weights, too slow
+for inline completion.
+
 Tier M autocomplete server:
 
 ```sh
