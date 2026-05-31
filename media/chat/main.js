@@ -379,7 +379,7 @@
       label.type = "button";
       label.className = "basket-item-label";
       label.textContent = describe(target);
-      label.title = describe(target) + " — click to reveal";
+      label.title = describe(target) + " - click to reveal";
       label.addEventListener("click", () => {
         vscode.postMessage({ type: "revealTarget", targetId: target.id });
       });

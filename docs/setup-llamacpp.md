@@ -23,18 +23,19 @@ Linux:
 Download the latest release for your platform from
 <https://github.com/ggml-org/llama.cpp/releases> or build from source.
 
-## 2. Pick a model tier and start a server
+## 2. Pick a chat model tier and start a server
 
-Three tiers, each with a Qwen pick and a Gemma alternative. Numbers are rough;
-your mileage varies with quantisation, context length, and GPU/CPU split.
+Three chat/edit/agent tiers, each with a Qwen pick and a Gemma alternative.
+Numbers are rough; your mileage varies with quantisation, context length, and
+GPU/CPU split.
 
 | Tier | RAM/VRAM | Qwen (default) | Gemma alternative |
 | ---- | -------- | -------------- | ----------------- |
-| S    | 4–8 GB   | Qwen3 4B-Instruct | Gemma 3n E2B-it |
-| M    | 12–16 GB | Qwen3 8B          | Gemma 3n E4B-it |
-| L    | 24 GB+   | Qwen3 14B (or 30B-A3B MoE) | Gemma 3 12B-it (27B-it if ≥30 GB) |
+| S    | 4-8 GB   | Qwen3 4B-Instruct | Gemma 3n E2B-it |
+| M    | 12-16 GB | Qwen3 8B          | Gemma 3n E4B-it |
+| L    | 24 GB+   | Qwen3-Coder 30B-A3B, or Qwen3 14B | Gemma 3 12B-it (27B-it if >=30 GB) |
 
-### Tier S (4–8 GB)
+### Tier S (4-8 GB)
 
 ```sh
 llama-server \
@@ -57,7 +58,7 @@ llama-server \
   --host 127.0.0.1 --port 8080
 ```
 
-### Tier M (12–16 GB)
+### Tier M (12-16 GB)
 
 ```sh
 llama-server \
@@ -84,7 +85,7 @@ llama-server \
 
 ```sh
 llama-server \
-  -hf unsloth/Qwen3-30B-A3B-GGUF:UD-Q4_K_XL \
+  -hf lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
   -c 65536 \
   --cache-type-k q8_0 --cache-type-v q8_0 \
   -ngl auto -fa on \
@@ -105,7 +106,46 @@ llama-server \
 
 Web UI: <http://127.0.0.1:8080/>.
 
-## 3. Point Hackl at it
+## 3. Optional FIM autocomplete endpoint
+
+Hackl can use the chat endpoint for autocomplete only when that local model has
+FIM tokens. For the best local UX, run a second low-latency FIM endpoint on a
+different port and point `hackl.autocomplete.endpoint` at it.
+
+| Tier | RAM/VRAM | FIM model |
+| ---- | -------- | --------- |
+| S    | 4-8 GB   | Qwen2.5-Coder 1.5B or 3B Q4_K_M |
+| M    | 12-16 GB | Qwen2.5-Coder 7B Q4_K_M |
+| L    | 24 GB+   | Qwen2.5-Coder 14B or Qwen3-Coder 30B-A3B Q4_K_M |
+| XL   | 64 GB+   | Qwen3-Coder-Next Q4_K_M |
+
+Tier M autocomplete server:
+
+```sh
+llama-server \
+  -hf Qwen/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M \
+  -c 32768 \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on \
+  --alias qwenfim --jinja \
+  --temp 0.15 --top-p 0.9 --top-k 40 \
+  --host 127.0.0.1 --port 8084
+```
+
+Server-class autocomplete endpoint:
+
+```sh
+llama-server \
+  -hf Qwen/Qwen3-Coder-Next-GGUF:Q4_K_M \
+  -c 131072 \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on -np 4 \
+  --alias qwenfim --jinja \
+  --temp 0.15 --top-p 0.9 --top-k 40 \
+  --host 127.0.0.1 --port 8084
+```
+
+## 4. Point Hackl at it
 
 Either click **Set endpoint to :8080/v1** in the Hackl setup panel, or:
 
@@ -113,7 +153,10 @@ Either click **Set endpoint to :8080/v1** in the Hackl setup panel, or:
 // settings.json
 {
   "hackl.endpoint": "http://localhost:8080/v1",
-  "hackl.maxContextTokens": 32768
+  "hackl.maxContextTokens": 32768,
+  "hackl.autocomplete.enabled": true,
+  "hackl.autocomplete.endpoint": "http://localhost:8084/v1",
+  "hackl.autocomplete.model": "qwenfim"
 }
 ```
 
@@ -133,4 +176,7 @@ Run `Hackl: Check Local Server` to confirm.
 
 - llama.cpp server: <https://github.com/ggml-org/llama.cpp/tree/master/tools/server>
 - Qwen on llama.cpp: <https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html>
+- Qwen3-Coder FIM: <https://github.com/QwenLM/Qwen3-Coder>
+- Qwen2.5-Coder GGUF: <https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF>
+- Qwen3-Coder-Next GGUF: <https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF>
 - Gemma 3n: <https://ai.google.dev/gemma/docs/gemma-3n>

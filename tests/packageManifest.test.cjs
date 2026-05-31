@@ -73,15 +73,22 @@ test("annotation reply is the only custom comment editor action", () => {
   ]);
 });
 
-test("codex backend commands and config keys are declared", () => {
+test("backend and autocomplete commands and config keys are declared", () => {
   const manifest = readManifest();
-  for (const id of ["hackl.selectBackend", "hackl.dismissSetupHint", "hackl.showSetupHint"]) {
+  for (const id of ["hackl.selectBackend", "hackl.dismissSetupHint", "hackl.showSetupHint", "hackl.toggleAutocomplete"]) {
     assert.ok(command(manifest, id), `missing command ${id}`);
   }
   const cfg = manifest.contributes.configuration.properties;
   assert.ok(cfg["hackl.codex.enabled"], "missing hackl.codex.enabled");
   assert.ok(cfg["hackl.codex.command"], "missing hackl.codex.command");
   assert.ok(cfg["hackl.codex.model"], "missing hackl.codex.model");
+  assert.ok(cfg["hackl.autocomplete.enabled"], "missing hackl.autocomplete.enabled");
+  assert.ok(cfg["hackl.autocomplete.endpoint"], "missing hackl.autocomplete.endpoint");
+  assert.ok(cfg["hackl.autocomplete.model"], "missing hackl.autocomplete.model");
+  assert.ok(cfg["hackl.autocomplete.maxTokens"], "missing hackl.autocomplete.maxTokens");
+  assert.ok(cfg["hackl.autocomplete.debounceMs"], "missing hackl.autocomplete.debounceMs");
+  assert.ok(cfg["hackl.autocomplete.multiLine"], "missing hackl.autocomplete.multiLine");
+  assert.ok(cfg["hackl.autocomplete.maxPredictMs"], "missing hackl.autocomplete.maxPredictMs");
 });
 
 test("internal annotation commands stay out of the command palette", () => {

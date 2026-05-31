@@ -146,8 +146,8 @@ export class AnnotationController {
   }
 
   /**
-   * Reveal a thread in its editor, plant the cursor on its line, and — when
-   * possible — land focus directly in the reply input so the user can type
+   * Reveal a thread in its editor, plant the cursor on its line, and, when
+   * possible, land focus directly in the reply input so the user can type
    * straight away.
    *
    * The reliable path is to pass `selection` to `showTextDocument`: VS Code
@@ -157,8 +157,8 @@ export class AnnotationController {
    * holds focus is not automatically displaced by `preserveFocus: false`.
    *
    * For the reply input itself there is no public command. We try
-   * `CommentThread.reveal({focus: Reply})` — proposed API (see
-   * vscode.proposed.commentReveal.d.ts) — and fall back to
+   * `CommentThread.reveal({focus: Reply})`, proposed API (see
+   * vscode.proposed.commentReveal.d.ts), and fall back to
    * `workbench.action.focusCommentOnCurrentLine`, which at least focuses the
    * comment widget on the line we just moved to.
    */
@@ -184,7 +184,7 @@ export class AnnotationController {
       this.debug?.("annotations.focusThreadReply.openFailed", { id: annotationId, error: String(error) });
       return;
     }
-    // Try CommentThread.reveal first — the proposed commentReveal API lands
+    // Try CommentThread.reveal first: the proposed commentReveal API lands
     // focus directly inside the reply textarea. If the host doesn't expose it
     // (stable VS Code without --enable-proposed-api), fall through to the
     // public command, which at least focuses the comment widget on the line

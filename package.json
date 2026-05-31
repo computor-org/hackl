@@ -142,6 +142,12 @@
         "category": "Hackl"
       },
       {
+        "command": "hackl.toggleAutocomplete",
+        "title": "Toggle Inline Autocomplete",
+        "category": "Hackl",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "hackl.dismissFocusedEmptyComment",
         "title": "Dismiss Empty Annotation",
         "category": "Hackl"
@@ -189,6 +195,12 @@
         "command": "hackl.dismissFocusedEmptyComment",
         "key": "escape",
         "when": "commentEditorFocused && commentIsEmpty"
+      },
+      {
+        "command": "editor.action.inlineSuggest.acceptNextWord",
+        "key": "alt+right",
+        "mac": "alt+right",
+        "when": "inlineSuggestionVisible && !editorReadonly"
       }
     ],
     "menus": {
@@ -278,6 +290,44 @@
           "type": "boolean",
           "default": false,
           "description": "Allow model thinking/reasoning when the local OpenAI-compatible server supports this switch."
+        },
+        "hackl.autocomplete.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable inline FIM autocomplete. Off by default. When hackl.autocomplete.endpoint is empty, Hackl only falls back to a local hackl.endpoint or an auto-discovered local server."
+        },
+        "hackl.autocomplete.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Optional dedicated llama.cpp-compatible endpoint for autocomplete requests. Accepts a /v1 base or server root. Set this explicitly to use a separate FIM model or a non-local endpoint."
+        },
+        "hackl.autocomplete.model": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model alias for autocomplete. When empty, Hackl uses the loaded model reported by the autocomplete endpoint when available."
+        },
+        "hackl.autocomplete.maxTokens": {
+          "type": "number",
+          "default": 48,
+          "minimum": 8,
+          "description": "Maximum tokens to predict per inline suggestion."
+        },
+        "hackl.autocomplete.debounceMs": {
+          "type": "number",
+          "default": 150,
+          "minimum": 0,
+          "description": "Debounce after the last keystroke before requesting autocomplete."
+        },
+        "hackl.autocomplete.multiLine": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow multi-line inline completions. When off, Hackl stops at the first newline."
+        },
+        "hackl.autocomplete.maxPredictMs": {
+          "type": "number",
+          "default": 400,
+          "minimum": 50,
+          "description": "Server-side prediction time budget in milliseconds for one autocomplete request."
         },
         "hackl.setupProfile": {
           "type": "string",

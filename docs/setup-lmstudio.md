@@ -8,19 +8,29 @@ to the OpenAI-compatible HTTP endpoint it exposes.
 
 Install for Windows, macOS, or Linux from <https://lmstudio.ai/>. Open it once.
 
-## 2. Pick a model tier
+## 2. Pick a chat model tier
 
-Three tiers, each with a Qwen pick and a Gemma alternative. Numbers are rough;
-your mileage varies with quantisation, context length, and GPU/CPU split.
+Three chat/edit/agent tiers, each with a Qwen pick and a Gemma alternative.
+Numbers are rough; your mileage varies with quantisation, context length, and
+GPU/CPU split.
 
 | Tier | RAM/VRAM | Qwen (default)             | Gemma alternative          |
 | ---- | -------- | -------------------------- | -------------------------- |
-| S    | 4–8 GB   | `Qwen3-4B-Instruct-GGUF` Q4_K_M | `gemma-3n-E2B-it-GGUF` Q4_0 |
-| M    | 12–16 GB | `Qwen3-8B-GGUF` Q4_K_M     | `gemma-3n-E4B-it-GGUF` Q4_0 |
-| L    | 24 GB+   | `Qwen3-14B-GGUF` Q4_K_M (or `Qwen3-30B-A3B-GGUF` Q4_K_M for MoE) | `gemma-3-12b-it-GGUF` Q4_K_M (or `gemma-3-27b-it-GGUF` if you have ~30 GB) |
+| S    | 4-8 GB   | `Qwen3-4B-Instruct-GGUF` Q4_K_M | `gemma-3n-E2B-it-GGUF` Q4_0 |
+| M    | 12-16 GB | `Qwen3-8B-GGUF` Q4_K_M     | `gemma-3n-E4B-it-GGUF` Q4_0 |
+| L    | 24 GB+   | `Qwen3-Coder-30B-A3B-Instruct-GGUF` Q4_K_M (or `Qwen3-14B-GGUF` Q4_K_M) | `gemma-3-12b-it-GGUF` Q4_K_M (or `gemma-3-27b-it-GGUF` if you have ~30 GB) |
 
 In the LM Studio search bar, paste one of the names above, pick a matching GGUF
 publisher, and download. Load it and confirm a quick chat in LM Studio's own UI.
+
+For inline autocomplete, prefer a FIM model on a second local server:
+
+| Tier | FIM model |
+| ---- | --------- |
+| S | `Qwen2.5-Coder-1.5B-Instruct-GGUF` or `Qwen2.5-Coder-3B-Instruct-GGUF` Q4_K_M |
+| M | `Qwen2.5-Coder-7B-Instruct-GGUF` Q4_K_M |
+| L | `Qwen2.5-Coder-14B-Instruct-GGUF` or `Qwen3-Coder-30B-A3B-Instruct-GGUF` Q4_K_M |
+| XL | `Qwen3-Coder-Next-GGUF` Q4_K_M |
 
 ## 3. Start the local server
 
@@ -42,7 +52,10 @@ Either click **Set endpoint to :1234/v1** in the Hackl setup panel, or edit:
 // settings.json
 {
   "hackl.endpoint": "http://localhost:1234/v1",
-  "hackl.maxContextTokens": 32768
+  "hackl.maxContextTokens": 32768,
+  "hackl.autocomplete.enabled": true,
+  "hackl.autocomplete.endpoint": "http://localhost:8084/v1",
+  "hackl.autocomplete.model": "qwenfim"
 }
 ```
 
@@ -52,8 +65,10 @@ Run `Hackl: Check Local Server` to confirm.
 
 - LM Studio's OpenAI compatibility docs:
   <https://lmstudio.ai/docs/developer/openai-compat>
-- Editor chat is comfortable at 16k–32k context. Agentic coding wants 64k+ if
+- Editor chat is comfortable at 16k-32k context. Agentic coding wants 64k+ if
   your RAM/VRAM allows it.
-- Gemma 3n's E2B/E4B are "effective" parameter sizes — actual memory footprint
+- If LM Studio serves only one model at a time, use llama.cpp for the dedicated
+  FIM autocomplete endpoint.
+- Gemma 3n's E2B/E4B are "effective" parameter sizes. Actual memory footprint
   is smaller than a vanilla 4B/8B model; the E4B fits where an 8B Qwen would
   struggle.

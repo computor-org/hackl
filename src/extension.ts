@@ -42,6 +42,7 @@ import { HacklSessionRecord, newHacklSessionId, persistHacklSession } from "./ha
 import { handleAnnotationReply, handleDeleteAnnotationThread, handleResolveAnnotationThread } from "./annotationCommands";
 import { readHacklConfig, hasUserConfigured } from "./config";
 import { resolveReviewTargets } from "./reviewTargets";
+import { registerAutocomplete } from "./autocomplete";
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let basketService: BasketService | undefined;
@@ -128,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openSetupGuide";
   context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
+  registerAutocomplete(context);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),

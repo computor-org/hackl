@@ -2,8 +2,8 @@
 
 Hack local-first.
 
-Hackl is a local-first VS Code coding assistant for chat, editing, agent work,
-and commit-level review.
+Hackl is a local-first VS Code coding assistant for chat, inline autocomplete,
+editing, agent work, and commit-level review.
 
 It helps you work on code in the editor, attach explicit context, edit files,
 run approved checks, and review changes before they become commits. Hackl keeps
@@ -11,13 +11,14 @@ Git as the source of truth: staged changes, commits, source ranges, and
 line-anchored annotations are the durable review objects.
 
 Hackl is useful as a normal coding assistant, but its modes also expose a
-learning path for responsible AI-assisted coding: understand first, edit
-boundedly, work across files, delegate checks, and review before commit.
+learning path for responsible AI-assisted coding: ask first, accept small
+completions, edit boundedly, work across files, delegate checks, and review
+before commit.
 
 Hackl is built around four objects:
 
 - Context: selected code, staged changes, commits, Markdown sections, or annotation notes.
-- Modes: Ask, Edit, Work, and Agent control what Hackl may do.
+- Modes: capability levels that control what Hackl may do.
 - Annotations: human or AI feedback anchored to source lines.
 - Git: the diff, staging area, commit, and history layer.
 
@@ -35,13 +36,13 @@ sign-in for the local-first workflow.
 - Context targets for source ranges, staged changes, the last commit, and
   Markdown sections.
 - Ask/Edit/Work/Agent modes with mode-specific tools.
+- Optional inline FIM autocomplete with a separate endpoint and model alias.
 - Commit-level `/review` for staged changes, attached context, or the current file.
 - Human and AI annotations as line-anchored VS Code comment threads.
 - Hackl session persistence in VS Code extension storage for annotation runs.
 
 Not in scope:
 
-- Inline autocomplete.
 - Custom diff/history UI.
 - Model downloader or runtime manager.
 - CLI.
@@ -66,6 +67,22 @@ Set `hackl.endpoint` to the server base URL, for example
 
 If `hackl.endpoint` is not localhost or loopback, Hackl asks before sending a
 prompt or selected context.
+
+Inline autocomplete is off by default. Enable it with `Hackl: Toggle Inline
+Autocomplete` or `hackl.autocomplete.enabled`. If `hackl.autocomplete.endpoint`
+is empty, Hackl only reuses a local chat endpoint or an auto-discovered local
+server. The autocomplete endpoint must expose llama.cpp-native `/tokenize` plus
+`/infill` or `/completion`. Set `hackl.autocomplete.endpoint` and
+`hackl.autocomplete.model` when you run a separate FIM model, for example:
+
+```jsonc
+{
+  "hackl.endpoint": "http://localhost:8080/v1",
+  "hackl.autocomplete.enabled": true,
+  "hackl.autocomplete.endpoint": "http://localhost:8084/v1",
+  "hackl.autocomplete.model": "qwenfim"
+}
+```
 
 ## Context
 
@@ -96,6 +113,7 @@ Modes control capability, not output format.
 | Mode | Tools |
 |------|-------|
 | Ask | Read-only, bounded `read_file`. |
+| Autocomplete | Inline FIM suggestions only; no file mutation. |
 | Edit | Read files and apply exact `replace_text` edits. |
 | Work | Edit plus `search_files` for multi-step code changes. |
 | Agent | Work plus approved `run_command` checks. |
@@ -139,9 +157,9 @@ the command palette.
 ## Sessions
 
 When `hackl.persistSessions` is true, completed annotation runs are written to
-VS Code extension storage as Hackl session JSON. Sessions store the mode,
-endpoint, model, targets, answer, and generated annotations. Old sessions are
-pruned on startup.
+VS Code extension storage as Hackl session JSON. Sessions store run metadata,
+context targets, the answer, and generated annotations. Old sessions are pruned
+on startup.
 
 ## Commands
 
@@ -157,6 +175,7 @@ pruned on startup.
 - `Hackl: Clear Annotations`
 - `Hackl: Discard Last Annotations Batch`
 - `Hackl: Review Staged Changes`
+- `Hackl: Toggle Inline Autocomplete`
 
 ## Settings
 
@@ -167,6 +186,13 @@ pruned on startup.
 - `hackl.enableThinking`: allow reasoning when the server supports it.
 - `hackl.debug`: write diagnostics to the Hackl Debug output channel.
 - `hackl.persistSessions`: persist annotation runs in VS Code extension storage.
+- `hackl.autocomplete.enabled`: enable inline FIM autocomplete.
+- `hackl.autocomplete.endpoint`: optional dedicated autocomplete endpoint.
+- `hackl.autocomplete.model`: optional model alias for a routed FIM endpoint.
+- `hackl.autocomplete.maxTokens`: token cap for one inline suggestion.
+- `hackl.autocomplete.debounceMs`: delay after typing before a request.
+- `hackl.autocomplete.multiLine`: allow suggestions past the first newline.
+- `hackl.autocomplete.maxPredictMs`: server-side time budget per suggestion.
 
 ## Architecture
 
@@ -176,6 +202,7 @@ Hackl keeps boundaries small:
 - `prompt.ts`: Ask/Edit/Work/Agent prompt assembly.
 - `annotations.ts`: annotation parsing and VS Code comment threads.
 - `gitTargets.ts`: staged and commit targets.
+- `autocomplete.ts`, `fimClient.ts`, and `fimDetect.ts`: inline FIM suggestions.
 - `chatSession.ts`: webview session protocol.
 - `toolLoop.ts` and `workspaceTools.ts`: bounded model tools.
 - `extension.ts`: VS Code command wiring.

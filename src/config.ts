@@ -12,6 +12,18 @@ export interface HacklConfig {
   codexEnabled: boolean;
   codexCommand: string;
   codexModel: string;
+  autocomplete: AutocompleteConfig;
+}
+
+export interface AutocompleteConfig {
+  enabled: boolean;
+  endpoint: string;
+  endpointConfigured: boolean;
+  model: string;
+  maxTokens: number;
+  debounceMs: number;
+  multiLine: boolean;
+  maxPredictMs: number;
 }
 
 const DEFAULTS = {
@@ -23,6 +35,11 @@ const DEFAULTS = {
   codexEnabled: true,
   codexCommand: "codex",
   codexModel: "",
+  autocompleteEnabled: false,
+  autocompleteMaxTokens: 48,
+  autocompleteDebounceMs: 150,
+  autocompleteMultiLine: false,
+  autocompleteMaxPredictMs: 400,
 };
 
 interface Inspect<T> {
@@ -60,5 +77,15 @@ export function readHacklConfig(): HacklConfig {
     codexEnabled: c.get<boolean>("codex.enabled", DEFAULTS.codexEnabled),
     codexCommand: (c.get<string>("codex.command", DEFAULTS.codexCommand) || DEFAULTS.codexCommand).trim(),
     codexModel: (c.get<string>("codex.model", DEFAULTS.codexModel) || "").trim(),
+    autocomplete: {
+      enabled: c.get<boolean>("autocomplete.enabled", DEFAULTS.autocompleteEnabled),
+      endpoint: (c.get<string>("autocomplete.endpoint", "") || "").trim(),
+      endpointConfigured: hasUserConfigured(c.inspect<string>("autocomplete.endpoint")),
+      model: (c.get<string>("autocomplete.model", "") || "").trim(),
+      maxTokens: c.get<number>("autocomplete.maxTokens", DEFAULTS.autocompleteMaxTokens),
+      debounceMs: c.get<number>("autocomplete.debounceMs", DEFAULTS.autocompleteDebounceMs),
+      multiLine: c.get<boolean>("autocomplete.multiLine", DEFAULTS.autocompleteMultiLine),
+      maxPredictMs: c.get<number>("autocomplete.maxPredictMs", DEFAULTS.autocompleteMaxPredictMs),
+    },
   };
 }

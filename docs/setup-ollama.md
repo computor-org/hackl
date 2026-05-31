@@ -2,7 +2,7 @@
 
 Ollama is an alternative if you already use it. It exposes an OpenAI-compatible
 endpoint, but model-name conventions and a few API quirks differ from
-LM Studio and llama.cpp — Hackl works, but expect minor friction (no
+LM Studio and llama.cpp. Hackl works, but expect minor friction (no
 `/props`, slightly different completion shape on older Ollama versions).
 
 For most users we recommend LM Studio (easy) or llama.cpp (control). Use
@@ -22,15 +22,15 @@ The default OpenAI-compatible base URL is:
 http://127.0.0.1:11434/v1
 ```
 
-## 2. Pull a model tier
+## 2. Pull a chat model tier
 
-Three tiers, each with a Qwen pick and a Gemma alternative.
+Three chat/edit/agent tiers, each with a Qwen pick and a Gemma alternative.
 
 | Tier | RAM/VRAM | Qwen (default) | Gemma alternative |
 | ---- | -------- | -------------- | ----------------- |
-| S    | 4–8 GB   | `qwen3:4b`     | `gemma3n:e2b`     |
-| M    | 12–16 GB | `qwen3:8b`     | `gemma3n:e4b`     |
-| L    | 24 GB+   | `qwen3-coder:30b` (MoE) | `gemma3:12b` (27b if ≥30 GB) |
+| S    | 4-8 GB   | `qwen3:4b`     | `gemma3n:e2b`     |
+| M    | 12-16 GB | `qwen3:8b`     | `gemma3n:e4b`     |
+| L    | 24 GB+   | `qwen3-coder:30b` (MoE) | `gemma3:12b` (27b if >=30 GB) |
 
 ```sh
 # Tier S
@@ -61,6 +61,19 @@ Either click **Set endpoint to :11434/v1** in the Hackl setup panel, or:
 ```
 
 Run `Hackl: Check Local Server` to confirm.
+
+Inline autocomplete currently expects llama.cpp-native `/tokenize` plus
+`/infill` or `/completion`. Keep Ollama for chat if you prefer it, and run a
+separate llama.cpp FIM endpoint for autocomplete:
+
+```jsonc
+{
+  "hackl.endpoint": "http://localhost:11434/v1",
+  "hackl.autocomplete.enabled": true,
+  "hackl.autocomplete.endpoint": "http://localhost:8084/v1",
+  "hackl.autocomplete.model": "qwenfim"
+}
+```
 
 ## Sources
 

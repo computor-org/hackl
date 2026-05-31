@@ -21,7 +21,7 @@ interface ProbedServer {
 }
 
 const DEFAULT_ENDPOINT = "http://localhost:8080/v1";
-const DEFAULT_MODEL = "local-model";
+export const DEFAULT_CHAT_MODEL = "local-model";
 const PROBE_TIMEOUT_MS = 600;
 
 export const LOCAL_SERVER_CANDIDATES: LocalServerCandidate[] = [
@@ -37,7 +37,7 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
     const probed = await probeServer(configuredEndpoint, fetchImpl);
     return {
       endpoint: configuredEndpoint,
-      model: probed?.model ?? DEFAULT_MODEL,
+      model: probed?.model ?? DEFAULT_CHAT_MODEL,
     };
   }
 
@@ -48,7 +48,7 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
 
   return {
     endpoint: discovered?.endpoint ?? DEFAULT_ENDPOINT,
-    model: discovered?.model ?? DEFAULT_MODEL,
+    model: discovered?.model ?? DEFAULT_CHAT_MODEL,
   };
 }
 

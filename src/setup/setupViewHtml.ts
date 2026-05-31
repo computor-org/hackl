@@ -11,14 +11,14 @@ export function renderSetupHtml(webview: vscode.Webview, extensionUri: vscode.Ur
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hackl — Setup</title>
+  <title>Hackl - Setup</title>
   <link rel="stylesheet" href="${css}">
 </head>
 <body>
   <div class="wrap">
     <div id="status" class="status status-probing">
       <span class="pill">probing</span>
-      <span id="status-text">Looking for a model backend…</span>
+      <span id="status-text">Looking for a model backend...</span>
     </div>
 
     <div class="row">
@@ -32,13 +32,13 @@ export function renderSetupHtml(webview: vscode.Webview, extensionUri: vscode.Ur
         <p class="lede">Run an OpenAI-compatible server on this machine. Hackl never starts it for you.</p>
 
         <div class="tiers">
-          <strong>Model tiers</strong>
+          <strong>Chat model tiers</strong>
           <table>
             <thead><tr><th>Tier</th><th>RAM/VRAM</th><th>Qwen</th><th>Gemma</th></tr></thead>
             <tbody>
-              <tr><td>S</td><td>4–8 GB</td><td><code>Qwen3 4B-Instruct</code></td><td><code>Gemma 3n E2B-it</code></td></tr>
-              <tr><td>M</td><td>12–16 GB</td><td><code>Qwen3 8B</code></td><td><code>Gemma 3n E4B-it</code></td></tr>
-              <tr><td>L</td><td>24 GB+</td><td><code>Qwen3 14B</code> / <code>Qwen3-30B-A3B</code></td><td><code>Gemma 3 12B-it</code> / <code>27B-it</code></td></tr>
+              <tr><td>S</td><td>4-8 GB</td><td><code>Qwen3 4B-Instruct</code></td><td><code>Gemma 3n E2B-it</code></td></tr>
+              <tr><td>M</td><td>12-16 GB</td><td><code>Qwen3 8B</code></td><td><code>Gemma 3n E4B-it</code></td></tr>
+              <tr><td>L</td><td>24 GB+</td><td><code>Qwen3-Coder 30B-A3B</code> / <code>Qwen3 14B</code></td><td><code>Gemma 3 12B-it</code> / <code>27B-it</code></td></tr>
             </tbody>
           </table>
         </div>
@@ -74,6 +74,13 @@ winget install llama.cpp         # Windows
           <pre><code>llama-server -hf ggml-org/gemma-3n-E4B-it-GGUF:Q4_0 \\
   -c 32768 -ngl auto -fa on --jinja \\
   --host 127.0.0.1 --port 8080</code></pre>
+          <p>Autocomplete FIM endpoint (Qwen2.5-Coder 7B):</p>
+          <pre><code>llama-server \\
+  -hf Qwen/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M \\
+  -c 32768 --cache-type-k q8_0 --cache-type-v q8_0 \\
+  -ngl auto -fa on --alias qwenfim --jinja \\
+  --temp 0.15 --top-p 0.9 --top-k 40 \\
+  --host 127.0.0.1 --port 8084</code></pre>
           <div class="actions">
             <button data-set="http://127.0.0.1:8080/v1" type="button">Set endpoint to :8080/v1</button>
             <button data-doc="llamacpp" type="button">Open full guide</button>
@@ -99,12 +106,12 @@ ollama pull qwen3-coder:30b   # or gemma3:12b</code></pre>
 
       <section class="column">
         <h2>Codex</h2>
-        <p class="lede">Use the OpenAI Codex CLI you already logged into. Hackl spawns <code>codex app-server</code> on demand and re-uses your session — no API keys to manage.</p>
+        <p class="lede">Use the OpenAI Codex CLI you already logged into. Hackl spawns <code>codex app-server</code> on demand and re-uses your session, with no API keys to manage.</p>
 
         <div id="codex-card" class="card open">
           <div id="codex-state" class="codex-state codex-state-missing">
             <span class="codex-pill">checking</span>
-            <span id="codex-state-text">Looking for the codex CLI…</span>
+            <span id="codex-state-text">Looking for the codex CLI...</span>
           </div>
 
           <div id="codex-install" hidden>
@@ -145,7 +152,7 @@ ollama pull qwen3-coder:30b   # or gemma3:12b</code></pre>
       </label>
     </div>
 
-    <p class="footer">Hackl never starts a server. You run the model — locally or via Codex — and Hackl connects to it.</p>
+    <p class="footer">Hackl never starts a server. You run the model locally or via Codex, and Hackl connects to it.</p>
   </div>
   <script nonce="${nonce}" src="${js}"></script>
 </body>

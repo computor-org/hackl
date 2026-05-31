@@ -11,13 +11,12 @@ The durable foundation is independent of the current chat surface:
 - `ChatViewProvider` is the current UI shell only.
 
 Hackl's broader product role is the missing local Copilot layer: a policy-safe
-VS Code assistant that grows from chat into edit mode and agent mode without
-requiring the GitHub Copilot extension or a hosted service. Inline FIM
-autocomplete was explored and intentionally dropped — see "Model Policy".
+VS Code assistant that grows from chat into autocomplete, edit mode, and agent
+mode without requiring the GitHub Copilot extension or a hosted service.
 
 Hackl is designed as a production tool with a visible learning ladder: users can
-work directly, but the same Ask -> Edit -> Work -> Agent -> Review progression
-can be surfaced by Computor for teaching.
+work directly, but the same Ask -> Autocomplete -> Edit -> Work -> Agent ->
+Review progression can be surfaced by Computor for teaching.
 
 ## Backend Boundary
 
@@ -27,9 +26,10 @@ Hackl supports only OpenAI-compatible local or self-hosted endpoints:
 - LM Studio: `http://localhost:1234/v1`
 - configured compatible endpoint, including slopgate
 
-Users configure `hackl.endpoint` only. Hackl does not expose model selection.
-It probes `/v1/models` and uses the loaded model id. If a multi-model gateway
-requires an alias, Hackl uses the first alias advertised by the gateway error.
+Users configure `hackl.endpoint` for the non-autocomplete modes. Hackl
+also exposes `hackl.autocomplete.endpoint` and `hackl.autocomplete.model` for a
+dedicated FIM endpoint. If the autocomplete endpoint is empty, Hackl only reuses
+a local chat endpoint or an auto-discovered local server.
 
 No hosted-provider adapters, API presets, custom history layer, or auto-approved
 command mode belong in this phase.
@@ -52,12 +52,13 @@ must request:
 HACKL_TOOL {"name":"read_file","path":"src/file.ts","start_line":1,"end_line":120}
 ```
 
-Hackl has four modes:
+Hackl has five capability levels:
 
 - Ask: bounded `read_file` only.
+- Autocomplete: inline FIM suggestions only.
 - Edit: `read_file` plus exact `replace_text` edits.
 - Work: search, read, and edit without shell commands.
-- Agent: search, read, edit, and approved structured commands.
+- Agent: workspace access plus approved structured commands.
 
 Modes control capability only. `/review` asks for a `hackl-annotations` JSON
 block, parses it into VS Code comment threads, and persists the finished Hackl
@@ -120,6 +121,7 @@ levels.
 For Hackl, the stages are:
 
 - Ask: understand code before changing it.
+- Autocomplete: accept or reject small local completions.
 - Edit: make bounded, inspectable changes.
 - Work: coordinate multi-file changes.
 - Agent: delegate bounded checks and tool use.
@@ -137,26 +139,32 @@ through the same stages explicitly.
 ## Model Policy
 
 Hackl prefers one loaded local model used for chat, edit, and agent workflows.
-The user should not have to swap models.
+The user should not have to swap models for those modes. Inline autocomplete
+may use a second endpoint because local FIM latency and chat/agent quality are
+different optimization targets.
 
 Initial local tiers:
 
-- Small RAM or weak GPU: Qwen3.5 4B, or Gemma 4 E2B/E4B.
-- Normal laptop or desktop: Qwen3.5 9B, or Gemma 4 E4B.
-- Large local machine: Qwen3.6-35B-A3B, or Gemma 4 26B A4B / 31B.
+- Small RAM or weak GPU: Qwen3 4B-Instruct, or Gemma 3n E2B-it.
+- Normal laptop or desktop: Qwen3 8B, or Gemma 3n E4B-it.
+- Large local machine: Qwen3-Coder 30B-A3B, Qwen3 14B, or Gemma 3 12B/27B.
 
-Inline FIM autocomplete is intentionally out of scope. It was prototyped
-(v0.0.13 – v0.0.15) and removed: at the latency a single locally-loaded
-chat-class model can deliver, the UX did not beat the chat/edit workflow that
-is Hackl's core, and maintaining a parallel FIM client, dialect detector, and
-prompt template added surface area without proportionate value. The chat/edit
-loop replaces autocomplete for Hackl's use case.
+Initial FIM tiers:
+
+- Small RAM or weak GPU: Qwen2.5-Coder 1.5B or 3B Q4_K_M.
+- Normal laptop or desktop: Qwen2.5-Coder 7B Q4_K_M.
+- Large local machine: Qwen2.5-Coder 14B or Qwen3-Coder 30B-A3B Q4_K_M.
+- Server-class local host: Qwen3-Coder-Next Q4_K_M on a dedicated endpoint.
+
+Autocomplete is deliberately narrow: it calls llama.cpp `/infill` first,
+falls back to `/completion` with FIM markers, detects Qwen, CodeGemma, and
+CodeLlama marker dialects, and never mutates files.
 
 ## UI Direction
 
 The default chat UI is a Hackl-owned `WebviewView` contributed to a Hackl view
 container. It is designed for the Secondary Sidebar: the same right-side work
-area users commonly use for Copilot, Codex, Claude, and similar assistants.
+area users commonly use for Copilot-style assistants.
 VS Code does not let extensions contribute directly to the Secondary Sidebar by
 default, so the view must work as a normal contributed view and remain movable
 by the user.

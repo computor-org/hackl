@@ -26,7 +26,7 @@ export class SetupPanel {
     }
     const panel = vscode.window.createWebviewPanel(
       SetupPanel.viewType,
-      "Hackl — Setup",
+      "Hackl - Setup",
       vscode.ViewColumn.One,
       {
         enableScripts: true,
