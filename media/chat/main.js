@@ -1,5 +1,20 @@
 (function () {
   const vscode = acquireVsCodeApi();
+
+  // Mirror of src/modelLabel.ts: compact a model id for display only.
+  function shortModelLabel(id) {
+    if (!id) return id;
+    const noVendor = id.includes("/") ? id.slice(id.lastIndexOf("/") + 1) : id;
+    const noCtx = noVendor.split("@")[0];
+    const colon = noCtx.indexOf(":");
+    if (colon === -1) return noCtx;
+    const name = noCtx.slice(0, colon);
+    const params = noCtx.slice(colon + 1);
+    const hasDescriptor = name.split("-").slice(1).some((seg) => /[a-zA-Z]/.test(seg));
+    if (hasDescriptor) return name;
+    const size = params.split("-").find((seg) => /^\d+(\.\d+)?b$/i.test(seg));
+    return size ? name + ":" + size : name;
+  }
   const form = document.getElementById("form");
   const prompt = document.getElementById("prompt");
   const thread = document.getElementById("thread");
@@ -163,7 +178,7 @@
       btn.setAttribute("data-model", model || "");
       btn.textContent = label;
       if (title) btn.title = title;
-      const selected = current.kind === kind && (current.model || "") === (model || current.model || "");
+      const selected = current.kind === kind && (current.model || "") === (model || "");
       btn.setAttribute("aria-selected", String(selected));
       if (!enabled) btn.setAttribute("disabled", "true");
       btn.addEventListener("click", () => {
@@ -177,14 +192,19 @@
     }
     addHeader("Local");
     if (backends.local && backends.local.available) {
-      addOption(backends.local.model || "Auto", "local", backends.local.model || "", true, backends.local.endpoint || "");
+      const models = (backends.local.models && backends.local.models.length)
+        ? backends.local.models
+        : [backends.local.model || ""];
+      for (const model of models) {
+        addOption(model ? shortModelLabel(model) : "Auto", "local", model || "", true, model || backends.local.endpoint || "");
+      }
     } else {
       addOption("Not reachable", "local", "", false, "Start a local server first.");
     }
     addHeader("Codex");
     if (backends.codex && backends.codex.available && !backends.codex.needsLogin) {
       for (const model of backends.codex.models) {
-        addOption(model, "codex", model, true, "codex app-server");
+        addOption(shortModelLabel(model), "codex", model, true, "codex app-server");
       }
     } else if (backends.codex && backends.codex.available && backends.codex.needsLogin) {
       addOption("Run codex login", "codex", "", false, "Run `codex login` in a terminal to enable.");
@@ -198,9 +218,9 @@
     if (!modelLabel || !backends) return;
     const c = backends.current || {};
     if (c.kind === "codex") {
-      modelLabel.textContent = "Codex · " + (c.model || "");
+      modelLabel.textContent = "Codex · " + shortModelLabel(c.model || "");
     } else if (c.kind === "local" && backends.local && backends.local.model) {
-      modelLabel.textContent = backends.local.model;
+      modelLabel.textContent = shortModelLabel(backends.local.model);
     } else {
       modelLabel.textContent = "Local";
     }

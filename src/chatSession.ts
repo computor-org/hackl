@@ -99,7 +99,7 @@ export type PromptProgress =
   | { type: "delta"; channel: "answer" | "reasoning"; text: string };
 
 export interface ChatBackendsState {
-  local: { available: boolean; endpoint?: string; model?: string };
+  local: { available: boolean; endpoint?: string; model?: string; models?: string[] };
   codex: { available: boolean; models: string[]; authMode: "chatgpt" | "apikey" | "none"; needsLogin: boolean };
   current: { kind: "local" | "codex"; model?: string };
 }

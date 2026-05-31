@@ -14,12 +14,14 @@ import { clearCodexDetectionCache, detectCodex, CodexDetection } from "./codexDe
 import { buildPromptContext, collectEditorContext } from "./context";
 import {
   detectMaxContextTokens,
+  listModelIds,
   LOCAL_SERVER_CANDIDATES,
   probeAll,
   ProbeResult,
   requiresNonLocalEndpointApproval,
   resolveChatTarget,
 } from "./localServers";
+import { shortModelLabel } from "./modelLabel";
 import { buildHacklMessages, PromptMode } from "./prompt";
 import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
@@ -123,6 +125,9 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       const cfg = readHacklConfig();
       const endpoint = cfg.endpoint || undefined;
       await writeBackendChoice({ kind: "local", model: model || "", endpoint });
+      await vscode.workspace
+        .getConfiguration("hackl")
+        .update("model", model || "", vscode.ConfigurationTarget.Global);
     }
     await refreshStatus();
   });
@@ -379,7 +384,7 @@ async function refreshStatus(): Promise<void> {
   if (choice?.kind === "codex" && cfg.codexEnabled) {
     const codex = await detectCodex({ command: cfg.codexCommand }).catch(() => undefined);
     if (codex?.available && codex.authMode !== "none") {
-      statusBarItem.text = `$(zap) Codex · ${choice.model}`;
+      statusBarItem.text = `$(zap) Codex · ${shortModelLabel(choice.model)}`;
       statusBarItem.tooltip = `Hackl connected via codex app-server (${choice.model})`;
       statusBarItem.show();
       return;
@@ -387,7 +392,8 @@ async function refreshStatus(): Promise<void> {
   }
   const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
   if (probe?.ok) {
-    statusBarItem.text = `$(pulse) ${probe.model ?? "Hackl"}`;
+    const chatModel = cfg.model || (choice?.kind === "local" ? choice.model : "") || probe.model;
+    statusBarItem.text = `$(pulse) ${chatModel ? shortModelLabel(chatModel) : "Hackl"}`;
     statusBarItem.tooltip = `Hackl connected to ${probe.endpoint}`;
   } else {
     statusBarItem.text = "$(plug) Hackl: connect";
@@ -401,12 +407,16 @@ async function pickBackend(view: ChatViewProvider): Promise<void> {
   const items: Array<vscode.QuickPickItem & { choice: BackendChoice }> = [];
   const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
   if (probe?.ok) {
-    items.push({
-      label: `$(pulse) ${probe.model ?? "Local"}`,
-      description: probe.endpoint,
-      detail: "Local OpenAI-compatible server",
-      choice: { kind: "local", endpoint: probe.endpoint, model: probe.model ?? "" },
-    });
+    const localModels = await listModelIds(probe.endpoint).catch(() => []);
+    const models = localModels.length ? localModels : [probe.model ?? ""];
+    for (const model of models) {
+      items.push({
+        label: `$(pulse) ${model || "Local"}`,
+        description: probe.endpoint,
+        detail: "Local OpenAI-compatible server",
+        choice: { kind: "local", endpoint: probe.endpoint, model },
+      });
+    }
   }
   if (cfg.codexEnabled) {
     const codex = await detectCodex({ command: cfg.codexCommand }).catch(() => undefined);
@@ -432,6 +442,7 @@ async function pickBackend(view: ChatViewProvider): Promise<void> {
     await vscode.workspace.getConfiguration("hackl").update("codex.model", picked.choice.model, vscode.ConfigurationTarget.Global);
   } else {
     await writeBackendChoice(picked.choice);
+    await vscode.workspace.getConfiguration("hackl").update("model", picked.choice.model, vscode.ConfigurationTarget.Global);
   }
   await refreshStatus();
   void view.postState();
@@ -520,9 +531,11 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     }
     target = { endpoint: "codex", model };
   } else {
+    const preferredModel = cfg.model || (stored?.kind === "local" ? stored.model : "");
     target = await resolveChatTarget({
       endpoint: cfg.endpoint,
       endpointConfigured: cfg.endpointConfigured,
+      preferredModel,
     });
   }
   progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
@@ -707,11 +720,14 @@ async function currentChatState(): Promise<ChatState> {
   const codex = cfg.codexEnabled
     ? await detectCodex({ command: cfg.codexCommand }).catch(() => undefined)
     : undefined;
-  const probe = (!cfg.endpointConfigured || !requiresNonLocalEndpointApproval(cfg.endpoint))
-    ? await tryProbe(cfg.endpoint, cfg.endpointConfigured)
-    : undefined;
-  const choice = effectiveBackendChoice(probe, codex);
-  const backends = buildBackendsState(choice, probe, codex);
+  // Probe the configured endpoint even when it is non-local: a /models probe
+  // sends no user content, and the send-time approval gate below remains the
+  // privacy boundary. Skipping the probe here made a reachable non-local
+  // endpoint render as "Not reachable" and silently fall back to codex.
+  const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
+  const localModels = probe?.ok ? await listModelIds(probe.endpoint).catch(() => []) : [];
+  const choice = effectiveBackendChoice(probe, codex, cfg.model);
+  const backends = buildBackendsState(choice, probe, codex, localModels);
   const base: ChatState = {
     type: "state",
     enableThinking: cfg.enableThinking,
@@ -738,6 +754,7 @@ async function currentChatState(): Promise<ChatState> {
 function effectiveBackendChoice(
   probe: ProbeResult | undefined,
   codex: CodexDetection | undefined,
+  configuredModel: string,
 ): BackendChoice {
   const stored = readBackendChoice();
   if (stored?.kind === "codex" && codex?.available && codex.authMode !== "none") {
@@ -745,10 +762,14 @@ function effectiveBackendChoice(
     if (model) return { kind: "codex", model };
   }
   if (stored?.kind === "local") {
-    return { kind: "local", model: stored.model || probe?.model || "", endpoint: stored.endpoint ?? probe?.endpoint };
+    return {
+      kind: "local",
+      model: configuredModel || stored.model || probe?.model || "",
+      endpoint: stored.endpoint ?? probe?.endpoint,
+    };
   }
   if (probe?.ok) {
-    return { kind: "local", model: probe.model ?? "", endpoint: probe.endpoint };
+    return { kind: "local", model: configuredModel || probe.model || "", endpoint: probe.endpoint };
   }
   if (codex?.available && codex.authMode !== "none" && codex.models.length > 0) {
     return { kind: "codex", model: codex.models[0] };
@@ -760,12 +781,14 @@ function buildBackendsState(
   current: BackendChoice,
   probe: ProbeResult | undefined,
   codex: CodexDetection | undefined,
+  localModels: string[],
 ): ChatBackendsState {
   return {
     local: {
       available: Boolean(probe?.ok),
       endpoint: probe?.endpoint,
-      model: probe?.model,
+      model: current.kind === "local" ? current.model || probe?.model : probe?.model,
+      models: localModels,
     },
     codex: {
       available: Boolean(codex?.available),

@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 export interface HacklConfig {
   endpoint: string;
   endpointConfigured: boolean;
+  model: string;
   maxToolFileChars: number;
   maxContextTokens: number;
   maxContextTokensConfigured: boolean;
@@ -68,6 +69,7 @@ export function readHacklConfig(): HacklConfig {
   return {
     endpoint: (c.get<string>("endpoint", "") || "").trim(),
     endpointConfigured: hasUserConfigured(c.inspect<string>("endpoint")),
+    model: (c.get<string>("model", "") || "").trim(),
     maxToolFileChars: c.get<number>("maxToolFileChars", DEFAULTS.maxToolFileChars),
     maxContextTokens: c.get<number>("maxContextTokens", DEFAULTS.maxContextTokens),
     maxContextTokensConfigured: hasUserConfigured(c.inspect<number>("maxContextTokens")),

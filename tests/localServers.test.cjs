@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   detectMaxContextTokens,
+  listModelIds,
   requiresNonLocalEndpointApproval,
   resolveChatTarget,
 } = require("../dist/localServers.js");
@@ -193,6 +194,54 @@ test("detectMaxContextTokens falls back to model metadata context", async () => 
   });
 
   assert.equal(detected, 262144);
+});
+
+test("resolveChatTarget honors an explicit chat model over the endpoint's first model", async () => {
+  let probed = false;
+  const target = await resolveChatTarget({
+    endpoint: "http://10.77.0.20:8080/v1",
+    endpointConfigured: true,
+    preferredModel: "unsloth/qwen3.6:35b-a3b@128k",
+    fetchImpl: async () => {
+      probed = true;
+      return modelResponse("qwen/qwen3-coder-next:80b-a3b-q4km@32k");
+    },
+  });
+
+  assert.deepEqual(target, {
+    endpoint: "http://10.77.0.20:8080/v1",
+    model: "unsloth/qwen3.6:35b-a3b@128k",
+  });
+  assert.equal(probed, false);
+});
+
+test("listModelIds returns every model the endpoint advertises", async () => {
+  const ids = await listModelIds("http://10.77.0.20:8080/v1/", async (url) => {
+    assert.equal(String(url), "http://10.77.0.20:8080/v1/models");
+    return new Response(
+      JSON.stringify({
+        data: [
+          { id: "qwen/qwen3-coder-next:80b-a3b-q4km@32k" },
+          { id: "unsloth/qwen3.5:122b-a10b@128k" },
+          { id: "unsloth/qwen3.6:35b-a3b@128k" },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  });
+
+  assert.deepEqual(ids, [
+    "qwen/qwen3-coder-next:80b-a3b-q4km@32k",
+    "unsloth/qwen3.5:122b-a10b@128k",
+    "unsloth/qwen3.6:35b-a3b@128k",
+  ]);
+});
+
+test("listModelIds returns an empty list when the endpoint is unreachable", async () => {
+  const ids = await listModelIds("http://localhost:9/v1", async () => {
+    throw new Error("offline");
+  });
+  assert.deepEqual(ids, []);
 });
 
 function modelResponse(id) {

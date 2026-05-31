@@ -3,6 +3,7 @@ import { AutocompleteConfig, readHacklConfig } from "./config";
 import { resolveAutocompleteTarget } from "./autocompleteTarget";
 import { FimDetectionResult, FimSupport, detectFim } from "./fimDetect";
 import { requestFim } from "./fimClient";
+import { shortModelLabel } from "./modelLabel";
 
 const STATUS_PRIORITY = 50;
 const COMMAND_TOGGLE = "hackl.toggleAutocomplete";
@@ -220,8 +221,8 @@ function statusState(enabled: boolean, runtime?: AutocompleteRuntime): StatusSta
     return { text: "$(circle-slash) Hackl AC", tooltip: runtime.detection.reason, warning: true };
   }
   return {
-    text: "$(sparkle-filled) Hackl AC",
-    tooltip: `Inline autocomplete is on - ${runtime.model ?? "loaded model"} - FIM ${runtime.detection.dialect}`,
+    text: `$(sparkle-filled) ${runtime.model ? shortModelLabel(runtime.model) : "Hackl AC"}`,
+    tooltip: `Inline autocomplete is on - ${runtime.model ?? "loaded model"} - FIM ${runtime.detection.dialect}. Click to toggle.`,
   };
 }
 

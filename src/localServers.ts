@@ -6,6 +6,7 @@ export interface LocalServerCandidate {
 export interface ChatTargetSettings {
   endpoint?: string;
   endpointConfigured: boolean;
+  preferredModel?: string;
   fetchImpl?: typeof fetch;
   candidates?: LocalServerCandidate[];
 }
@@ -32,8 +33,15 @@ export const LOCAL_SERVER_CANDIDATES: LocalServerCandidate[] = [
 export async function resolveChatTarget(settings: ChatTargetSettings): Promise<ChatTarget> {
   const configuredEndpoint = clean(settings.endpoint);
   const fetchImpl = settings.fetchImpl ?? fetch;
+  const preferred = settings.preferredModel?.trim();
 
   if (settings.endpointConfigured && configuredEndpoint) {
+    // An explicit chat model wins over auto-detection: a multi-model endpoint
+    // (e.g. slopgate) lists several models and the first one is not necessarily
+    // the right chat model. Skip the probe round-trip when we already know it.
+    if (preferred) {
+      return { endpoint: configuredEndpoint, model: preferred };
+    }
     const probed = await probeServer(configuredEndpoint, fetchImpl);
     return {
       endpoint: configuredEndpoint,
@@ -48,8 +56,44 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
 
   return {
     endpoint: discovered?.endpoint ?? DEFAULT_ENDPOINT,
-    model: discovered?.model ?? DEFAULT_CHAT_MODEL,
+    model: preferred || discovered?.model || DEFAULT_CHAT_MODEL,
   };
+}
+
+export async function listModelIds(
+  endpoint: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string[]> {
+  const base = trimSlash(endpoint);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(`${base}/models`, { signal: controller.signal });
+    if (!response.ok) return [];
+    return allModelIds(await response.json());
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function allModelIds(payload: unknown): string[] {
+  if (!isRecord(payload)) return [];
+  const ids = new Set<string>();
+  for (const [list, key] of [
+    [payload.data, "id"],
+    [payload.models, "model"],
+    [payload.models, "name"],
+  ] as Array<[unknown, "id" | "model" | "name"]>) {
+    if (!Array.isArray(list)) continue;
+    for (const model of list) {
+      if (isRecord(model) && typeof model[key] === "string" && model[key].trim()) {
+        ids.add(model[key]);
+      }
+    }
+  }
+  return [...ids];
 }
 
 export function requiresNonLocalEndpointApproval(endpoint: string | undefined): boolean {

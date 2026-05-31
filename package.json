@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack local-first.",
-  "version": "0.0.56",
+  "version": "0.0.60",
   "enabledApiProposals": [
     "commentReveal"
   ],
@@ -273,6 +273,11 @@
           "type": "string",
           "default": "",
           "description": "OpenAI-compatible API base URL. Leave empty to auto-discover llama.cpp on port 8080 or LM Studio on port 1234."
+        },
+        "hackl.model": {
+          "type": "string",
+          "default": "",
+          "description": "Chat/agent model id for the local OpenAI-compatible endpoint. Leave empty to use the first model the endpoint reports. Set this when the endpoint serves several models (e.g. a separate chat model from the autocomplete/FIM model). Set automatically when picking a model from the chat dropdown."
         },
         "hackl.maxToolFileChars": {
           "type": "number",
