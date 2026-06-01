@@ -1,6 +1,23 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { detectFim, toRootBase, buildQwenPrompt } = require("../dist/fimDetect.js");
+const { detectFim, toRootBase, buildQwenPrompt, fimCapableByModelName } = require("../dist/fimDetect.js");
+
+test("fimCapableByModelName treats the Qwen line as FIM-capable", () => {
+  assert.equal(fimCapableByModelName("qwen"), true);
+  assert.equal(fimCapableByModelName("Qwen3.6-35B-A3B"), true);
+  assert.equal(fimCapableByModelName("qwen2.5-coder-7b-instruct"), true);
+});
+
+test("fimCapableByModelName rejects plain Gemma but not CodeGemma", () => {
+  assert.equal(fimCapableByModelName("gemma-4-31b-it"), false);
+  assert.equal(fimCapableByModelName("codegemma-7b"), true);
+});
+
+test("fimCapableByModelName returns undefined for unknown or empty ids", () => {
+  assert.equal(fimCapableByModelName("local-model"), undefined);
+  assert.equal(fimCapableByModelName(""), undefined);
+  assert.equal(fimCapableByModelName(undefined), undefined);
+});
 
 function jsonResponse(body, ok = true) {
   return {

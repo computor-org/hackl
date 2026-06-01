@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack local-first.",
-  "version": "0.0.60",
+  "version": "0.0.61",
   "enabledApiProposals": [
     "commentReveal"
   ],
@@ -304,7 +304,7 @@
         "hackl.autocomplete.endpoint": {
           "type": "string",
           "default": "",
-          "description": "Optional dedicated llama.cpp-compatible endpoint for autocomplete requests. Accepts a /v1 base or server root. Set this explicitly to use a separate FIM model or a non-local endpoint."
+          "description": "Optional dedicated llama.cpp-compatible endpoint for autocomplete requests. Accepts a /v1 base or server root. Leave empty to reuse the main chat model for FIM when it supports infill tokens (the Qwen line does, plain Gemma does not). Set this explicitly to use a separate FIM model or a non-local endpoint."
         },
         "hackl.autocomplete.model": {
           "type": "string",

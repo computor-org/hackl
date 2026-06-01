@@ -49,6 +49,41 @@ export function buildQwenPrompt(prefix: string, suffix: string): string {
   return `<|fim_prefix|>${prefix}<|fim_suffix|>${suffix}<|fim_middle|>`;
 }
 
+// Model families that ship infill tokens, so the main chat model can also drive
+// autocomplete. The whole Qwen line (Qwen3.6 instruct included, not just the
+// Coder variants) carries <|fim_prefix|> etc.
+const FIM_CAPABLE_HINTS = [
+  "qwen",
+  "codeqwen",
+  "codellama",
+  "code-llama",
+  "codegemma",
+  "code-gemma",
+  "deepseek-coder",
+  "deepseek_coder",
+  "codestral",
+  "starcoder",
+  "stable-code",
+  "granite-code",
+];
+
+// Families that chat but expose no infill tokens. A plain Gemma instruct model
+// cannot do FIM even though it answers chat fine, so it must never be reused as
+// the autocomplete model.
+const FIM_INCAPABLE_HINTS = ["gemma"];
+
+// Decide FIM capability from a model id alone, before any network probe.
+// Returns true/false for known families, undefined when the name is unknown so
+// the caller falls back to the /tokenize probe. Capable hints win over
+// incapable ones so "codegemma" resolves to true despite containing "gemma".
+export function fimCapableByModelName(model: string | undefined): boolean | undefined {
+  const name = model?.trim().toLowerCase();
+  if (!name) return undefined;
+  if (FIM_CAPABLE_HINTS.some((hint) => name.includes(hint))) return true;
+  if (FIM_INCAPABLE_HINTS.some((hint) => name.includes(hint))) return false;
+  return undefined;
+}
+
 function buildCodeLlamaPrompt(prefix: string, suffix: string): string {
   return `<PRE> ${prefix} <SUF>${suffix} <MID>`;
 }

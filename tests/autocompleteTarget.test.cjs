@@ -63,6 +63,46 @@ test("autocomplete falls back to the local chat endpoint when safe", async () =>
   });
 });
 
+test("autocomplete refuses a chat-only family (Gemma) reused for FIM", async () => {
+  const result = await resolveAutocompleteTarget({
+    chatEndpoint: "http://localhost:8080/v1",
+    chatEndpointConfigured: true,
+    autocomplete: {
+      endpoint: "",
+      endpointConfigured: false,
+      model: "",
+    },
+  }, {
+    resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "gemma-4-31b-it" }),
+  });
+
+  assert.equal(result.available, false);
+  assert.match(result.reason, /chat-only family without FIM tokens/i);
+});
+
+test("autocomplete reuses a Qwen chat model for FIM", async () => {
+  const result = await resolveAutocompleteTarget({
+    chatEndpoint: "http://localhost:8080/v1",
+    chatEndpointConfigured: true,
+    autocomplete: {
+      endpoint: "",
+      endpointConfigured: false,
+      model: "",
+    },
+  }, {
+    resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "Qwen3.6-35B-A3B" }),
+  });
+
+  assert.deepEqual(result, {
+    available: true,
+    endpoint: "http://localhost:8080/v1",
+    root: "http://localhost:8080",
+    model: "Qwen3.6-35B-A3B",
+    source: "chat-fallback",
+    remote: false,
+  });
+});
+
 test("autocomplete omits the compatibility fallback model alias", async () => {
   const result = await resolveAutocompleteTarget({
     chatEndpoint: "http://localhost:8080/v1",
