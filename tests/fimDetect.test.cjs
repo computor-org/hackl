@@ -61,17 +61,18 @@ test("detectFim returns qwen when fim markers tokenize as one token", async () =
   assert.equal(result.dialect, "qwen");
 });
 
-test("detectFim sends configured model alias for routed gateways", async () => {
+test("detectFim probes /tokenize without an x-model header", async () => {
   const calls = [];
   const result = await detectFim({
     root: "http://localhost:8080",
-    model: "qwenfim",
     fetchImpl: captureFetch({ "<|fim_prefix|>": 1, "<|file_separator|>": 6 }, calls),
   });
   assert.equal(result.supported, true);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "http://localhost:8080/tokenize");
-  assert.equal(calls[0].headers["x-model"], "qwenfim");
+  // A routed gateway (slopgate) rejects an x-model header on /tokenize with
+  // HTTP 400, so detection must send a plain request and route via the body.
+  assert.equal(calls[0].headers["x-model"], undefined);
   assert.equal(calls[0].body.add_special, false);
 });
 

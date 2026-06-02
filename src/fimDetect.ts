@@ -16,7 +16,6 @@ export type FimDetectionResult = FimSupport | FimUnsupported;
 
 export interface FimDetectOptions {
   root: string;
-  model?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -101,7 +100,7 @@ export async function detectFim(options: FimDetectOptions): Promise<FimDetection
     try {
       const response = await fetchImpl(`${root}/tokenize`, {
         method: "POST",
-        headers: headersForModel(options.model),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, add_special: false }),
         signal: controller.signal,
       });
@@ -157,14 +156,6 @@ export async function detectFim(options: FimDetectOptions): Promise<FimDetection
 
 function trimSlash(value: string): string {
   return value.replace(/\/+$/, "");
-}
-
-function headersForModel(model: string | undefined): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (model) {
-    headers["x-model"] = model;
-  }
-  return headers;
 }
 
 export function toRootBase(endpoint: string): string {

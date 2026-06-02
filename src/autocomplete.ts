@@ -143,7 +143,7 @@ class AutocompleteController {
     if (!target.available) {
       return this.cache({ kind: "unavailable", reason: target.reason });
     }
-    const detection = await detectFim({ root: target.root, model: target.model });
+    const detection = await detectFim({ root: target.root });
     return this.cache({
       kind: "ready",
       endpoint: target.endpoint,

@@ -64,7 +64,7 @@ test("requestFim posts /infill with input_prefix and input_suffix", async () => 
   assert.equal(calls[0].body.input_suffix, "after");
   assert.equal(calls[0].body.model, "qwen");
   assert.equal(calls[0].body.cache_prompt, true);
-  assert.equal(calls[0].headers["x-model"], "qwen");
+  assert.equal(calls[0].headers["x-model"], undefined);
 });
 
 test("requestFim falls back to /completion when /infill fails", async () => {

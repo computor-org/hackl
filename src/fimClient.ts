@@ -91,7 +91,6 @@ export async function requestFim(options: FimClientOptions, request: FimRequest)
       input_suffix: suffix,
       prompt: "",
     },
-    options.model,
     request.signal,
   );
   if (infillResult !== undefined) {
@@ -105,7 +104,6 @@ export async function requestFim(options: FimClientOptions, request: FimRequest)
       ...sharedBody,
       prompt: options.support.template(prefix, suffix),
     },
-    options.model,
     request.signal,
   );
   if (completionResult !== undefined) {
@@ -119,13 +117,12 @@ async function tryPost(
   fetchImpl: typeof fetch,
   url: string,
   body: unknown,
-  model: string | undefined,
   signal: AbortSignal | undefined,
 ): Promise<string | undefined> {
   try {
     const response = await fetchImpl(url, {
       method: "POST",
-      headers: headersForModel(model),
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal,
     });
@@ -135,14 +132,6 @@ async function tryPost(
   } catch {
     return undefined;
   }
-}
-
-function headersForModel(model: string | undefined): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (model) {
-    headers["x-model"] = model;
-  }
-  return headers;
 }
 
 function finalise(content: string, suffix: string, stops: string[]): string | undefined {
