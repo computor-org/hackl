@@ -7,6 +7,7 @@ import { shortModelLabel } from "./modelLabel";
 
 const STATUS_PRIORITY = 50;
 const COMMAND_TOGGLE = "hackl.toggleAutocomplete";
+const COMMAND_STATUS_CLICK = "hackl.autocompleteStatusClick";
 const PREFIX_LINE_WINDOW = 120;
 const SUFFIX_LINE_WINDOW = 80;
 
@@ -31,7 +32,7 @@ type AutocompleteRuntime =
 
 export function registerAutocomplete(context: vscode.ExtensionContext): void {
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, STATUS_PRIORITY);
-  status.command = COMMAND_TOGGLE;
+  status.command = COMMAND_STATUS_CLICK;
   status.show();
   context.subscriptions.push(status);
 
@@ -52,6 +53,7 @@ class AutocompleteController {
   register(): void {
     this.context.subscriptions.push(
       vscode.commands.registerCommand(COMMAND_TOGGLE, () => this.toggle()),
+      vscode.commands.registerCommand(COMMAND_STATUS_CLICK, () => this.statusClick()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("hackl.autocomplete") || event.affectsConfiguration("hackl.endpoint")) {
           this.invalidate();
@@ -65,11 +67,30 @@ class AutocompleteController {
 
   private async toggle(): Promise<void> {
     const cfg = vscode.workspace.getConfiguration("hackl");
-    const current = cfg.get<boolean>("autocomplete.enabled", false);
+    const current = cfg.get<boolean>("autocomplete.enabled", true);
     await cfg.update("autocomplete.enabled", !current, vscode.ConfigurationTarget.Global);
     if (!current) {
       void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
     }
+  }
+
+  // Status-bar click. Unlike the palette toggle, this never disables a broken
+  // endpoint: clicking a warning state retries resolution instead, so a user
+  // reacting to "no suggestions" does not silently turn autocomplete off.
+  private async statusClick(): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration("hackl");
+    if (!cfg.get<boolean>("autocomplete.enabled", true)) {
+      await cfg.update("autocomplete.enabled", true, vscode.ConfigurationTarget.Global);
+      void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+      return;
+    }
+    if (!isSupportedRuntime(this.resolved)) {
+      this.invalidate();
+      await this.refresh();
+      void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+      return;
+    }
+    await cfg.update("autocomplete.enabled", false, vscode.ConfigurationTarget.Global);
   }
 
   private provider(): vscode.InlineCompletionItemProvider {
@@ -215,14 +236,14 @@ function statusState(enabled: boolean, runtime?: AutocompleteRuntime): StatusSta
     return { text: "$(loading~spin) Hackl AC", tooltip: "Resolving autocomplete endpoint and FIM support..." };
   }
   if (runtime.kind === "unavailable") {
-    return { text: "$(circle-slash) Hackl AC", tooltip: runtime.reason, warning: true };
+    return { text: "$(circle-slash) Hackl AC", tooltip: `${runtime.reason} Click to retry.`, warning: true };
   }
   if (!runtime.detection.supported) {
-    return { text: "$(circle-slash) Hackl AC", tooltip: runtime.detection.reason, warning: true };
+    return { text: "$(circle-slash) Hackl AC", tooltip: `${runtime.detection.reason} Click to retry.`, warning: true };
   }
   return {
     text: `$(sparkle-filled) ${runtime.model ? shortModelLabel(runtime.model) : "Hackl AC"}`,
-    tooltip: `Inline autocomplete is on - ${runtime.model ?? "loaded model"} - FIM ${runtime.detection.dialect}. Click to toggle.`,
+    tooltip: `Inline autocomplete is on - ${runtime.model ?? "loaded model"} - FIM ${runtime.detection.dialect}. Click to turn off.`,
   };
 }
 
