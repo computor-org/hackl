@@ -47,13 +47,9 @@ export async function resolveAutocompleteTarget(
     });
   }
 
-  if (input.chatEndpointConfigured && requiresNonLocalEndpointApproval(input.chatEndpoint)) {
-    return {
-      available: false,
-      reason: "Autocomplete does not automatically reuse a non-local hackl.endpoint. Set hackl.autocomplete.endpoint explicitly to opt in.",
-    };
-  }
-
+  // No dedicated autocomplete endpoint: always reuse the chat endpoint, local or
+  // not. A configured autocomplete.model belongs to the removed endpoint, so it
+  // is ignored here; FIM runs on whatever model the chat endpoint has loaded.
   const target = await resolveChatTargetImpl({
     endpoint: input.chatEndpoint,
     endpointConfigured: input.chatEndpointConfigured,
@@ -62,9 +58,9 @@ export async function resolveAutocompleteTarget(
     available: true,
     endpoint: target.endpoint,
     root: toRootBase(target.endpoint),
-    model: resolvedModel(input.autocomplete.model, target.model),
+    model: resolvedModel("", target.model),
     source: "chat-fallback",
-    remote: false,
+    remote: requiresNonLocalEndpointApproval(target.endpoint),
   });
 }
 

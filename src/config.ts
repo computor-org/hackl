@@ -38,7 +38,7 @@ const DEFAULTS = {
   codexEnabled: true,
   codexCommand: "codex",
   codexModel: "",
-  autocompleteEnabled: false,
+  autocompleteEnabled: true,
   autocompleteMaxTokens: 48,
   autocompleteDebounceMs: 150,
   autocompleteMultiLine: false,

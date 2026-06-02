@@ -25,19 +25,45 @@ test("explicit autocomplete endpoint wins and keeps explicit model", async () =>
   });
 });
 
-test("autocomplete does not automatically reuse a non-local chat endpoint", async () => {
+test("autocomplete reuses a non-local chat endpoint when no autocomplete endpoint is set", async () => {
   const result = await resolveAutocompleteTarget({
-    chatEndpoint: "http://slopgate.example/v1",
+    chatEndpoint: "http://10.77.0.20:8080/v1",
     chatEndpointConfigured: true,
     autocomplete: {
       endpoint: "",
       endpointConfigured: false,
       model: "",
     },
+  }, {
+    resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "Qwen3.6-35B-A3B" }),
   });
 
-  assert.equal(result.available, false);
-  assert.match(result.reason, /does not automatically reuse a non-local hackl\.endpoint/i);
+  assert.deepEqual(result, {
+    available: true,
+    endpoint: "http://10.77.0.20:8080/v1",
+    root: "http://10.77.0.20:8080",
+    model: "Qwen3.6-35B-A3B",
+    source: "chat-fallback",
+    remote: true,
+  });
+});
+
+test("autocomplete ignores a stale autocomplete.model when reusing the chat endpoint", async () => {
+  const result = await resolveAutocompleteTarget({
+    chatEndpoint: "http://10.77.0.20:8080/v1",
+    chatEndpointConfigured: true,
+    autocomplete: {
+      endpoint: "",
+      endpointConfigured: false,
+      model: "qwen3-coder-next",
+    },
+  }, {
+    resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "Qwen3.6-35B-A3B" }),
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.model, "Qwen3.6-35B-A3B");
+  assert.equal(result.source, "chat-fallback");
 });
 
 test("autocomplete falls back to the local chat endpoint when safe", async () => {

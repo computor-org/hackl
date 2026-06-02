@@ -304,18 +304,18 @@
         },
         "hackl.autocomplete.enabled": {
           "type": "boolean",
-          "default": false,
-          "description": "Enable inline FIM autocomplete. Off by default. When hackl.autocomplete.endpoint is empty, Hackl only falls back to a local hackl.endpoint or an auto-discovered local server."
+          "default": true,
+          "description": "Enable inline FIM autocomplete. On by default. When hackl.autocomplete.endpoint is empty, autocomplete reuses the chat endpoint (hackl.endpoint or an auto-discovered local server) and the model it has loaded, so one Qwen model serves both chat and completion."
         },
         "hackl.autocomplete.endpoint": {
           "type": "string",
           "default": "",
-          "description": "Optional dedicated llama.cpp-compatible endpoint for autocomplete requests. Accepts a /v1 base or server root. Leave empty to reuse the main chat model for FIM when it supports infill tokens (the Qwen line does, plain Gemma does not). Set this explicitly to use a separate FIM model or a non-local endpoint."
+          "description": "Optional dedicated llama.cpp-compatible endpoint for autocomplete requests. Accepts a /v1 base or server root. Leave empty to reuse the chat endpoint for FIM when its model supports infill tokens (the Qwen line does, plain Gemma does not). Set this only to run a separate FIM model."
         },
         "hackl.autocomplete.model": {
           "type": "string",
           "default": "",
-          "description": "Optional model alias for autocomplete. When empty, Hackl uses the loaded model reported by the autocomplete endpoint when available."
+          "description": "Model alias for a dedicated autocomplete endpoint. Applies only when hackl.autocomplete.endpoint is set; it is ignored when autocomplete reuses the chat endpoint, which always uses the chat endpoint's loaded model. Remove this when you remove the autocomplete endpoint."
         },
         "hackl.autocomplete.maxTokens": {
           "type": "number",
