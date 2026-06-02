@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Hack local-first.",
-  "version": "0.0.64",
+  "version": "0.0.65",
   "enabledApiProposals": [
     "commentReveal"
   ],
