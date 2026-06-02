@@ -23,154 +23,115 @@ Linux:
 Download the latest release for your platform from
 <https://github.com/ggml-org/llama.cpp/releases> or build from source.
 
-## 2. Pick a chat model tier and start a server
+## 2. Pick a model and start a server
 
-Three chat/edit/agent tiers, each with a Qwen pick and a Gemma alternative.
-Numbers are rough; your mileage varies with quantisation, context length, and
-GPU/CPU split.
+One Qwen model serves both chat and inline autocomplete. The Qwen line ships
+the infill tokens (`<|fim_prefix|>`, `<|fim_suffix|>`, `<|fim_middle|>`), so the
+same server answers chat through `/v1/chat/completions` and completes code
+through `/infill`. Pick by the memory you have:
 
-| Tier | RAM/VRAM | Qwen (default) | Gemma alternative |
-| ---- | -------- | -------------- | ----------------- |
-| S    | 4-8 GB   | Qwen3 4B-Instruct | Gemma 3n E2B-it |
-| M    | 12-16 GB | Qwen3 8B          | Gemma 3n E4B-it |
-| L    | 24 GB+   | Qwen3-Coder 30B-A3B, or Qwen3 14B | Gemma 3 12B-it (27B-it if >=30 GB) |
+| Tier | RAM/VRAM | Qwen (chat + autocomplete) | Gemma (chat only) |
+| ---- | -------- | -------------------------- | ----------------- |
+| S    | 4-8 GB   | `Qwen3.5 4B`     | `Gemma 4 E2B` |
+| M    | 12-16 GB | `Qwen3.5 9B`     | `Gemma 4 E4B` |
+| L    | 24-32 GB | `Qwen3.6 35B-A3B` (MoE) | `Gemma 4 26B-A4B` (MoE) |
 
-### Tier S (4-8 GB)
+Gemma carries no infill tokens, so it drives chat, edit, and agent modes but not
+inline autocomplete. Choose Qwen if you want completion.
+
+Every command uses Qwen's "thinking + precise coding" sampler and caps hidden
+reasoning at 4096 tokens. The cap matters: without it a thinking model loops
+through the whole turn in an agent run. `--reasoning-format deepseek` splits the
+`<think>` block into a separate `reasoning_content` field so the client renders
+a clean answer.
+
+Tier S:
 
 ```sh
 llama-server \
-  -hf bartowski/Qwen_Qwen3-4B-Instruct-GGUF:Q4_K_M \
-  -c 16384 \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  -ngl auto -fa on \
-  --alias qwen-local --jinja \
+  -hf bartowski/Qwen_Qwen3.5-4B-GGUF:Q4_K_M \
+  -c 16384 --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on --alias qwen-local --jinja \
+  --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 \
+  --presence-penalty 0.0 --repeat-penalty 1.0 \
+  --reasoning-format deepseek --reasoning-budget 4096 \
   --host 127.0.0.1 --port 8080
 ```
 
-Gemma alternative:
+Tier M:
 
 ```sh
 llama-server \
-  -hf ggml-org/gemma-3n-E2B-it-GGUF:Q4_0 \
-  -c 16384 \
-  -ngl auto -fa on \
-  --alias gemma-local --jinja \
+  -hf bartowski/Qwen_Qwen3.5-9B-GGUF:Q4_K_M \
+  -c 32768 --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on --alias qwen-local --jinja \
+  --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 \
+  --presence-penalty 0.0 --repeat-penalty 1.0 \
+  --reasoning-format deepseek --reasoning-budget 4096 \
   --host 127.0.0.1 --port 8080
 ```
 
-### Tier M (12-16 GB)
+Tier L. The MTP build ships a multi-token prediction head; the `--spec-type
+draft-mtp` flags draft and verify in parallel for faster decode. The 35B-A3B is
+hybrid-attention, so its KV cache at 131072 context costs about the same as
+32768:
 
 ```sh
 llama-server \
-  -hf bartowski/Qwen_Qwen3-8B-GGUF:Q4_K_M \
-  -c 32768 \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  -ngl auto -fa on \
-  --alias qwen-local --jinja \
+  -hf unsloth/Qwen3.6-35B-A3B-MTP-GGUF:UD-Q4_K_XL \
+  -c 131072 --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on --alias qwen-local --jinja \
+  --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 \
+  --presence-penalty 0.0 --repeat-penalty 1.0 \
+  --reasoning-format deepseek --reasoning-budget 4096 \
+  --spec-type draft-mtp --spec-draft-n-max 2 \
+  --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 \
   --host 127.0.0.1 --port 8080
 ```
 
-Gemma alternative:
+Gemma alternative (chat only, no autocomplete), sized per tier. Gemma 4 is a
+thinking model, so it takes the same reasoning cap:
 
 ```sh
-llama-server \
-  -hf ggml-org/gemma-3n-E4B-it-GGUF:Q4_0 \
-  -c 32768 \
-  -ngl auto -fa on \
-  --alias gemma-local --jinja \
-  --host 127.0.0.1 --port 8080
-```
-
-### Tier L (24 GB+)
-
-```sh
-llama-server \
-  -hf lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
-  -c 65536 \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  -ngl auto -fa on \
-  --alias qwen-local --jinja \
-  --host 127.0.0.1 --port 8080
-```
-
-Gemma alternative (12B fits ~12 GB VRAM; 27B fits ~22 GB VRAM at Q4):
-
-```sh
-llama-server \
-  -hf bartowski/gemma-3-12b-it-GGUF:Q4_K_M \
-  -c 32768 \
-  -ngl auto -fa on \
-  --alias gemma-local --jinja \
+llama-server -hf unsloth/gemma-4-E4B-it-GGUF:Q4_K_M \
+  -c 32768 -ngl auto -fa on --jinja \
+  --reasoning-format deepseek --reasoning-budget 4096 \
   --host 127.0.0.1 --port 8080
 ```
 
 Web UI: <http://127.0.0.1:8080/>.
 
-## 3. Optional FIM autocomplete endpoint
+## 3. Point Hackl at it
 
-Hackl can use the chat endpoint for autocomplete only when that local model has
-FIM tokens. For the best local UX, run a second low-latency FIM endpoint on a
-different port and point `hackl.autocomplete.endpoint` at it.
-
-| Tier | RAM/VRAM | FIM model |
-| ---- | -------- | --------- |
-| S    | 4-8 GB   | Qwen2.5-Coder 1.5B or 3B Q4_K_M |
-| M    | 12-16 GB | Qwen2.5-Coder 7B Q4_K_M |
-| L    | 24 GB+   | Qwen2.5-Coder 14B or Qwen3-Coder 30B-A3B Q4_K_M |
-| XL   | 64 GB+   | Qwen3-Coder-Next Q4_K_M |
-
-FIM needs a Coder model with infill tokens. A general chat model (Qwen3.5/3.6,
-Gemma) cannot drive autocomplete, so the FIM slot is always a Coder.
-
-On a single 32 GB machine, run chat and FIM together: the chat server on `:8080`
-(a 35B-A3B MoE such as Qwen3.6 35B-A3B at IQ4 for headroom) and the Tier M FIM
-server below on `:8084`. Both fit because the 35B-A3B is hybrid-attention with a
-small KV and the FIM window is tiny. Do not use a large dense Coder such as
-Codestral 22B for FIM on a laptop: every token activates all weights, too slow
-for inline completion.
-
-Tier M autocomplete server:
-
-```sh
-llama-server \
-  -hf Qwen/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M \
-  -c 32768 \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  -ngl auto -fa on \
-  --alias qwenfim --jinja \
-  --temp 0.15 --top-p 0.9 --top-k 40 \
-  --host 127.0.0.1 --port 8084
-```
-
-Server-class autocomplete endpoint:
-
-```sh
-llama-server \
-  -hf Qwen/Qwen3-Coder-Next-GGUF:Q4_K_M \
-  -c 131072 \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  -ngl auto -fa on -np 4 \
-  --alias qwenfim --jinja \
-  --temp 0.15 --top-p 0.9 --top-k 40 \
-  --host 127.0.0.1 --port 8084
-```
-
-## 4. Point Hackl at it
-
-Either click **Set endpoint to :8080/v1** in the Hackl setup panel, or:
+Either click **Set endpoint to :8080/v1** in the Hackl setup panel, or edit:
 
 ```jsonc
 // settings.json
 {
   "hackl.endpoint": "http://localhost:8080/v1",
   "hackl.maxContextTokens": 32768,
-  "hackl.autocomplete.enabled": true,
-  "hackl.autocomplete.endpoint": "http://localhost:8084/v1",
-  "hackl.autocomplete.model": "qwenfim"
+  "hackl.autocomplete.enabled": true
 }
 ```
 
-Run `Hackl: Check Local Server` to confirm.
+Leave `hackl.autocomplete.endpoint` empty: autocomplete reuses the chat model
+through `/infill`, which skips the chat template and never enters a reasoning
+phase. Run `Hackl: Check Local Server` to confirm.
+
+## Advanced
+
+A separate autocomplete endpoint and a smaller model both stay available; most
+users need neither.
+
+- **Tiny, faster FIM.** On a small box that wants quicker keystroke latency,
+  serve `bartowski/Qwen_Qwen3.5-2B-GGUF:Q4_K_M` on a second port (`--port 8084`,
+  `--alias qwenfim`) and set `hackl.autocomplete.endpoint` to
+  `http://localhost:8084/v1`.
+- **Reasoning budget.** The launch commands cap reasoning server-side with
+  `--reasoning-budget 4096`. When the server runs without that flag (for example
+  LM Studio or Ollama), Hackl sends the cap per request from
+  `hackl.reasoningBudget` instead. `-1` is unrestricted, `0` ends thinking
+  immediately.
 
 ## Tuning notes
 
@@ -178,15 +139,13 @@ Run `Hackl: Check Local Server` to confirm.
   model is stable.
 - `q8_0` KV cache is a good long-context compromise.
 - `-ngl auto` asks llama.cpp to place what fits on GPU.
-- On MoE models (e.g. Qwen3-30B-A3B), partial CPU expert placement with
-  `--n-cpu-moe N` can help fit limited VRAM; tune `N` per hardware.
+- On the 35B-A3B MoE, partial CPU expert placement with `--n-cpu-moe N` can help
+  fit limited VRAM; tune `N` per hardware.
 - `--no-webui` disables the browser UI.
 
 ## Sources
 
 - llama.cpp server: <https://github.com/ggml-org/llama.cpp/tree/master/tools/server>
 - Qwen on llama.cpp: <https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html>
-- Qwen3-Coder FIM: <https://github.com/QwenLM/Qwen3-Coder>
-- Qwen2.5-Coder GGUF: <https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF>
-- Qwen3-Coder-Next GGUF: <https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF>
-- Gemma 3n: <https://ai.google.dev/gemma/docs/gemma-3n>
+- Qwen3.5 GGUF: <https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF>
+- Qwen3.6 35B-A3B MTP GGUF: <https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF>

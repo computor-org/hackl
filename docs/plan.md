@@ -79,33 +79,27 @@ needs that integration; it must not be required for local-only use.
 
 ## Model Policy
 
-Hackl defaults to one loaded model used for chat, edit, and agent workflows.
-Users should not have to swap models for those modes. Inline autocomplete may
-use a second endpoint because the best low-latency FIM model is not always the
-best chat or agent model.
+Hackl uses one loaded Qwen model for every mode, autocomplete included. The Qwen
+line ships the infill tokens, so the chat server drives FIM through `/infill`;
+users do not swap models. A second endpoint stays optional for hosts
+that want lower keystroke latency from a smaller FIM model.
 
-Preferred hardware tiers:
+Hardware tiers, one model each (Gemma 4 is a chat-only alternative without
+infill tokens, so it does chat, edit, and agent but not autocomplete):
 
-- Small RAM or weak GPU: Qwen3 4B-Instruct, or Gemma 3n E2B-it.
-- Normal laptop or desktop: Qwen3 8B, or Gemma 3n E4B-it.
-- Large local machine: Qwen3-Coder 30B-A3B, Qwen3 14B, or Gemma 3 12B/27B.
+- Small RAM or weak GPU: Qwen3.5 4B, or Gemma 4 E2B.
+- Normal laptop or desktop: Qwen3.5 9B, or Gemma 4 E4B.
+- Large local machine (24-32 GB): Qwen3.6 35B-A3B, or Gemma 4 26B-A4B.
 
-Preferred FIM tiers:
+Each runs Qwen's "thinking + precise coding" sampler (temp 0.6, top-p 0.95,
+top-k 20, min-p 0). Reasoning is capped at 4096 tokens so a thinking model does
+not loop through the whole turn in agent mode: on llama.cpp the
+`--reasoning-budget` flag, otherwise per request from `hackl.reasoningBudget`.
+`--reasoning-format deepseek` splits the `<think>` block into `reasoning_content`
+so the client renders a clean answer stream.
 
-- Small RAM or weak GPU: Qwen2.5-Coder 1.5B or 3B Q4_K_M.
-- Normal laptop or desktop: Qwen2.5-Coder 7B Q4_K_M.
-- Large local machine: Qwen2.5-Coder 14B or Qwen3-Coder 30B-A3B Q4_K_M.
-- Server-class local host: Qwen3-Coder-Next Q4_K_M, served as a separate FIM
-  endpoint.
-
-On a single 32 GB machine, pair the two: chat/agent on a 35B-A3B MoE (e.g.
-Qwen3.6 35B-A3B at IQ4) and FIM on Qwen2.5-Coder 7B. They fit together because
-the MoE chat KV is small and the FIM window is tiny. Prefer a small dense Coder
-or a low-active-param MoE for FIM; a large dense Coder such as Codestral 22B
-activates all weights per token and is too slow inline.
-
-For Qwen3-Coder-Next, do not enable thinking mode. The model is documented as
-non-thinking only and does not emit `<think></think>` blocks.
+A smaller, faster FIM model (for example Qwen3.5 2B) on a second endpoint is an
+advanced option for hosts that want quicker keystroke latency.
 
 Inline FIM autocomplete is in scope as a bounded bridge between Ask and Edit.
 It remains off by default and does not mutate files. The implementation should

@@ -8,6 +8,7 @@ export interface HacklConfig {
   maxContextTokens: number;
   maxContextTokensConfigured: boolean;
   enableThinking: boolean;
+  reasoningBudget: number;
   debug: boolean;
   persistSessions: boolean;
   codexEnabled: boolean;
@@ -31,6 +32,7 @@ const DEFAULTS = {
   maxToolFileChars: 12000,
   maxContextTokens: 32768,
   enableThinking: false,
+  reasoningBudget: 4096,
   debug: false,
   persistSessions: true,
   codexEnabled: true,
@@ -74,6 +76,7 @@ export function readHacklConfig(): HacklConfig {
     maxContextTokens: c.get<number>("maxContextTokens", DEFAULTS.maxContextTokens),
     maxContextTokensConfigured: hasUserConfigured(c.inspect<number>("maxContextTokens")),
     enableThinking: c.get<boolean>("enableThinking", DEFAULTS.enableThinking),
+    reasoningBudget: c.get<number>("reasoningBudget", DEFAULTS.reasoningBudget),
     debug: c.get<boolean>("debug", DEFAULTS.debug),
     persistSessions: c.get<boolean>("persistSessions", DEFAULTS.persistSessions),
     codexEnabled: c.get<boolean>("codex.enabled", DEFAULTS.codexEnabled),

@@ -15,6 +15,7 @@ export interface BackendChoice {
 export interface BuildBackendInput {
   choice: BackendChoice;
   enableThinking?: boolean;
+  reasoningBudget?: number;
   codexCommand?: string;
   cwd?: string;
   clientVersion?: string;
@@ -37,6 +38,7 @@ export function buildBackend(input: BuildBackendInput): ChatBackend {
     endpoint: choice.endpoint,
     model: choice.model,
     enableThinking: input.enableThinking,
+    reasoningBudget: input.reasoningBudget,
   });
 }
 

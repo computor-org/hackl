@@ -7,6 +7,7 @@ export interface ChatClientOptions {
   endpoint: string;
   model: string;
   enableThinking?: boolean;
+  reasoningBudget?: number;
   fetchImpl?: typeof fetch;
 }
 
@@ -100,6 +101,12 @@ class OpenAICompatibleBackend implements ChatBackend {
     if (this.options.enableThinking === false) {
       body.chat_template_kwargs = { enable_thinking: false };
       body.enable_thinking = false;
+    } else if (typeof this.options.reasoningBudget === "number" && Number.isFinite(this.options.reasoningBudget)) {
+      // Cap hidden reasoning so a thinking model does not loop through the
+      // whole turn in agent mode. llama.cpp honors this per request unless the
+      // server was started with --reasoning-budget; -1 is unrestricted, 0 ends
+      // thinking immediately.
+      body.thinking_budget_tokens = this.options.reasoningBudget;
     }
     return body;
   }

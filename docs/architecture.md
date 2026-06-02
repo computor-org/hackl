@@ -138,27 +138,28 @@ through the same stages explicitly.
 
 ## Model Policy
 
-Hackl prefers one loaded local model used for chat, edit, and agent workflows.
-The user should not have to swap models for those modes. Inline autocomplete
-may use a second endpoint because local FIM latency and chat/agent quality are
-different optimization targets.
+Hackl uses one loaded Qwen model for every mode, autocomplete included. The Qwen
+line ships the infill tokens, so the chat server also drives FIM through
+`/infill`; the user does not swap models. A second endpoint stays optional for
+hosts that want lower keystroke latency from a smaller FIM model.
 
-Initial local tiers:
+Local tiers, one model each (Gemma 4 is a chat-only alternative; it has no
+infill tokens, so it drives chat, edit, and agent but not autocomplete):
 
-- Small RAM or weak GPU: Qwen3 4B-Instruct, or Gemma 3n E2B-it.
-- Normal laptop or desktop: Qwen3 8B, or Gemma 3n E4B-it.
-- Large local machine: Qwen3-Coder 30B-A3B, Qwen3 14B, or Gemma 3 12B/27B.
+- Small RAM or weak GPU: Qwen3.5 4B, or Gemma 4 E2B.
+- Normal laptop or desktop: Qwen3.5 9B, or Gemma 4 E4B.
+- Large local machine (24-32 GB): Qwen3.6 35B-A3B, or Gemma 4 26B-A4B.
 
-Initial FIM tiers:
-
-- Small RAM or weak GPU: Qwen2.5-Coder 1.5B or 3B Q4_K_M.
-- Normal laptop or desktop: Qwen2.5-Coder 7B Q4_K_M.
-- Large local machine: Qwen2.5-Coder 14B or Qwen3-Coder 30B-A3B Q4_K_M.
-- Server-class local host: Qwen3-Coder-Next Q4_K_M on a dedicated endpoint.
+Each runs Qwen's "thinking + precise coding" sampler (temp 0.6, top-p 0.95,
+top-k 20, min-p 0) with reasoning capped at 4096 tokens. The cap stops a thinking
+model from looping through the whole turn in agent mode; on llama.cpp it is the
+`--reasoning-budget` flag, otherwise Hackl sends it per request from
+`hackl.reasoningBudget`.
 
 Autocomplete is deliberately narrow: it calls llama.cpp `/infill` first,
 falls back to `/completion` with FIM markers, detects Qwen, CodeGemma, and
-CodeLlama marker dialects, and never mutates files.
+CodeLlama marker dialects, and never mutates files. `/infill` skips the chat
+template, so FIM never enters a reasoning phase even on a thinking model.
 
 ## UI Direction
 

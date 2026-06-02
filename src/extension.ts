@@ -548,12 +548,14 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     : undefined;
   const maxContextTokens = configuredMaxContext ?? codexMaxContext ?? detectedMaxContext ?? 32768;
   const enableThinking = cfg.enableThinking;
+  const reasoningBudget = cfg.reasoningBudget;
   debug?.("prompt.start", {
     mode,
     endpoint: target.endpoint,
     model: target.model,
     maxToolFileChars,
     enableThinking,
+    reasoningBudget,
     targets: targets.length,
     createAnnotations,
   });
@@ -581,6 +583,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     backend: buildBackend({
       choice: choiceForCall,
       enableThinking,
+      reasoningBudget,
       codexCommand,
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
       clientVersion: extensionContext?.extension.packageJSON?.version,

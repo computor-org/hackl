@@ -32,13 +32,14 @@ export function renderSetupHtml(webview: vscode.Webview, extensionUri: vscode.Ur
         <p class="lede">Run an OpenAI-compatible server on this machine. Hackl never starts it for you.</p>
 
         <div class="tiers">
-          <strong>Chat model tiers</strong>
+          <strong>Pick one model</strong>
+          <p class="hint">Qwen drives chat and inline autocomplete from one server. Gemma is a chat-only alternative: it carries no infill tokens, so no autocomplete.</p>
           <table>
-            <thead><tr><th>Tier</th><th>RAM/VRAM</th><th>Qwen</th><th>Gemma</th></tr></thead>
+            <thead><tr><th>Tier</th><th>RAM/VRAM</th><th>Qwen</th><th>Gemma (chat only)</th></tr></thead>
             <tbody>
-              <tr><td>S</td><td>4-8 GB</td><td><code>Qwen3 4B-Instruct</code></td><td><code>Gemma 3n E2B-it</code></td></tr>
-              <tr><td>M</td><td>12-16 GB</td><td><code>Qwen3 8B</code></td><td><code>Gemma 3n E4B-it</code></td></tr>
-              <tr><td>L</td><td>24 GB+</td><td><code>Qwen3-Coder 30B-A3B</code> / <code>Qwen3 14B</code></td><td><code>Gemma 3 12B-it</code> / <code>27B-it</code></td></tr>
+              <tr><td>S</td><td>4-8 GB</td><td><code>Qwen3.5 4B</code></td><td><code>Gemma 4 E2B</code></td></tr>
+              <tr><td>M</td><td>12-16 GB</td><td><code>Qwen3.5 9B</code></td><td><code>Gemma 4 E4B</code></td></tr>
+              <tr><td>L</td><td>24-32 GB</td><td><code>Qwen3.6 35B-A3B</code></td><td><code>Gemma 4 26B-A4B</code></td></tr>
             </tbody>
           </table>
         </div>
@@ -47,11 +48,12 @@ export function renderSetupHtml(webview: vscode.Webview, extensionUri: vscode.Ur
           <summary><strong>LM Studio</strong> · easy</summary>
           <ol>
             <li>Install LM Studio (<button class="linklike" type="button" data-link="https://lmstudio.ai/">lmstudio.ai</button>) and open it once.</li>
-            <li>Search a GGUF matching your tier (see table above).</li>
-            <li>Load the model and try a quick chat in LM Studio's UI.</li>
+            <li>Search the Qwen GGUF for your tier (see table above).</li>
+            <li>Load it, set the sampler to temp 0.6 / top-p 0.95 / top-k 20 / min-p 0, and try a quick chat.</li>
             <li>Open <em>Developer</em> → start the local server.</li>
             <li>Point Hackl at it:</li>
           </ol>
+          <p class="hint">Chat works against LM Studio. Inline autocomplete needs llama.cpp <code>/infill</code>; run a small llama.cpp server for it.</p>
           <div class="actions">
             <button data-set="http://127.0.0.1:1234/v1" type="button">Set endpoint to :1234/v1</button>
             <button data-doc="lmstudio" type="button">Open full guide</button>
@@ -64,23 +66,16 @@ export function renderSetupHtml(webview: vscode.Webview, extensionUri: vscode.Ur
           <pre><code>brew install llama.cpp           # macOS
 winget install llama.cpp         # Windows
 # Linux: github.com/ggml-org/llama.cpp/releases</code></pre>
-          <p>Tier M (Qwen 8B):</p>
+          <p>Tier M (Qwen3.5 9B), chat and autocomplete from one server:</p>
           <pre><code>llama-server \\
-  -hf bartowski/Qwen_Qwen3-8B-GGUF:Q4_K_M \\
+  -hf bartowski/Qwen_Qwen3.5-9B-GGUF:Q4_K_M \\
   -c 32768 --cache-type-k q8_0 --cache-type-v q8_0 \\
   -ngl auto -fa on --alias qwen-local --jinja \\
+  --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 \\
+  --presence-penalty 0.0 --repeat-penalty 1.0 \\
+  --reasoning-format deepseek --reasoning-budget 4096 \\
   --host 127.0.0.1 --port 8080</code></pre>
-          <p>Tier M (Gemma 3n E4B):</p>
-          <pre><code>llama-server -hf ggml-org/gemma-3n-E4B-it-GGUF:Q4_0 \\
-  -c 32768 -ngl auto -fa on --jinja \\
-  --host 127.0.0.1 --port 8080</code></pre>
-          <p>Autocomplete FIM endpoint (Qwen2.5-Coder 7B):</p>
-          <pre><code>llama-server \\
-  -hf Qwen/Qwen2.5-Coder-7B-Instruct-GGUF:Q4_K_M \\
-  -c 32768 --cache-type-k q8_0 --cache-type-v q8_0 \\
-  -ngl auto -fa on --alias qwenfim --jinja \\
-  --temp 0.15 --top-p 0.9 --top-k 40 \\
-  --host 127.0.0.1 --port 8084</code></pre>
+          <p class="hint">The sampler and <code>--reasoning-budget 4096</code> keep a thinking model from looping in agent mode. Autocomplete reuses this model via <code>/infill</code>; leave the autocomplete endpoint empty.</p>
           <div class="actions">
             <button data-set="http://127.0.0.1:8080/v1" type="button">Set endpoint to :8080/v1</button>
             <button data-doc="llamacpp" type="button">Open full guide</button>
@@ -91,12 +86,12 @@ winget install llama.cpp         # Windows
           <summary><strong>Ollama</strong> · alternative</summary>
           <pre><code>ollama serve
 # Tier S
-ollama pull qwen3:4b      # or gemma3n:e2b
+ollama pull qwen3.5:4b
 # Tier M
-ollama pull qwen3:8b      # or gemma3n:e4b
+ollama pull qwen3.5:9b
 # Tier L
-ollama pull qwen3-coder:30b   # or gemma3:12b</code></pre>
-          <p class="hint">Ollama exposes <code>/v1</code> on port 11434 but has model-name and <code>/props</code> quirks.</p>
+ollama pull qwen3.6:35b-a3b</code></pre>
+          <p class="hint">Ollama exposes <code>/v1</code> on port 11434 but has model-name and <code>/props</code> quirks. Chat only; autocomplete needs a llama.cpp <code>/infill</code> server.</p>
           <div class="actions">
             <button data-set="http://127.0.0.1:11434/v1" type="button">Set endpoint to :11434/v1</button>
             <button data-doc="ollama" type="button">Open full guide</button>

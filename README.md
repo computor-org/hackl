@@ -36,7 +36,7 @@ sign-in for the local-first workflow.
 - Context targets for source ranges, staged changes, the last commit, and
   Markdown sections.
 - Ask/Edit/Work/Agent modes with mode-specific tools.
-- Optional inline FIM autocomplete with a separate endpoint and model alias.
+- Inline FIM autocomplete from the same chat model, or a separate endpoint.
 - Commit-level `/review` for staged changes, attached context, or the current file.
 - Human and AI annotations as line-anchored VS Code comment threads.
 - Hackl session persistence in VS Code extension storage for annotation runs.
@@ -69,18 +69,20 @@ If `hackl.endpoint` is not localhost or loopback, Hackl asks before sending a
 prompt or selected context.
 
 Inline autocomplete is off by default. Enable it with `Hackl: Toggle Inline
-Autocomplete` or `hackl.autocomplete.enabled`. If `hackl.autocomplete.endpoint`
-is empty, Hackl only reuses a local chat endpoint or an auto-discovered local
-server. The autocomplete endpoint must expose llama.cpp-native `/tokenize` plus
-`/infill` or `/completion`. Set `hackl.autocomplete.endpoint` and
-`hackl.autocomplete.model` when you run a separate FIM model, for example:
+Autocomplete` or `hackl.autocomplete.enabled`. With a llama.cpp chat server it
+reuses the loaded Qwen model: the Qwen line ships infill tokens, so the same
+model completes code through `/infill`. Leave `hackl.autocomplete.endpoint`
+empty for that path.
+
+Autocomplete needs llama.cpp-native `/tokenize` plus `/infill` or `/completion`,
+which LM Studio and Ollama do not serve. On those backends, run a small llama.cpp
+server for completion and point the autocomplete endpoint at it:
 
 ```jsonc
 {
-  "hackl.endpoint": "http://localhost:8080/v1",
+  "hackl.endpoint": "http://localhost:1234/v1",
   "hackl.autocomplete.enabled": true,
-  "hackl.autocomplete.endpoint": "http://localhost:8084/v1",
-  "hackl.autocomplete.model": "qwenfim"
+  "hackl.autocomplete.endpoint": "http://localhost:8084/v1"
 }
 ```
 
@@ -184,6 +186,8 @@ on startup.
 - `hackl.maxContextTokens`: context-window override for the budget meter.
 - `hackl.maxToolFileChars`: cap for one `read_file` result.
 - `hackl.enableThinking`: allow reasoning when the server supports it.
+- `hackl.reasoningBudget`: token cap on reasoning, sent per request. Stops a
+  thinking model from looping in agent mode. Default 4096; -1 unrestricted.
 - `hackl.debug`: write diagnostics to the Hackl Debug output channel.
 - `hackl.persistSessions`: persist annotation runs in VS Code extension storage.
 - `hackl.autocomplete.enabled`: enable inline FIM autocomplete.

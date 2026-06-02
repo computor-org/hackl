@@ -22,29 +22,26 @@ The default OpenAI-compatible base URL is:
 http://127.0.0.1:11434/v1
 ```
 
-## 2. Pull a chat model tier
+## 2. Pull a model
 
-Three chat/edit/agent tiers, each with a Qwen pick and a Gemma alternative.
+Pick one model by the memory you have. The same model drives chat, edit, and
+agent modes.
 
-| Tier | RAM/VRAM | Qwen (default) | Gemma alternative |
-| ---- | -------- | -------------- | ----------------- |
-| S    | 4-8 GB   | `qwen3:4b`     | `gemma3n:e2b`     |
-| M    | 12-16 GB | `qwen3:8b`     | `gemma3n:e4b`     |
-| L    | 24 GB+   | `qwen3-coder:30b` (MoE) | `gemma3:12b` (27b if >=30 GB) |
+| Tier | RAM/VRAM | Qwen | Gemma (chat only) |
+| ---- | -------- | ---- | ----------------- |
+| S    | 4-8 GB   | `qwen3.5:4b`     | `gemma4:e2b` |
+| M    | 12-16 GB | `qwen3.5:9b`     | `gemma4:e4b` |
+| L    | 24-32 GB | `qwen3.6:35b-a3b` | `gemma4:26b` (MoE) |
 
 ```sh
-# Tier S
-ollama pull qwen3:4b
-ollama pull gemma3n:e2b
-
-# Tier M
-ollama pull qwen3:8b
-ollama pull gemma3n:e4b
-
-# Tier L
-ollama pull qwen3-coder:30b
-ollama pull gemma3:12b
+ollama pull qwen3.5:4b       # Tier S
+ollama pull qwen3.5:9b       # Tier M
+ollama pull qwen3.6:35b-a3b  # Tier L
 ```
+
+Gemma carries no infill tokens, so it does chat but not autocomplete. Since
+Ollama does not serve `/infill` either, autocomplete needs a llama.cpp server
+regardless (see below).
 
 Use whatever `ollama list` shows as the model id when talking to the API.
 
@@ -60,18 +57,20 @@ Either click **Set endpoint to :11434/v1** in the Hackl setup panel, or:
 }
 ```
 
-Run `Hackl: Check Local Server` to confirm.
+Run `Hackl: Check Local Server` to confirm. Hackl ships with thinking off, so an
+agent run will not loop; turn it on only with a server that bounds reasoning.
 
-Inline autocomplete currently expects llama.cpp-native `/tokenize` plus
-`/infill` or `/completion`. Keep Ollama for chat if you prefer it, and run a
-separate llama.cpp FIM endpoint for autocomplete:
+## Inline autocomplete
+
+Inline completion uses llama.cpp-native `/tokenize` plus `/infill` or
+`/completion`, which Ollama does not serve. Keep Ollama for chat and run a small
+llama.cpp server for autocomplete (see the llama.cpp guide's Advanced section):
 
 ```jsonc
 {
   "hackl.endpoint": "http://localhost:11434/v1",
   "hackl.autocomplete.enabled": true,
-  "hackl.autocomplete.endpoint": "http://localhost:8084/v1",
-  "hackl.autocomplete.model": "qwenfim"
+  "hackl.autocomplete.endpoint": "http://localhost:8084/v1"
 }
 ```
 

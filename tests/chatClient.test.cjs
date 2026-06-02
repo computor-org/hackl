@@ -49,6 +49,45 @@ test("sendChat can request non-thinking Qwen-compatible chat templates", async (
 });
 
 
+test("sendChat caps reasoning with thinking_budget_tokens when thinking is allowed", async () => {
+  let request;
+  await sendChat(messages, {
+    endpoint: "http://localhost:1234/v1/",
+    model: "loaded-model",
+    reasoningBudget: 4096,
+    fetchImpl: async (url, init) => {
+      request = { url: String(url), init };
+      return jsonResponse({ choices: [{ message: { content: "pong" } }] });
+    },
+  });
+
+  assert.deepEqual(JSON.parse(request.init.body), {
+    model: "loaded-model",
+    messages,
+    stream: false,
+    temperature: 0.2,
+    thinking_budget_tokens: 4096,
+  });
+});
+
+test("sendChat omits the reasoning budget when thinking is disabled", async () => {
+  let request;
+  await sendChat(messages, {
+    endpoint: "http://localhost:1234/v1/",
+    model: "loaded-model",
+    enableThinking: false,
+    reasoningBudget: 4096,
+    fetchImpl: async (url, init) => {
+      request = { url: String(url), init };
+      return jsonResponse({ choices: [{ message: { content: "pong" } }] });
+    },
+  });
+
+  const body = JSON.parse(request.init.body);
+  assert.equal(body.enable_thinking, false);
+  assert.equal("thinking_budget_tokens" in body, false);
+});
+
 test("OpenAI-compatible backend returns response model metadata", async () => {
   const backend = createOpenAICompatibleBackend({
     endpoint: "http://localhost:8080/v1",

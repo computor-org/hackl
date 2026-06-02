@@ -296,6 +296,12 @@
           "default": false,
           "description": "Allow model thinking/reasoning when the local OpenAI-compatible server supports this switch."
         },
+        "hackl.reasoningBudget": {
+          "type": "number",
+          "default": 4096,
+          "minimum": -1,
+          "description": "Token cap on hidden reasoning when thinking is enabled, sent per request as thinking_budget_tokens. Stops a thinking model from looping through the whole turn in agent mode. -1 is unrestricted, 0 ends thinking immediately. llama.cpp honors this only when its server was started without --reasoning-budget; otherwise pass --reasoning-budget on the server."
+        },
         "hackl.autocomplete.enabled": {
           "type": "boolean",
           "default": false,
