@@ -99,6 +99,33 @@ llama-server -hf unsloth/gemma-4-E4B-it-GGUF:Q4_K_M \
   --host 127.0.0.1 --port 8080
 ```
 
+### gpt-oss-20b alternative (chat only, 16 GB)
+
+OpenAI's gpt-oss-20b is a Mixture-of-Experts model (20.9B total, ~3.6B active)
+in native MXFP4 (~11.3 GB). On a 16 GB box it decodes faster than a dense Qwen
+9B, because only ~3.6B parameters fire per token, at o3-mini-class quality. It
+carries no infill tokens, so it drives chat, edit, and agent modes but not
+inline autocomplete. Sliding-window attention keeps the 128K KV near 1.7 GB,
+so the full context fits GPU-only.
+
+gpt-oss uses the harmony response format, its own sampler (temp 1.0, top-p
+1.0), and no repetition penalty. Reasoning rides the harmony analysis channel,
+so the flag is `--reasoning-format none` with no token budget. `-c 0` loads
+the model's full 128K context:
+
+```sh
+llama-server -hf ggml-org/gpt-oss-20b-GGUF \
+  -c 0 --cache-type-k q8_0 --cache-type-v q8_0 \
+  -ngl auto -fa on --alias qwen-local --jinja \
+  --temp 1.0 --top-p 1.0 --top-k 40 --min-p 0 \
+  --presence-penalty 0.0 --repeat-penalty 1.0 \
+  --reasoning-format none \
+  --host 127.0.0.1 --port 8080
+```
+
+On a gpt-oss endpoint set `hackl.autocomplete.enabled` to false, or point
+`hackl.autocomplete.endpoint` at a separate Qwen Coder server for completion.
+
 Web UI: <http://127.0.0.1:8080/>.
 
 ## 3. Point Hackl at it
