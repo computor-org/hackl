@@ -10,9 +10,7 @@ export const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
   "hackl.addStagedChangesToContext",
   "hackl.addLastCommitToContext",
   "hackl.clearContext",
-  "hackl.openSetupGuide",
   "hackl.discardLastAnnotations",
-  "hackl.dismissSetupHint",
   "hackl.selectBackend",
 ]);
 

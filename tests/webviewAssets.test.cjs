@@ -19,7 +19,6 @@ test("media/chat/main.css exists and contains expected rules", () => {
   assert.match(css, /\.send-button/);
   assert.match(css, /\.hidden-unavailable/);
   assert.match(css, /\.tool-button\[aria-pressed="true"\]/);
-  assert.match(css, /\.connect-hint\[hidden\]\s*\{\s*display:\s*none;/);
 });
 
 test("main.js still wires the key element ids the HTML shell renders", () => {

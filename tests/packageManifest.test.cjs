@@ -75,7 +75,7 @@ test("annotation reply is the only custom comment editor action", () => {
 
 test("backend and autocomplete commands and config keys are declared", () => {
   const manifest = readManifest();
-  for (const id of ["hackl.selectBackend", "hackl.dismissSetupHint", "hackl.showSetupHint", "hackl.toggleAutocomplete"]) {
+  for (const id of ["hackl.selectBackend", "hackl.codexLogin", "hackl.toggleAutocomplete"]) {
     assert.ok(command(manifest, id), `missing command ${id}`);
   }
   const cfg = manifest.contributes.configuration.properties;

@@ -37,12 +37,6 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
       <button id="clear" class="icon-button" type="button" title="Clear transcript" aria-label="Clear transcript"><span class="codicon codicon-clear-all" aria-hidden="true"></span></button>
     </header>
     <main id="thread" aria-live="polite">
-      <div id="connect-hint" class="connect-hint" hidden>
-        <span class="codicon codicon-plug" aria-hidden="true"></span>
-        <span id="connect-hint-text">No local model or Codex login detected. Open the setup guide to connect either one.</span>
-        <button id="open-setup" type="button">Open setup</button>
-        <button id="dismiss-hint" type="button" title="Don't show again">Hide</button>
-      </div>
       <div id="empty-state" class="empty-state">
         <div class="empty-mark" aria-hidden="true"></div>
         <div class="empty-title">Hi. How can I help?</div>

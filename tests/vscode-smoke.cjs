@@ -32,7 +32,8 @@ async function run() {
   const commands = await vscode.commands.getCommands(true);
   for (const expected of [
     "hackl.chat",
-    "hackl.openSetupGuide",
+    "hackl.openWalkthrough",
+    "hackl.codexLogin",
     "hackl.checkLocalServer",
     "hackl.addSelectionToContext",
     "hackl.addCurrentFileToContext",

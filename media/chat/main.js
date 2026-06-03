@@ -124,19 +124,6 @@
     });
   }
 
-  const openSetupBtn = document.getElementById("open-setup");
-  if (openSetupBtn) {
-    openSetupBtn.addEventListener("click", () => {
-      vscode.postMessage({ type: "runCommand", value: "hackl.openSetupGuide" });
-    });
-  }
-  const dismissHintBtn = document.getElementById("dismiss-hint");
-  if (dismissHintBtn) {
-    dismissHintBtn.addEventListener("click", () => {
-      vscode.postMessage({ type: "runCommand", value: "hackl.dismissSetupHint" });
-    });
-  }
-
   if (modelButton && modelMenu) {
     modelButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -566,14 +553,6 @@
       renderModelMenu();
     }
     updateEndpointStatus(message);
-    updateConnectHint(message);
-  }
-
-  function updateConnectHint(message) {
-    const hint = document.getElementById("connect-hint");
-    if (!hint) return;
-    const needsConnect = message.connected === false && !message.endpointApprovalRequired;
-    hint.hidden = !needsConnect;
   }
 
   function updateEndpointStatus(message) {

@@ -28,7 +28,7 @@ sign-in for the local-first workflow.
 ## Current Surface
 
 - VS Code Secondary Sidebar chat view.
-- Setup panel with LM Studio, llama.cpp, and Ollama recipes.
+- Get Started walkthrough with LM Studio, llama.cpp, and Ollama recipes.
 - Auto-discovery for LM Studio on `:1234` and llama.cpp on `:8080`.
 - Local Markdown, code, and LaTeX math rendering in chat.
 - Active editor metadata, cursor position, selection range, and capped selected
@@ -166,7 +166,6 @@ on startup.
 ## Commands
 
 - `Hackl: Open Chat`
-- `Hackl: Open Setup Guide`
 - `Hackl: Check Local Server`
 - `Hackl: Refresh Endpoint`
 - `Hackl: Add Selection to Context`

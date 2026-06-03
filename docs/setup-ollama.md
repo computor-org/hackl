@@ -47,7 +47,7 @@ Use whatever `ollama list` shows as the model id when talking to the API.
 
 ## 3. Point Hackl at it
 
-Either click **Set endpoint to :11434/v1** in the Hackl setup panel, or:
+Hackl probes the common local ports on its own. To pin it, set the endpoint in settings:
 
 ```jsonc
 // settings.json

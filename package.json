@@ -31,11 +31,6 @@
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "hackl.openSetupGuide",
-        "title": "Open Setup Guide",
-        "category": "Hackl"
-      },
-      {
         "command": "hackl.checkLocalServer",
         "title": "Check Local Server",
         "category": "Hackl"
@@ -132,13 +127,8 @@
         "category": "Hackl"
       },
       {
-        "command": "hackl.dismissSetupHint",
-        "title": "Dismiss Setup Hint",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.showSetupHint",
-        "title": "Show Setup Hint",
+        "command": "hackl.codexLogin",
+        "title": "Log in to Codex",
         "category": "Hackl"
       },
       {
@@ -387,12 +377,12 @@
           {
             "id": "hackl.walkthrough.pickServer",
             "title": "Pick a server",
-            "description": "LM Studio is the easy path. llama.cpp is the expert path. Ollama works too.\n\n[Open setup guide](command:hackl.openSetupGuide)",
+            "description": "LM Studio is the easy path. llama.cpp is the expert path. Ollama works too.\n\n[LM Studio](command:hackl.openSetupDoc?%5B%22lmstudio%22%5D) · [llama.cpp](command:hackl.openSetupDoc?%5B%22llamacpp%22%5D) · [Ollama](command:hackl.openSetupDoc?%5B%22ollama%22%5D)\n\nUsing Codex instead? [Log in to Codex](command:hackl.codexLogin), then [Select Backend](command:hackl.selectBackend).",
             "media": {
               "markdown": "media/setup-tutorial.md"
             },
             "completionEvents": [
-              "onCommand:hackl.openSetupGuide"
+              "onCommand:hackl.openSetupDoc"
             ]
           },
           {

@@ -44,7 +44,7 @@ settings if you want it always up.
 
 ## 4. Point Hackl at it
 
-Either click **Set endpoint to :1234/v1** in the Hackl setup panel, or edit:
+Hackl probes the common local ports on its own. To pin it, set the endpoint in settings:
 
 ```jsonc
 // settings.json

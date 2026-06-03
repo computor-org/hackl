@@ -130,7 +130,7 @@ Web UI: <http://127.0.0.1:8080/>.
 
 ## 3. Point Hackl at it
 
-Either click **Set endpoint to :8080/v1** in the Hackl setup panel, or edit:
+Hackl probes the common local ports on its own. To pin it, set the endpoint in settings:
 
 ```jsonc
 // settings.json

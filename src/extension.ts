@@ -27,7 +27,6 @@ import { completeWithTools } from "./toolLoop";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import { createWorkspaceToolRunner } from "./workspaceTools";
 import { createDebugLog, disposeDebugLog } from "./debugLog";
-import { SetupPanel } from "./setup/setupView";
 import {
   BasketService,
   BasketSnapshot,
@@ -55,7 +54,6 @@ let activationDebug: ReturnType<typeof createDebugLog> | undefined;
 const detectedContextCache = new Map<string, number | undefined>();
 
 const BACKEND_CHOICE_KEY = "hackl.backendChoice";
-const SETUP_HINT_DISMISSED_KEY = "hackl.setupHintDismissed";
 
 function readBackendChoice(): BackendChoice | undefined {
   const raw = extensionContext?.globalState.get<unknown>(BACKEND_CHOICE_KEY);
@@ -72,14 +70,6 @@ async function writeBackendChoice(choice: BackendChoice | undefined): Promise<vo
 function readGlobalCodexModel(): string | undefined {
   const value = vscode.workspace.getConfiguration("hackl").inspect<string>("codex.model")?.globalValue;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function isSetupHintDismissed(): boolean {
-  return Boolean(extensionContext?.globalState.get<boolean>(SETUP_HINT_DISMISSED_KEY, false));
-}
-
-export async function dismissSetupHint(value: boolean): Promise<void> {
-  await extensionContext?.globalState.update(SETUP_HINT_DISMISSED_KEY, value);
 }
 
 export interface HacklApi {
@@ -132,7 +122,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     await refreshStatus();
   });
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-  statusBarItem.command = "hackl.openSetupGuide";
+  statusBarItem.command = "hackl.openWalkthrough";
   context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
   registerAutocomplete(context);
 
@@ -143,36 +133,20 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       chatViewProvider.show();
       chatViewProvider.focusInput();
     }),
-    vscode.commands.registerCommand("hackl.openSetupGuide", () => {
-      SetupPanel.show(context, runProbe, setEndpoint, {
-        detectCodex: () => detectCodex({ command: readHacklConfig().codexCommand }),
-        useCodex: async (model) => {
-          await writeBackendChoice({ kind: "codex", model });
-          await vscode.workspace.getConfiguration("hackl").update("codex.model", model, vscode.ConfigurationTarget.Global);
-          await refreshStatus();
-          void chatViewProvider.postState();
-        },
-        codexLogin: async () => {
-          const terminal = vscode.window.createTerminal({ name: "codex login" });
-          terminal.show();
-          terminal.sendText(`${readHacklConfig().codexCommand} login`, true);
-        },
-        isHintDismissed: () => isSetupHintDismissed(),
-        setHintDismissed: (value) => dismissSetupHint(value),
-      });
+    vscode.commands.registerCommand("hackl.openWalkthrough", async () => {
+      await vscode.commands.executeCommand(
+        "workbench.action.openWalkthrough",
+        "computor-org.hackl#hackl.connect",
+        false,
+      );
+    }),
+    vscode.commands.registerCommand("hackl.codexLogin", () => {
+      const terminal = vscode.window.createTerminal({ name: "codex login" });
+      terminal.show();
+      terminal.sendText(`${readHacklConfig().codexCommand} login`, true);
     }),
     vscode.commands.registerCommand("hackl.selectBackend", async () => {
       await pickBackend(chatViewProvider);
-    }),
-    vscode.commands.registerCommand("hackl.dismissSetupHint", async () => {
-      await dismissSetupHint(true);
-      await refreshStatus();
-      void chatViewProvider.postState();
-    }),
-    vscode.commands.registerCommand("hackl.showSetupHint", async () => {
-      await dismissSetupHint(false);
-      await refreshStatus();
-      void chatViewProvider.postState();
     }),
     vscode.commands.registerCommand("hackl.checkLocalServer", async () => {
       const probe = await runProbe();
@@ -181,7 +155,6 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     vscode.commands.registerCommand("hackl.refreshEndpoint", async () => {
       detectedContextCache.clear();
       clearCodexDetectionCache();
-      SetupPanel.refresh();
       const probe = await runProbe();
       await reportProbe(probe);
     }),
@@ -472,24 +445,13 @@ async function reportProbe(probes: ProbeResult[]): Promise<void> {
   } else {
     const choice = await vscode.window.showWarningMessage(
       "Hackl: no local model server detected on the configured or default endpoints.",
-      "Open setup guide",
+      "Open walkthrough",
     );
-    if (choice === "Open setup guide") {
-      await vscode.commands.executeCommand("hackl.openSetupGuide");
+    if (choice === "Open walkthrough") {
+      await vscode.commands.executeCommand("hackl.openWalkthrough");
     }
   }
   await refreshStatus();
-}
-
-async function setEndpoint(endpoint: string): Promise<void> {
-  await vscode.workspace.getConfiguration("hackl").update(
-    "endpoint",
-    endpoint,
-    vscode.ConfigurationTarget.Global,
-  );
-  detectedContextCache.clear();
-  await refreshStatus();
-  SetupPanel.refresh();
 }
 
 export function deactivate(): void {
