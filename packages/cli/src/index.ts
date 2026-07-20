@@ -11,7 +11,7 @@ import { createAgentContext, runTurn, AgentContext } from "./agent";
 import { Renderer, statusLine } from "./render";
 import { ENGINE_COMMANDS, runEngineCommand, handleEngineSlash, type EngineCommand } from "./engineCli";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 
 async function main(): Promise<void> {
   let args: CliArgs;
