@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Hackl</title>
+    <link rel="stylesheet" href="/main.css" />
+  </head>
+  <body>
+    <header id="topbar">
+      <span id="brand">Hackl</span>
+      <span id="conn" class="muted">connecting...</span>
+      <span class="spacer"></span>
+      <button id="engine-toggle" type="button">Engine</button>
+      <span id="meter" class="muted"></span>
+    </header>
+    <div id="yolo-banner" hidden>
+      Yolo mode: commands run with no policy and no approval. You are responsible for what happens.
+    </div>
+    <section id="engine-panel" hidden>
+      <div class="engine-row">
+        <strong>Local engine</strong>
+        <span id="engine-status" class="muted">checking...</span>
+        <span class="spacer"></span>
+        <button id="engine-start" type="button">Start</button>
+        <button id="engine-stop" type="button">Stop</button>
+        <button id="engine-restart" type="button">Restart</button>
+      </div>
+      <div class="engine-row">
+        <label>Model
+          <select id="engine-model"></select>
+        </label>
+        <button id="engine-pull" type="button">Download</button>
+      </div>
+      <div class="engine-row engine-knobs">
+        <label>Context <input id="knob-ctx" type="number" min="2048" step="1024" placeholder="auto" /></label>
+        <label>n-cpu-moe <input id="knob-moe" type="number" min="0" placeholder="auto" /></label>
+        <label>MTP
+          <select id="knob-mtp"><option value="auto">auto</option><option value="on">on</option><option value="off">off</option></select>
+        </label>
+        <label>mmproj
+          <select id="knob-mmproj"><option value="auto">auto</option><option value="on">on</option><option value="off">off</option></select>
+        </label>
+        <label>Host
+          <select id="knob-host"><option value="loopback">localhost</option><option value="any">0.0.0.0 (danger)</option></select>
+        </label>
+      </div>
+      <pre id="engine-log" aria-live="polite"></pre>
+    </section>
+    <main id="thread"></main>
+    <div id="empty" class="muted">Ask Hackl about this workspace, or give it a task.</div>
+    <form id="composer">
+      <textarea id="prompt" rows="1" placeholder="Message Hackl" autocomplete="off"></textarea>
+      <div id="composer-row">
+        <select id="mode" aria-label="Mode"></select>
+        <span class="spacer"></span>
+        <button id="cancel" type="button" hidden>Stop</button>
+        <button id="send" type="submit">Send</button>
+      </div>
+    </form>
+    <script src="/main.js"></script>
+  </body>
+</html>

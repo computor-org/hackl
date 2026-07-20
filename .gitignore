@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+build/
+release/
+*.vsix
+*.tsbuildinfo
+.vscode-test/
+.DS_Store
+npm-debug.log*
+.sloptools/artifacts/
+.hackl/
+.env
+.env.*

@@ -1,0 +1,24 @@
+{
+  "name": "@hackl/desktop",
+  "version": "0.2.0",
+  "description": "Hackl desktop app: an Electron shell around the local server and the shared web UI.",
+  "author": "Christopher Albert",
+  "license": "MIT",
+  "private": true,
+  "main": "build/main.js",
+  "scripts": {
+    "bundle": "node esbuild.mjs",
+    "dist": "node esbuild.mjs && electron-builder --publish never"
+  },
+  "build": {
+    "appId": "org.computor.hackl",
+    "productName": "Hackl",
+    "executableName": "hackl",
+    "electronVersion": "42.3.3",
+    "files": ["build/**/*"],
+    "directories": { "output": "release" },
+    "linux": { "target": ["AppImage"], "category": "Development", "artifactName": "Hackl-${version}-${arch}.${ext}" },
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.developer-tools", "identity": null, "artifactName": "Hackl-${version}-${arch}.${ext}" },
+    "win": { "target": ["nsis", "portable"], "artifactName": "Hackl-${version}-${arch}.${ext}" }
+  }
+}

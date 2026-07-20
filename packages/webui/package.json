@@ -1,0 +1,15 @@
+{
+  "name": "@hackl/webui",
+  "version": "0.2.0",
+  "description": "Hackl shared web UI for the browser and the desktop shell.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "compile": "tsc -p .",
+    "test": "tsc -p . && node esbuild.mjs && node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "@hackl/protocol": "*"
+  }
+}

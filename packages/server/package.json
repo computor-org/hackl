@@ -1,0 +1,32 @@
+{
+  "name": "@hackl/server",
+  "version": "0.2.0",
+  "description": "Hackl local session server: runs the agent loop behind a localhost WebSocket for the web and desktop GUIs.",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "hackl-serve": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && node esbuild.mjs",
+    "compile": "tsc -b",
+    "test": "tsc -b && node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "@hackl/core": "*",
+    "@hackl/protocol": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
+  }
+}

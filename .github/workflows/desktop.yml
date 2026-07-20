@@ -1,0 +1,52 @@
+name: Desktop binaries
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm run build -w @hackl/core -w @hackl/protocol -w @hackl/server -w @hackl/webui
+      - run: npm run bundle -w @hackl/desktop
+      # electron-builder is installed ad hoc (kept out of the main install) and
+      # downloads the pinned Electron itself; unsigned per the build config.
+      - run: npx --yes electron-builder@26.15.2 --publish never
+        working-directory: packages/desktop
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hackl-desktop-${{ matrix.os }}
+          path: |
+            packages/desktop/release/*.AppImage
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.zip
+            packages/desktop/release/*.exe
+          if-no-files-found: error
+      - name: Attach to release
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(packages/desktop/release/*.AppImage packages/desktop/release/*.dmg packages/desktop/release/*.zip packages/desktop/release/*.exe)
+          if [ ${#files[@]} -gt 0 ]; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}

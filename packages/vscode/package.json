@@ -1,0 +1,596 @@
+{
+  "name": "hackl",
+  "displayName": "Hackl",
+  "description": "Hack local-first.",
+  "version": "0.2.0",
+  "publisher": "computor-org",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:computor-org/hackl.git"
+  },
+  "engines": {
+    "vscode": "^1.106.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "local-first",
+    "llm",
+    "ai",
+    "chat",
+    "agent",
+    "copilot",
+    "llama.cpp",
+    "ollama",
+    "lm studio",
+    "mcp"
+  ],
+  "icon": "media/icon.png",
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hackl.chat",
+        "title": "Open Chat",
+        "category": "Hackl",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "hackl.checkLocalServer",
+        "title": "Check Local Server",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.refreshEndpoint",
+        "title": "Refresh Endpoint",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.traceAnnotationRanges",
+        "title": "Trace Annotation Ranges",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.replyToAnnotationThread",
+        "title": "Submit",
+        "category": "Hackl",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "hackl.addAnnotationNote",
+        "title": "Add Annotation Note",
+        "category": "Hackl",
+        "icon": "$(comment-add)"
+      },
+      {
+        "command": "hackl.deleteAnnotationThread",
+        "title": "Delete Annotation Thread",
+        "category": "Hackl",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "hackl.resolveAnnotationThread",
+        "title": "Resolve",
+        "category": "Hackl",
+        "icon": "$(check)"
+      },
+      {
+        "command": "hackl.addSelectionToContext",
+        "title": "Add Selection",
+        "category": "Hackl",
+        "icon": "$(add)"
+      },
+      {
+        "command": "hackl.addCurrentFileToContext",
+        "title": "Add Current File",
+        "category": "Hackl",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "hackl.addMarkdownSectionToContext",
+        "title": "Add Markdown Section",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.addStagedChangesToContext",
+        "title": "Add Staged Changes",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.addLastCommitToContext",
+        "title": "Add Last Commit to Context",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.clearContext",
+        "title": "Clear Context",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.clearAnnotations",
+        "title": "Clear Annotations",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.discardLastAnnotations",
+        "title": "Discard Last Annotations Batch",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.reviewStagedChanges",
+        "title": "Review Staged Changes",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.revealTarget",
+        "title": "Reveal Target",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.selectBackend",
+        "title": "Select Backend",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.configureConnection",
+        "title": "Configure Primary Endpoint and Model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.codexLogin",
+        "title": "Log in to Codex",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.setApiKey",
+        "title": "Set API Key",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.clearApiKey",
+        "title": "Clear API Key",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.clearTrustedEndpoints",
+        "title": "Forget Trusted Remote Endpoints",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.engineMenu",
+        "title": "Engine: Actions",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.engineStart",
+        "title": "Engine: Start Local Model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.engineStop",
+        "title": "Engine: Stop Local Model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.engineRestart",
+        "title": "Engine: Restart Local Model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.engineStatus",
+        "title": "Engine: Status",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.engineDoctor",
+        "title": "Engine: Doctor (hardware + recommendation)",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.selectModel",
+        "title": "Engine: Select Model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.pullModel",
+        "title": "Engine: Download Model",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.toggleAutocomplete",
+        "title": "Toggle Inline Autocomplete",
+        "category": "Hackl",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "hackl.dismissFocusedEmptyComment",
+        "title": "Dismiss Empty Annotation",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.reconnectMcp",
+        "title": "Reconnect MCP Servers",
+        "category": "Hackl"
+      }
+    ],
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "hackl",
+          "title": "Hackl",
+          "icon": "media/hackl.svg"
+        }
+      ]
+    },
+    "views": {
+      "hackl": [
+        {
+          "id": "hackl.chatView",
+          "type": "webview",
+          "name": "Chat",
+          "icon": "media/hackl.svg",
+          "contextualTitle": "Hackl Chat"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "hackl.chat",
+        "key": "ctrl+alt+h",
+        "mac": "cmd+alt+h",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "hackl.addSelectionToContext",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "hackl.discardLastAnnotations",
+        "key": "ctrl+alt+z",
+        "mac": "cmd+alt+z"
+      },
+      {
+        "command": "hackl.dismissFocusedEmptyComment",
+        "key": "escape",
+        "when": "commentEditorFocused && commentIsEmpty"
+      },
+      {
+        "command": "editor.action.inlineSuggest.acceptNextWord",
+        "key": "alt+right",
+        "mac": "alt+right",
+        "when": "inlineSuggestionVisible && !editorReadonly"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "hackl.replyToAnnotationThread",
+          "when": "false"
+        },
+        {
+          "command": "hackl.deleteAnnotationThread",
+          "when": "false"
+        },
+        {
+          "command": "hackl.resolveAnnotationThread",
+          "when": "false"
+        },
+        {
+          "command": "hackl.revealTarget",
+          "when": "false"
+        },
+        {
+          "command": "hackl.dismissFocusedEmptyComment",
+          "when": "false"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "hackl.chat",
+          "group": "navigation@50",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "hackl.addSelectionToContext",
+          "group": "navigation@52",
+          "when": "editorTextFocus && editorHasSelection"
+        },
+        {
+          "command": "hackl.addCurrentFileToContext",
+          "group": "navigation@53",
+          "when": "editorTextFocus"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "hackl.replyToAnnotationThread",
+          "group": "inline@1",
+          "when": "commentController == hackl.annotations"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "hackl.resolveAnnotationThread",
+          "group": "inline@1",
+          "when": "commentController == hackl.annotations && commentThread == hackl.annotation.open"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "hackl.addStagedChangesToContext",
+          "group": "navigation",
+          "when": "scmProvider == git"
+        }
+      ]
+    },
+    "configuration": [
+      {
+        "id": "hackl.connection",
+        "type": "object",
+        "title": "Hackl: Connection",
+        "order": 10,
+        "properties": {
+        "hackl.endpoint": {
+          "type": "string",
+          "default": "",
+          "order": 10,
+          "markdownDescription": "Primary OpenAI-compatible server address for chat, agent work, and—by default—autocomplete. `/v1` is optional for a bare host such as `http://localhost:8080`. Leave empty to auto-discover llama.cpp on port 8080 or LM Studio on port 1234. Chat asks once before trusting a configured non-loopback endpoint."
+        },
+        "hackl.model": {
+          "type": "string",
+          "default": "",
+          "order": 20,
+          "markdownDescription": "Primary model ID for the endpoint above. You can edit it here or select it from Hackl's model dropdown. Leave empty to use the first model reported by the endpoint. Autocomplete reuses this model unless an advanced override is set below."
+        }
+        }
+      },
+      {
+        "id": "hackl.agentContext",
+        "type": "object",
+        "title": "Hackl: Agent and Context",
+        "order": 30,
+        "properties": {
+        "hackl.maxToolFileChars": {
+          "type": "number",
+          "default": 12000,
+          "minimum": 1000,
+          "order": 210,
+          "description": "Maximum characters returned by one read_file tool call."
+        },
+        "hackl.maxToolCalls": {
+          "type": "number",
+          "default": 128,
+          "minimum": 1,
+          "order": 220,
+          "description": "Tool-call budget for one agent turn. The agent stops and answers once it reaches this many tool calls (read, search, edit, command, MCP)."
+        },
+        "hackl.maxContextTokens": {
+          "type": "number",
+          "default": 32768,
+          "minimum": 1024,
+          "order": 30,
+          "description": "Override for the model context window used by the token budget indicator. When unset, Hackl auto-detects from llama.cpp /props or LM Studio /api/v0/models and falls back to 32768."
+        },
+        "hackl.enableThinking": {
+          "type": "boolean",
+          "default": false,
+          "order": 200,
+          "description": "Allow model thinking/reasoning when the local OpenAI-compatible server supports this switch."
+        },
+        "hackl.reasoningBudget": {
+          "type": "number",
+          "default": 4096,
+          "minimum": -1,
+          "order": 201,
+          "description": "Token cap on hidden reasoning when thinking is enabled, sent per request as thinking_budget_tokens. Stops a thinking model from looping through the whole turn in agent mode. -1 is unrestricted, 0 ends thinking immediately. llama.cpp honors this only when its server was started without --reasoning-budget; otherwise pass --reasoning-budget on the server."
+        }
+        }
+      },
+      {
+        "id": "hackl.autocomplete",
+        "type": "object",
+        "title": "Hackl: Autocomplete",
+        "order": 20,
+        "properties": {
+        "hackl.autocomplete.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 100,
+          "description": "Enable inline FIM autocomplete. On by default. When hackl.autocomplete.endpoint is empty, autocomplete reuses the chat endpoint and hackl.model, so one selected Qwen model can serve both chat and completion, including through a routed gateway."
+        },
+        "hackl.autocomplete.endpoint": {
+          "type": "string",
+          "default": "",
+          "order": 110,
+          "markdownDescription": "**Advanced override.** Dedicated llama.cpp-compatible endpoint for autocomplete only. Leave empty to reuse `hackl.endpoint`. Set this only when autocomplete should use a genuinely separate server."
+        },
+        "hackl.autocomplete.model": {
+          "type": "string",
+          "default": "",
+          "order": 120,
+          "markdownDescription": "**Advanced override.** Model ID for the dedicated autocomplete endpoint. This applies only when `hackl.autocomplete.endpoint` is set; otherwise Hackl reuses `hackl.model`."
+        },
+        "hackl.autocomplete.maxTokens": {
+          "type": "number",
+          "default": 48,
+          "minimum": 8,
+          "order": 130,
+          "description": "Maximum tokens to predict per inline suggestion."
+        },
+        "hackl.autocomplete.debounceMs": {
+          "type": "number",
+          "default": 150,
+          "minimum": 0,
+          "order": 140,
+          "description": "Debounce after the last keystroke before requesting autocomplete."
+        },
+        "hackl.autocomplete.multiLine": {
+          "type": "boolean",
+          "default": false,
+          "order": 150,
+          "description": "Allow multi-line inline completions. When off, Hackl stops at the first newline."
+        },
+        "hackl.autocomplete.maxPredictMs": {
+          "type": "number",
+          "default": 400,
+          "minimum": 50,
+          "order": 160,
+          "description": "Server-side prediction time budget in milliseconds for one autocomplete request."
+        }
+        }
+      },
+      {
+        "id": "hackl.general",
+        "type": "object",
+        "title": "Hackl: General",
+        "order": 60,
+        "properties": {
+        "hackl.setupProfile": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "lmstudio",
+            "llamacpp",
+            "ollama"
+          ],
+          "default": "auto",
+          "order": 40,
+          "description": "Preferred backend for setup-guide ordering only. Hackl never starts a server; this just decides which recipe is foregrounded in the Setup view."
+        },
+        "hackl.debug": {
+          "type": "boolean",
+          "default": false,
+          "order": 510,
+          "description": "Write Hackl prompt and tool-loop diagnostics to the Hackl Debug output channel and the VS Code Extension Host debug console."
+        },
+        "hackl.persistSessions": {
+          "type": "boolean",
+          "default": true,
+          "order": 230,
+          "description": "Persist completed Hackl sessions (when annotations are requested) as JSON files in VS Code extension storage."
+        }
+        }
+      },
+      {
+        "id": "hackl.codex",
+        "type": "object",
+        "title": "Hackl: Codex",
+        "order": 40,
+        "properties": {
+        "hackl.codex.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 300,
+          "description": "Enable the Codex CLI backend. When enabled, Hackl auto-detects `codex` on PATH and offers it alongside the local OpenAI-compatible backend."
+        },
+        "hackl.codex.command": {
+          "type": "string",
+          "default": "codex",
+          "order": 310,
+          "description": "Command used to invoke the Codex CLI. Override if codex is installed at a non-standard location."
+        },
+        "hackl.codex.model": {
+          "type": "string",
+          "default": "",
+          "order": 320,
+          "description": "Last-selected Codex model. Set automatically when picking a model from the chat dropdown."
+        }
+        }
+      },
+      {
+        "id": "hackl.mcp",
+        "type": "object",
+        "title": "Hackl: MCP",
+        "order": 50,
+        "properties": {
+        "hackl.mcp": {
+          "type": "object",
+          "default": {},
+          "order": 400,
+          "markdownDescription": "Model Context Protocol servers, by name. Each value is either a local server `{ \"type\": \"local\", \"command\": [\"helpy\", \"mcp-stdio\"], \"environment\": {}, \"enabled\": true }` or a remote one `{ \"type\": \"remote\", \"url\": \"https://host/mcp\", \"headers\": {}, \"enabled\": true }`. Their tools are offered to chat/agent and approved per call. Run `Hackl: Reconnect MCP Servers` after changing this.",
+          "additionalProperties": true
+        }
+        }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "hackl.connect",
+        "title": "Connect Hackl to a local model",
+        "description": "Start or choose a model, then configure one primary endpoint and model. Qwen autocomplete works automatically.",
+        "steps": [
+          {
+            "id": "hackl.walkthrough.pickServer",
+            "title": "Start a model",
+            "description": "Fastest local setup: let Hackl choose, download, and start llama.cpp plus a model. Or use a server you already have.\n\n[Start recommended local model](command:hackl.engineStart) · [LM Studio](command:hackl.openSetupDoc?%5B%22lmstudio%22%5D) · [llama.cpp](command:hackl.openSetupDoc?%5B%22llamacpp%22%5D) · [Ollama](command:hackl.openSetupDoc?%5B%22ollama%22%5D)\n\nUsing Codex instead? [Log in](command:hackl.codexLogin), then [select it](command:hackl.selectBackend).",
+            "media": {
+              "markdown": "media/setup-tutorial.md"
+            },
+            "completionEvents": [
+              "onCommand:hackl.engineStart",
+              "onCommand:hackl.openSetupDoc"
+            ]
+          },
+          {
+            "id": "hackl.walkthrough.setEndpoint",
+            "title": "Connect",
+            "description": "Set the primary endpoint and choose its model. `/v1` is optional; autocomplete reuses both automatically.\n\n[Configure endpoint + model](command:hackl.configureConnection) · [Open all settings](command:workbench.action.openSettings?%22@ext%3Acomputor-org.hackl%22)",
+            "media": {
+              "markdown": "media/setup-tutorial.md"
+            },
+            "completionEvents": [
+              "onCommand:hackl.configureConnection",
+              "onCommand:hackl.checkLocalServer"
+            ]
+          },
+          {
+            "id": "hackl.walkthrough.chat",
+            "title": "Open chat",
+            "description": "Start chatting locally.\n\n[Open chat](command:hackl.chat)",
+            "media": {
+              "markdown": "media/setup-tutorial.md"
+            },
+            "completionEvents": [
+              "onCommand:hackl.chat"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "build": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "bundle": "node esbuild.mjs",
+    "test": "npm run compile && node --test tests/*.test.cjs tests/**/*.test.cjs",
+    "test:ui": "npm run compile && node scripts/run-webview-ui-smoke.mjs",
+    "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/context.js --test tests/*.test.cjs",
+    "test:extension": "npm run compile && node scripts/run-vscode-smoke.mjs",
+    "package:vsix": "npm run compile && npm run bundle && vsce package --no-dependencies --allow-star-activation",
+    "smoke:openai": "npm run compile && node scripts/smoke-openai-compatible.mjs"
+  },
+  "devDependencies": {
+    "@hackl/core": "*",
+    "@modelcontextprotocol/sdk": "^1.21.0",
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^20.14.10",
+    "@types/vscode": "^1.106.0",
+    "@vscode/codicons": "^0.0.45",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.1",
+    "esbuild": "^0.24.2",
+    "katex": "^0.16.45",
+    "markdown-it": "^14.1.1",
+    "typescript": "^5.5.4"
+  }
+}

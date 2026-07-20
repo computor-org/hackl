@@ -1,0 +1,31 @@
+name: Release VSIX
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  vsix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      # npm >= 11 honors the package.json "allowScripts" allowlist and blocks
+      # unapproved dependency install scripts; the bundled npm 10 does not.
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm run test:coverage
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - run: xvfb-run -a npm run test:extension
+      - run: npm run package:vsix
+      - run: gh release upload "$GITHUB_REF_NAME" ./*.vsix --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

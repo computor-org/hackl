@@ -1,0 +1,27 @@
+// Public surface of the Hackl backend. Frontends import from "@hackl/core";
+// tests may also deep-import compiled modules (e.g. "@hackl/core/tools").
+export * from "./types";
+export * from "./debugLog";
+export * from "./chatClient";
+export * from "./tools";
+export * from "./toolRunner";
+export * from "./nodeWorkspaceHost";
+export * from "./toolLoop";
+export * from "./commandPolicy";
+export * from "./prompt";
+export * from "./reasoning";
+export * from "./tokenBudget";
+export * from "./modelLabel";
+export * from "./backendRegistry";
+export * from "./codexBackend";
+export * from "./codexDetect";
+export * from "./localServers";
+export * from "./openAIEndpoint";
+export * from "./targetResolve";
+export * from "./hacklSession";
+export * from "./mcp/manager";
+export * from "./mcp/config";
+export * from "./toolCatalog";
+export * from "./session";
+export * from "./jsonStore";
+export * from "./engine";

@@ -1,0 +1,42 @@
+{
+  "name": "hackl-monorepo",
+  "version": "0.2.0",
+  "description": "Hackl: local-first AI coding agent. Shared core, VS Code extension, and CLI.",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:computor-org/hackl.git"
+  },
+  "engines": {
+    "node": ">=20",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "packages/core",
+    "packages/protocol",
+    "packages/server",
+    "packages/webui",
+    "packages/desktop",
+    "packages/vscode",
+    "packages/cli"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc -b",
+    "test": "npm run test --workspaces --if-present",
+    "test:coverage": "npm run test -w @hackl/core && npm run test -w @hackl/cli && npm run test -w @hackl/server && npm run test -w @hackl/webui && npm run test:coverage -w hackl",
+    "test:ui": "npm run test:ui -w hackl",
+    "test:extension": "npm run test:extension -w hackl",
+    "package:vsix": "npm run package:vsix -w hackl && cp packages/vscode/*.vsix .",
+    "build:cli": "npm run build -w @hackl/cli"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.5.4"
+  },
+  "allowScripts": {
+    "esbuild@0.24.2": true
+  }
+}

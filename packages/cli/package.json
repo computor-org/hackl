@@ -1,0 +1,23 @@
+{
+  "name": "@hackl/cli",
+  "version": "0.2.0",
+  "description": "Hackl CLI: local-first AI coding agent in the terminal.",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "hackl": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "compile": "tsc -p .",
+    "build": "tsc -p . && node esbuild.mjs",
+    "bundle": "node esbuild.mjs",
+    "test": "tsc -p . && node --test tests/*.test.cjs"
+  },
+  "devDependencies": {
+    "@hackl/core": "*",
+    "@modelcontextprotocol/sdk": "^1.21.0"
+  }
+}
