@@ -1,8 +1,8 @@
 {
   "name": "hackl",
   "displayName": "Hackl",
-  "description": "Hack local-first.",
-  "version": "0.2.1",
+  "description": "Local-first AI coding with managed llama.cpp, agent tools, and autocomplete.",
+  "version": "0.3.0",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -330,7 +330,7 @@
           "type": "boolean",
           "default": true,
           "order": 25,
-          "markdownDescription": "Let this VS Code window participate in Hackl's temporary managed llama.cpp session. This setting is global and persists across restarts. Turning it off releases VS Code's lease; manual `hackl serve`, other clients, and configured external endpoints are never stopped."
+          "markdownDescription": "Let this VS Code window participate in Hackl's temporary managed llama.cpp session. This setting is global and persists across restarts. Turning it off releases VS Code's lease."
         }
         }
       },
@@ -435,18 +435,6 @@
         "title": "Hackl: General",
         "order": 60,
         "properties": {
-        "hackl.setupProfile": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "lmstudio",
-            "llamacpp",
-            "ollama"
-          ],
-          "default": "auto",
-          "order": 40,
-          "description": "Preferred backend for setup-guide ordering only. Hackl never starts a server; this just decides which recipe is foregrounded in the Setup view."
-        },
         "hackl.debug": {
           "type": "boolean",
           "default": false,
@@ -506,13 +494,13 @@
     "walkthroughs": [
       {
         "id": "hackl.connect",
-        "title": "Connect Hackl to a local model",
-        "description": "Start or choose a model, then configure one primary endpoint and model. Qwen autocomplete works automatically.",
+        "title": "Start Hackl",
+        "description": "Use Hackl's temporary managed llama.cpp session or connect a server you already run.",
         "steps": [
           {
             "id": "hackl.walkthrough.pickServer",
-            "title": "Start a model",
-            "description": "Hackl starts a temporary managed llama.cpp session while clients are using it. The status-bar server item persistently enables or disables that behavior. You can also use a server you already have.\n\n[Enable managed local model](command:hackl.toggleEngine) · [LM Studio](command:hackl.openSetupDoc?%5B%22lmstudio%22%5D) · [llama.cpp](command:hackl.openSetupDoc?%5B%22llamacpp%22%5D) · [Ollama](command:hackl.openSetupDoc?%5B%22ollama%22%5D)\n\nUsing Codex instead? [Log in](command:hackl.codexLogin), then [select it](command:hackl.selectBackend).",
+            "title": "Use a local model",
+            "description": "Leave the endpoint empty. Hackl selects and starts a temporary llama.cpp model while clients are using it. The status-bar server item persistently enables or disables this behavior.\n\n[Toggle managed local server](command:hackl.toggleEngine) · [Choose model for next start](command:hackl.selectModel)",
             "media": {
               "markdown": "media/setup-tutorial.md"
             },
@@ -523,8 +511,8 @@
           },
           {
             "id": "hackl.walkthrough.setEndpoint",
-            "title": "Connect",
-            "description": "Set the primary endpoint and choose its model. `/v1` is optional; autocomplete reuses both automatically.\n\n[Configure endpoint + model](command:hackl.configureConnection) · [Open all settings](command:workbench.action.openSettings?%22@ext%3Acomputor-org.hackl%22)",
+            "title": "Or use your server",
+            "description": "For LM Studio, Ollama, manual llama.cpp, or a gateway, set the endpoint and choose its model.\n\n[Configure endpoint + model](command:hackl.configureConnection) · [LM Studio](command:hackl.openSetupDoc?%5B%22lmstudio%22%5D) · [Ollama](command:hackl.openSetupDoc?%5B%22ollama%22%5D)",
             "media": {
               "markdown": "media/setup-tutorial.md"
             },
@@ -557,7 +545,7 @@
     "test:ui": "npm run compile && node scripts/run-webview-ui-smoke.mjs",
     "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/context.js --test tests/*.test.cjs",
     "test:extension": "npm run compile && node scripts/run-vscode-smoke.mjs",
-    "package:vsix": "npm run compile && npm run bundle && vsce package --no-dependencies --allow-star-activation",
+    "package:vsix": "npm run compile && npm run bundle && node ../../scripts/vsce.mjs package",
     "smoke:openai": "npm run compile && node scripts/smoke-openai-compatible.mjs"
   },
   "devDependencies": {

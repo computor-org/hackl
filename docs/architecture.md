@@ -245,6 +245,21 @@ For Hackl this means:
   local backend as a VS Code language model for other extensions, not just use
   it internally.
 
+## Release channels
+
+Hackl uses even minor versions for stable releases and odd minor versions for
+pre-releases. Versions stay in `major.minor.patch` form because the VS Code
+Marketplace does not accept SemVer suffixes:
+
+- `0.3.x`: GitHub and Marketplace pre-release.
+- `0.4.x`: stable.
+
+`scripts/release-channel.mjs` validates the package version, GitHub tag, and
+GitHub pre-release flag. `npm run package:vsix` automatically adds the
+Marketplace pre-release marker for odd minor versions. After the GitHub release
+artifacts pass, `npm run publish:marketplace` publishes the same VSIX using
+`VSCE_PAT` when set or the current Microsoft Entra credential otherwise.
+
 ## Gates
 
 Required local gates:

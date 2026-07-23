@@ -63,6 +63,7 @@ export function composeServerArgs(
 
 export interface StartOptions {
   serverBin: string;
+  serverArgs?: string[];
   modelPath: string;
   mmprojPath?: string;
   model?: ModelOption;
@@ -75,7 +76,10 @@ export async function startEngine(opts: StartOptions): Promise<EngineState> {
   const env = opts.env ?? process.env;
   const dir = stateDir(env);
   fs.mkdirSync(dir, { recursive: true });
-  const argv = composeServerArgs(opts.modelPath, opts.mmprojPath, opts.model, opts.knobs);
+  const argv = [
+    ...(opts.serverArgs ?? []),
+    ...composeServerArgs(opts.modelPath, opts.mmprojPath, opts.model, opts.knobs),
+  ];
   const logFd = fs.openSync(stateFile("log", env), "a");
   const child = spawn(opts.serverBin, argv, { detached: false, stdio: ["ignore", logFd, logFd], env });
   child.on("error", () => { /* readiness below reports the launch failure */ });

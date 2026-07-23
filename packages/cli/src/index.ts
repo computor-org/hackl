@@ -12,7 +12,7 @@ import { Renderer, statusLine } from "./render";
 import { runModelsCommand } from "./engineCli";
 import { runServeCommand } from "./serve";
 
-const VERSION = "0.2.1";
+const VERSION = "0.3.0";
 
 async function main(): Promise<void> {
   if (process.argv[2] === "__engine-host") {

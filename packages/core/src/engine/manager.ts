@@ -40,12 +40,20 @@ export interface StartArgs {
   log?: (s: string) => void;
 }
 
+export interface EngineManagerOptions {
+  serverBin?: string;
+  serverArgs?: string[];
+}
+
 // Single brain for the managed/adopted local engine, shared by the CLI, the
 // VS Code extension host, and the server.
 export class EngineManager {
   private probed?: SystemProbe;
 
-  constructor(private readonly env: NodeJS.ProcessEnv = process.env) {}
+  constructor(
+    private readonly env: NodeJS.ProcessEnv = process.env,
+    private readonly options: EngineManagerOptions = {},
+  ) {}
 
   async probe(): Promise<SystemProbe> {
     if (!this.probed) this.probed = await probeSystem();
@@ -96,6 +104,7 @@ export class EngineManager {
   }
 
   async ensureServer(log: (s: string) => void = () => {}): Promise<ResolvedServer> {
+    if (this.options.serverBin) return { bin: this.options.serverBin, source: "env" };
     return (await resolveServerBin(this.env)) ?? installManaged(this.env, log);
   }
 
@@ -138,6 +147,7 @@ export class EngineManager {
     const mmproj = knobs.mmproj ? mmprojPath(model, this.env) : undefined;
     return startEngine({
       serverBin: server.bin,
+      serverArgs: this.options.serverArgs,
       modelPath: resolvedModelPath,
       mmprojPath: mmproj,
       model,

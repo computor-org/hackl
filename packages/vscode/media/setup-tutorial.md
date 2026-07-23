@@ -1,15 +1,16 @@
-# Start Hackl in two steps
+# Start Hackl
 
-1. Start a model:
+## Managed local model
 
-   - **Hackl Engine**: choose, download, and start a suitable llama.cpp model.
-   - **LM Studio**: download a model and click *Start Server*.
-   - **Existing llama.cpp**: `llama-server -m model.gguf --port 8080`.
-   - **Ollama**: `ollama serve`.
+Leave **Endpoint** empty and keep the Hackl server status item enabled. Hackl
+selects a llama.cpp model for this machine, downloads it when needed, and keeps
+the server alive only while Hackl clients are using it.
 
-2. Run **Hackl: Configure Primary Endpoint and Model**. Enter the server address;
-   `/v1` is optional. Pick the model Hackl discovers.
+Open the Hackl view and start chatting. No endpoint setup is required.
 
-That is enough for Qwen on llama.cpp or a compatible gateway: chat and inline autocomplete
-reuse the same endpoint and model. The separate autocomplete endpoint/model are
-advanced overrides for a genuinely different FIM server.
+## Existing server
+
+Start LM Studio, Ollama, or llama.cpp, then run **Hackl: Configure Primary
+Endpoint and Model**.
+
+The autocomplete toggle is independent of the managed-server toggle.

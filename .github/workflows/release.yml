@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Validate release channel
+        run: node scripts/release-channel.mjs check-github "$GITHUB_REF_NAME" "${{ github.event.release.prerelease }}"
       # npm >= 11 honors the package.json "allowScripts" allowlist and blocks
       # unapproved dependency install scripts; the bundled npm 10 does not.
       - run: npm install -g npm@11
@@ -26,6 +28,13 @@ jobs:
       - run: npm run test:ui
       - run: xvfb-run -a npm run test:extension
       - run: npm run package:vsix
-      - run: gh release upload "$GITHUB_REF_NAME" ./*.vsix --clobber
+      - run: npm run build:cli
+      - name: Prepare standalone CLI
+        run: |
+          version=$(node -p "require('./package.json').version")
+          cp packages/cli/dist/index.js "hackl-${version}.js"
+          chmod 755 "hackl-${version}.js"
+          sha256sum ./*.vsix ./hackl-*.js > SHA256SUMS
+      - run: gh release upload "$GITHUB_REF_NAME" ./*.vsix ./hackl-*.js SHA256SUMS --clobber
         env:
           GH_TOKEN: ${{ github.token }}
