@@ -11,10 +11,10 @@
     "dist"
   ],
   "scripts": {
-    "compile": "tsc -p .",
-    "build": "tsc -p . && node esbuild.mjs",
+    "compile": "tsc -b",
+    "build": "tsc -b && node esbuild.mjs",
     "bundle": "node esbuild.mjs",
-    "test": "tsc -p . && node --test tests/*.test.cjs"
+    "test": "tsc -b && node --test tests/*.test.cjs"
   },
   "devDependencies": {
     "@hackl/core": "*",
