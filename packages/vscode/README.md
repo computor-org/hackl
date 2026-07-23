@@ -41,10 +41,9 @@ sign-in for the local-first workflow.
   Markdown sections.
 - Ask/Edit/Work/Agent/Yolo modes with mode-specific tools.
 - Inline FIM autocomplete from the same chat model, or a separate endpoint.
-- Managed local llama.cpp engine: `Hackl: Engine` commands and a status-bar item
-  to recommend a model for your hardware, start/stop it on localhost, switch and
-  download models, and run a hardware doctor. An already-running server is adopted
-  read-only.
+- Managed local llama.cpp session with a direct status-bar on/off toggle. The
+  global choice persists across restarts; VS Code releases only its lease and
+  never stops manual or external servers.
 - Commit-level `/review` for staged changes, attached context, or the current file.
 - Human and AI annotations as line-anchored VS Code comment threads.
 - Hackl session persistence in VS Code extension storage for annotation runs.
@@ -58,7 +57,8 @@ Not in scope:
 
 ## Connect A Model
 
-Start an OpenAI-compatible server yourself, then point Hackl at it.
+Leave the endpoint empty to use Hackl's temporary managed llama.cpp session, or
+start an OpenAI-compatible server yourself and point Hackl at it.
 
 | Path | Use when |
 |------|----------|
@@ -194,6 +194,8 @@ on startup.
 ## Settings
 
 - `hackl.endpoint`: OpenAI-compatible base URL. Empty means auto-discover.
+- `hackl.engine.enabled`: globally persist VS Code participation in the
+  temporary managed llama.cpp session. External endpoints are unaffected.
 - `hackl.setupProfile`: setup recipe ordering only.
 - `hackl.maxContextTokens`: context-window override for the budget meter.
 - `hackl.maxToolFileChars`: cap for one `read_file` result.

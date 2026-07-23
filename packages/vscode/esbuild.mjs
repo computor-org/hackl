@@ -15,3 +15,14 @@ await esbuild.build({
   conditions: ["source"],
   logLevel: "info",
 });
+
+await esbuild.build({
+  entryPoints: ["src/engineHost.ts"],
+  outfile: "dist/engine-host.js",
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node20",
+  conditions: ["source"],
+  logLevel: "info",
+});

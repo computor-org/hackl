@@ -77,8 +77,9 @@ export async function startEngine(opts: StartOptions): Promise<EngineState> {
   fs.mkdirSync(dir, { recursive: true });
   const argv = composeServerArgs(opts.modelPath, opts.mmprojPath, opts.model, opts.knobs);
   const logFd = fs.openSync(stateFile("log", env), "a");
-  const child = spawn(opts.serverBin, argv, { detached: true, stdio: ["ignore", logFd, logFd], env });
-  child.unref();
+  const child = spawn(opts.serverBin, argv, { detached: false, stdio: ["ignore", logFd, logFd], env });
+  child.on("error", () => { /* readiness below reports the launch failure */ });
+  fs.closeSync(logFd);
   const pid = child.pid ?? 0;
   const state: EngineState = {
     alias: opts.model?.alias ?? "custom",
@@ -93,8 +94,13 @@ export async function startEngine(opts: StartOptions): Promise<EngineState> {
   writeJsonFileAtomic(stateFile("state", env), state);
   fs.writeFileSync(stateFile("pid", env), String(pid));
   fs.writeFileSync(stateFile("port", env), String(opts.knobs.port));
-  await waitForReady(opts.knobs.host, opts.knobs.port, opts.readyTimeoutMs ?? 900000, () => isAlive(pid));
-  return state;
+  try {
+    await waitForReady(opts.knobs.host, opts.knobs.port, opts.readyTimeoutMs ?? 900000, () => isAlive(pid));
+    return state;
+  } catch (error) {
+    stopEngine(env);
+    throw error;
+  }
 }
 
 export function readEngineState(env: NodeJS.ProcessEnv = process.env): EngineState | undefined {
@@ -113,20 +119,19 @@ export function stopEngine(env: NodeJS.ProcessEnv = process.env): boolean {
   return stopped;
 }
 
-export function bumpActivity(env: NodeJS.ProcessEnv = process.env): void {
-  try {
-    fs.mkdirSync(stateDir(env), { recursive: true });
-    fs.writeFileSync(stateFile("activity", env), String(Date.now()));
-  } catch { /* best effort */ }
-}
-
-export function readActivity(env: NodeJS.ProcessEnv = process.env): number | undefined {
-  try {
-    const n = Number(fs.readFileSync(stateFile("activity", env), "utf8").trim());
-    return Number.isFinite(n) ? n : undefined;
-  } catch {
-    return undefined;
+export async function stopEngineAndWait(
+  env: NodeJS.ProcessEnv = process.env,
+  timeoutMs = 5000,
+): Promise<boolean> {
+  const state = readEngineState(env);
+  const stopped = stopEngine(env);
+  if (!state?.pid || !stopped) return stopped;
+  const deadline = Date.now() + timeoutMs;
+  while (isAlive(state.pid) && Date.now() < deadline) await delay(50);
+  if (isAlive(state.pid)) {
+    try { process.kill(state.pid, "SIGKILL"); } catch { /* already gone */ }
   }
+  return true;
 }
 
 export function isAlive(pid: number): boolean {

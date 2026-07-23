@@ -63,6 +63,37 @@ export function isPresent(model: ModelOption, env: NodeJS.ProcessEnv = process.e
   return Boolean(modelPath(model, env));
 }
 
+export function managedModelFiles(model: ModelOption, env: NodeJS.ProcessEnv = process.env): string[] {
+  const files = walkGguf(modelCacheDir(model, env));
+  const root = modelCacheRoot(env);
+  const prefix = model.repo.replace(/\//g, "_") + "_";
+  try {
+    for (const name of fs.readdirSync(root)) {
+      if (name.startsWith(prefix) && name.endsWith(".gguf")) files.push(path.join(root, name));
+    }
+  } catch { /* cache may not exist */ }
+  return [...new Set(files)].sort();
+}
+
+export function managedModelSize(model: ModelOption, env: NodeJS.ProcessEnv = process.env): number {
+  return managedModelFiles(model, env).reduce((total, file) => {
+    try { return total + fs.statSync(file).size; } catch { return total; }
+  }, 0);
+}
+
+export function removeManagedModel(model: ModelOption, env: NodeJS.ProcessEnv = process.env): number {
+  const files = managedModelFiles(model, env);
+  let removed = 0;
+  for (const file of files) {
+    try {
+      removed += fs.statSync(file).size;
+      fs.rmSync(file);
+    } catch { /* already absent */ }
+  }
+  try { fs.rmSync(modelCacheDir(model, env), { recursive: true }); } catch { /* already absent */ }
+  return removed;
+}
+
 export interface PullOptions {
   withMmproj?: boolean;
   env?: NodeJS.ProcessEnv;
@@ -83,17 +114,27 @@ export async function pullModel(model: ModelOption, opts: PullOptions = {}): Pro
   const args = ["download", model.repo, "--local-dir", dir, "--include", model.include];
   if (opts.withMmproj && model.mmproj) args.push("--include", model.mmproj);
   log(`downloading ${model.alias} from ${model.repo} (license: ${model.license})`);
-  await runInherit(cli, args);
+  await runLogged(cli, args, log);
 
   const resolved = modelPath(model, env);
   if (!resolved) throw new Error(`download finished but no GGUF matched ${model.include} under ${dir}`);
   return resolved;
 }
 
-function runInherit(cmd: string, args: string[]): Promise<void> {
+function runLogged(cmd: string, args: string[], log: (text: string) => void): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: ["ignore", "inherit", "inherit"] });
+    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => emitLines(chunk, log));
+    child.stderr?.on("data", (chunk: string) => emitLines(chunk, log));
     child.on("error", reject);
     child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
   });
+}
+
+function emitLines(chunk: string, log: (text: string) => void): void {
+  for (const line of chunk.split(/\r?\n/)) {
+    if (line.trim()) log(line);
+  }
 }

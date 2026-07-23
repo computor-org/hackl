@@ -313,9 +313,6 @@ function renderEngineStatus(status: EngineStatus): void {
   } else {
     node.textContent = `running (external, adopted): ${status.endpoint ?? ""}`;
   }
-  (byId<HTMLButtonElement>("engine-start")).disabled = status.state !== "stopped";
-  (byId<HTMLButtonElement>("engine-stop")).disabled = status.state !== "running-managed";
-  (byId<HTMLButtonElement>("engine-restart")).disabled = status.state === "running-external";
 }
 
 function renderEngineModels(models: ModelEntry[]): void {
@@ -346,18 +343,9 @@ function setupEnginePanel(): void {
       send({ type: "engine", action: "status" });
     }
   });
-  const selectedModel = (): string | undefined => byId<HTMLSelectElement>("engine-model").value || undefined;
-  byId("engine-start").addEventListener("click", () => send({ type: "engine", action: "up", alias: selectedModel() }));
-  byId("engine-stop").addEventListener("click", () => send({ type: "engine", action: "down" }));
-  byId("engine-restart").addEventListener("click", () => send({ type: "engine", action: "restart", alias: selectedModel() }));
-  byId("engine-pull").addEventListener("click", () => { const a = selectedModel(); if (a) send({ type: "engine", action: "pull", alias: a }); });
-
-  const setKnob = (key: string, value: string): void => send({ type: "engineSet", key, value });
-  byId("knob-ctx").addEventListener("change", (e) => setKnob("ctx", (e.target as HTMLInputElement).value));
-  byId("knob-moe").addEventListener("change", (e) => setKnob("n-cpu-moe", (e.target as HTMLInputElement).value));
-  byId("knob-mtp").addEventListener("change", (e) => setKnob("mtp", (e.target as HTMLSelectElement).value));
-  byId("knob-mmproj").addEventListener("change", (e) => setKnob("mmproj", (e.target as HTMLSelectElement).value));
-  byId("knob-host").addEventListener("change", (e) => setKnob("host", (e.target as HTMLSelectElement).value));
+  byId("engine-model").addEventListener("change", (event) => {
+    send({ type: "engineSet", key: "model", value: (event.target as HTMLSelectElement).value });
+  });
 }
 
 setupEnginePanel();

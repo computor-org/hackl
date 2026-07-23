@@ -6,9 +6,6 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {
-    "hackl-serve": "dist/cli.js"
-  },
   "exports": {
     ".": {
       "source": "./src/index.ts",
@@ -17,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b && node esbuild.mjs",
+    "build": "tsc -b",
     "compile": "tsc -b",
     "test": "tsc -b && node --test tests/*.test.cjs"
   },

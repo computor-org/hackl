@@ -41,8 +41,8 @@ Hackl is a local-first AI coding agent with a shared core and several frontends:
 
 - `@hackl/core`: agent loop, tools, backends, MCP client, and session.
 - `@hackl/cli` (`hackl`): terminal one-shot, REPL, and NDJSON.
-- `@hackl/server` (`hackl-serve`) + `@hackl/webui`: a localhost server and a
-  shared browser UI.
+- `@hackl/server` + `@hackl/webui`: the internal localhost server and shared
+  browser UI used by `hackl serve` and desktop.
 - `@hackl/desktop`: an Electron shell around the server and the shared UI.
 - VS Code extension: in-editor chat, Git-anchored annotations, inline autocomplete.
 
@@ -52,9 +52,12 @@ API key (e.g. OpenRouter), and the Codex app-server. MCP tools work across the
 frontends. Scope is open; weigh new directions on their merits.
 
 Managed local engine: `@hackl/engine` (in core) probes hardware, recommends a
-model, installs/adopts and supervises llama.cpp, and exposes start/stop/model
-control to the CLI (`hackl up/down/status/pull/model/doctor`, REPL slash
-commands), VS Code (`Hackl: Engine` commands), and the web/desktop Engine panel.
+model, installs/adopts and supervises llama.cpp. `hackl serve [model]` is the
+explicit foreground owner; ordinary CLI, VS Code, and desktop clients share one
+lease-based automatic session that exits after the last client. The first
+starter owns the model and launch state. No installed service or tray process
+is used. VS Code's global `hackl.engine.enabled` setting persists independently
+of autocomplete and never stops a manual or external server.
 It binds `127.0.0.1` by default; the managed llama.cpp binary is a pinned,
 sha256-verified download (never at npm install). Defaults derive from the
 slopcode-infra launch profile; the public model catalog is a curated subset.

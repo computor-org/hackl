@@ -6,6 +6,10 @@
   "license": "MIT",
   "private": true,
   "main": "build/main.js",
+  "dependencies": {
+    "@hackl/core": "*",
+    "@hackl/server": "*"
+  },
   "scripts": {
     "bundle": "node esbuild.mjs",
     "dist": "node esbuild.mjs && electron-builder --publish never"

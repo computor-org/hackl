@@ -1,10 +1,14 @@
 import type { PromptMode } from "@hackl/core";
-import { ENGINE_COMMANDS, type EngineCommand } from "./engineCli";
-
 export interface CliArgs {
-  command?: "review" | EngineCommand;
+  command?: "review" | "serve" | "models";
   engineArg?: string;
+  modelsRemove?: string;
   allowRemote: boolean;
+  host?: string;
+  port?: number;
+  token?: string;
+  open: boolean;
+  allowYolo: boolean;
   prompt?: string;
   mode: PromptMode;
   model?: string;
@@ -47,6 +51,8 @@ export function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     mode: "agent",
     allowRemote: false,
+    open: false,
+    allowYolo: false,
     json: false,
     yes: false,
     noColor: false,
@@ -94,6 +100,19 @@ export function parseArgs(argv: string[]): CliArgs {
       case "--resume": args.resume = true; break;
       case "--codex": args.codex = true; break;
       case "--allow-remote": args.allowRemote = true; break;
+      case "--open": args.open = true; break;
+      case "--no-open": args.open = false; break;
+      case "--allow-yolo": args.allowYolo = true; break;
+      case "--host": args.host = takeValue(); break;
+      case "--port": {
+        const value = Number(takeValue());
+        if (!Number.isInteger(value) || value < 0 || value > 65535) {
+          throw new ArgError("--port requires a number from 0 to 65535");
+        }
+        args.port = value;
+        break;
+      }
+      case "--token": args.token = takeValue(); break;
       case "--mode": {
         const value = takeValue();
         if (!MODES.has(value)) throw new ArgError(`invalid --mode '${value}' (ask|edit|work|agent|yolo)`);
@@ -126,16 +145,38 @@ export function parseArgs(argv: string[]): CliArgs {
     positional.shift();
     const joined = positional.join(" ").trim();
     if (joined) args.prompt = joined;
+    rejectServeOptions(args);
     return args;
   }
-  if (positional[0] && ENGINE_COMMANDS.has(positional[0])) {
-    args.command = positional[0] as EngineCommand;
+  if (positional[0] === "serve") {
+    args.command = "serve";
     positional.shift();
-    const joined = positional.join(" ").trim();
-    if (joined) args.engineArg = joined;
+    if (positional.length > 1) throw new ArgError("usage: hackl serve [model]");
+    args.engineArg = positional[0];
+    return args;
+  }
+  if (positional[0] === "models") {
+    args.command = "models";
+    const modelArgs = positional.slice(1);
+    if (modelArgs.length === 0) {
+      rejectServeOptions(args);
+      return args;
+    }
+    if (modelArgs[0] !== "remove" || modelArgs.length !== 2) {
+      throw new ArgError("usage: hackl models [remove <model>]");
+    }
+    args.modelsRemove = modelArgs[1];
+    rejectServeOptions(args);
     return args;
   }
   const joined = positional.join(" ").trim();
   if (joined) args.prompt = joined;
+  rejectServeOptions(args);
   return args;
+}
+
+function rejectServeOptions(args: CliArgs): void {
+  if (args.allowRemote || args.open || args.allowYolo || args.host || args.port !== undefined || args.token) {
+    throw new ArgError("--open, --host, --port, --token, --allow-yolo, and --allow-remote require `hackl serve`");
+  }
 }

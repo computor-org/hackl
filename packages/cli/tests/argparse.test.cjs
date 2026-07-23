@@ -54,16 +54,21 @@ test("collects repeatable --mcp and boolean flags", () => {
   assert.equal(a.staged, true);
 });
 
-test("recognizes engine subcommands and their argument", () => {
-  assert.equal(parseArgs(["doctor"]).command, "doctor");
-  assert.equal(parseArgs(["status"]).command, "status");
-  const up = parseArgs(["up", "--allow-remote"]);
-  assert.equal(up.command, "up");
-  assert.equal(up.allowRemote, true);
-  const pull = parseArgs(["pull", "qwen3.5-9b-q4"]);
-  assert.equal(pull.command, "pull");
-  assert.equal(pull.engineArg, "qwen3.5-9b-q4");
-  // a normal prompt is not an engine command
+test("recognizes the minimal local-engine commands", () => {
+  const serve = parseArgs(["serve", "qwen3.5-9b-q4", "--open", "--port", "9000"]);
+  assert.equal(serve.command, "serve");
+  assert.equal(serve.engineArg, "qwen3.5-9b-q4");
+  assert.equal(serve.open, true);
+  assert.equal(serve.port, 9000);
+  assert.equal(parseArgs(["models"]).command, "models");
+  const remove = parseArgs(["models", "remove", "qwen3.5-9b-q4", "--yes"]);
+  assert.equal(remove.modelsRemove, "qwen3.5-9b-q4");
+  assert.equal(remove.yes, true);
+  assert.throws(() => parseArgs(["serve", "one", "two"]), ArgError);
+  assert.throws(() => parseArgs(["models", "pull", "one"]), ArgError);
+  assert.throws(() => parseArgs(["--open", "explain", "this"]), ArgError);
+  // Removed lifecycle words are ordinary prompt text, not hidden aliases.
+  assert.equal(parseArgs(["down"]).prompt, "down");
   assert.equal(parseArgs(["explain", "this"]).command, undefined);
 });
 

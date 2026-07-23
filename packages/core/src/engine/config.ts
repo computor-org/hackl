@@ -41,8 +41,6 @@ export interface EngineConfig {
   model?: string;
   host: string;
   port: number;
-  autostart: boolean;
-  autostopIdleMinutes: number;
   mmproj: TriState;
   mtp: TriState;
   overrides: Partial<Knobs>;
@@ -52,8 +50,6 @@ export interface EngineConfig {
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   host: "127.0.0.1",
   port: 8080,
-  autostart: false,
-  autostopIdleMinutes: 0,
   mmproj: "auto",
   mtp: "auto",
   overrides: {},
@@ -125,9 +121,7 @@ export function applyEngineSet(cfg: EngineConfig, key: string, value: string): s
     case "kv": cfg.overrides.cacheTypeK = value; cfg.overrides.cacheTypeV = value; return `kv = ${value}`;
     case "mtp": cfg.mtp = tri(value); return `mtp = ${cfg.mtp}`;
     case "mmproj": cfg.mmproj = tri(value); return `mmproj = ${cfg.mmproj}`;
-    case "autostart": cfg.autostart = value === "on" || value === "true"; return `autostart = ${cfg.autostart}`;
-    case "autostop": cfg.autostopIdleMinutes = Number(value); return `autostopIdleMinutes = ${cfg.autostopIdleMinutes}`;
-    default: throw new Error(`unknown key: ${key} (model, host, port, ctx, ngl, n-cpu-moe, threads, kv, mtp, mmproj, autostart, autostop)`);
+    default: throw new Error(`unknown key: ${key} (model, host, port, ctx, ngl, n-cpu-moe, threads, kv, mtp, mmproj)`);
   }
 }
 

@@ -1,121 +1,175 @@
 import * as vscode from "vscode";
-import { EngineManager, type EngineStatus } from "@hackl/core";
+import {
+  EngineManager,
+  EngineSessionLease,
+  queryEngineSession,
+} from "@hackl/core";
+import { readHacklConfig } from "./config";
+import { engineStatusDisplay } from "./engineStatus";
 
-// VS Code surface for the managed/adopted local llama.cpp engine: a status-bar
-// item plus commands that drive the shared core EngineManager from the extension
-// host. Editor-native (QuickPick + notifications + an output channel) rather than
-// a webview; the rich knob panel lives in the shared web UI.
-let engine: EngineManager | undefined;
-let statusItem: vscode.StatusBarItem | undefined;
-let output: vscode.OutputChannel | undefined;
+const ENABLED_SETTING = "engine.enabled";
+let controller: EngineController | undefined;
 
 export function registerEngine(context: vscode.ExtensionContext): void {
-  engine = new EngineManager();
-  output = vscode.window.createOutputChannel("Hackl Engine");
-  statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 80);
-  statusItem.command = "hackl.engineMenu";
-  context.subscriptions.push(statusItem, output);
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("hackl.engineMenu", engineMenu),
-    vscode.commands.registerCommand("hackl.engineStart", () => runWithProgress("Starting local engine", (log) => engine!.start({ allowDownload: true, log }))),
-    vscode.commands.registerCommand("hackl.engineRestart", () => runWithProgress("Restarting local engine", (log) => engine!.restart({ allowDownload: true, log }))),
-    vscode.commands.registerCommand("hackl.engineStop", async () => { engine!.stop(); await refresh(); vscode.window.setStatusBarMessage("Hackl: engine stopped", 3000); }),
-    vscode.commands.registerCommand("hackl.engineStatus", async () => vscode.window.showInformationMessage(`Hackl engine: ${describe(await engine!.status())}`)),
-    vscode.commands.registerCommand("hackl.engineDoctor", engineDoctor),
-    vscode.commands.registerCommand("hackl.selectModel", selectModel),
-    vscode.commands.registerCommand("hackl.pullModel", pullModel),
-  );
-
-  void refresh();
+  controller = new EngineController(context);
+  controller.register();
 }
 
-async function refresh(): Promise<void> {
-  if (!engine || !statusItem) return;
-  try {
-    const s = await engine.status();
-    statusItem.text =
-      s.state === "stopped" ? "$(server) Hackl: off"
-        : s.state === "running-managed" ? `$(server-process) Hackl: ${shortModel(s)}`
-          : "$(plug) Hackl: external";
-    statusItem.tooltip = `${describe(s)}\nClick for engine actions`;
-    statusItem.show();
-  } catch {
-    statusItem.hide();
+export async function deactivateEngine(): Promise<void> {
+  await controller?.dispose();
+  controller = undefined;
+}
+
+export async function ensureEngineReady(): Promise<void> {
+  await controller?.ensure();
+}
+
+class EngineController {
+  private readonly engine = new EngineManager();
+  private readonly status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 80);
+  private readonly output = vscode.window.createOutputChannel("Hackl Engine");
+  private lease?: EngineSessionLease;
+  private starting?: Promise<void>;
+
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.status.command = "hackl.toggleEngine";
   }
-}
 
-async function engineMenu(): Promise<void> {
-  const status = await engine!.status();
-  const pick = await vscode.window.showQuickPick(
-    [
-      { label: "$(play) Start", command: "hackl.engineStart" },
-      { label: "$(debug-stop) Stop", command: "hackl.engineStop" },
-      { label: "$(refresh) Restart", command: "hackl.engineRestart" },
-      { label: "$(list-selection) Select model", command: "hackl.selectModel" },
-      { label: "$(cloud-download) Download model", command: "hackl.pullModel" },
-      { label: "$(pulse) Doctor", command: "hackl.engineDoctor" },
-    ],
-    { title: `Hackl engine - ${describe(status)}`, placeHolder: "Engine action" },
-  );
-  if (pick) await vscode.commands.executeCommand(pick.command);
-}
-
-async function selectModel(): Promise<void> {
-  const items = engine!.listModels().map((m) => ({
-    label: `${m.present ? "$(check) " : "$(cloud) "}${m.alias}`,
-    description: `~${m.approxSizeGB} GiB${m.present ? "" : " (download)"}`,
-    detail: m.note,
-    alias: m.alias,
-  }));
-  const pick = await vscode.window.showQuickPick(items, { title: "Select local model", placeHolder: "Model to use" });
-  if (!pick) return;
-  engine!.setConfig((c) => { c.model = pick.alias; });
-  vscode.window.setStatusBarMessage(`Hackl: model set to ${pick.alias}`, 3000);
-  const status = await engine!.status();
-  if (status.state === "running-managed") {
-    await runWithProgress(`Switching to ${pick.alias}`, (log) => engine!.restart({ alias: pick.alias, allowDownload: true, log }));
+  register(): void {
+    this.context.subscriptions.push(
+      this.status,
+      this.output,
+      vscode.commands.registerCommand("hackl.toggleEngine", () => this.toggle()),
+      vscode.commands.registerCommand("hackl.engineStatus", () => this.showStatus()),
+      vscode.commands.registerCommand("hackl.selectModel", () => this.selectModel()),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("hackl.engine.enabled")
+          || event.affectsConfiguration("hackl.endpoint")) {
+          void this.reconcile();
+        }
+      }),
+    );
+    this.status.show();
+    void this.reconcile();
   }
-}
 
-async function pullModel(): Promise<void> {
-  const items = engine!.listModels().filter((m) => !m.present).map((m) => ({ label: m.alias, description: `~${m.approxSizeGB} GiB`, detail: m.note, alias: m.alias }));
-  if (items.length === 0) { vscode.window.showInformationMessage("Hackl: all catalog models are already downloaded."); return; }
-  const pick = await vscode.window.showQuickPick(items, { title: "Download a model", placeHolder: "Model to download" });
-  if (pick) await runWithProgress(`Downloading ${pick.alias}`, (log) => engine!.pull(pick.alias, log));
-}
+  async dispose(): Promise<void> {
+    await this.lease?.release();
+    this.lease = undefined;
+  }
 
-async function engineDoctor(): Promise<void> {
-  const report = await engine!.doctor();
-  const p = report.probe;
-  output!.clear();
-  output!.appendLine(`machine:     ${p.platform}/${p.arch}, ${p.cpuCount} cores, ${p.totalRamGB} GiB RAM`);
-  output!.appendLine(`accelerator: ${p.gpuName ?? p.accelerator}${p.vramGB ? ` (${p.vramGB} GiB)` : ""}`);
-  output!.appendLine(`engine:      ${report.serverInstalled ? `llama.cpp present (${report.serverSource})` : "not installed (Start will fetch a pinned build)"}`);
-  output!.appendLine(`server:      ${describe(report.status)}`);
-  output!.appendLine(`recommended: ${report.recommendation.primary.alias} (${report.recommendation.budgetGB} GiB budget)`);
-  output!.appendLine(`             ${report.recommendation.reason}`);
-  for (const n of report.notes) output!.appendLine(`note: ${n}`);
-  output!.show(true);
-}
+  async ensure(): Promise<void> {
+    await this.reconcile();
+  }
 
-async function runWithProgress(title: string, fn: (log: (s: string) => void) => Promise<unknown>): Promise<void> {
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, async (progress) => {
-    try {
-      await fn((line) => { output?.appendLine(line); progress.report({ message: line.slice(0, 80) }); });
-      await refresh();
-    } catch (error) {
-      vscode.window.showErrorMessage(`Hackl engine: ${error instanceof Error ? error.message : String(error)}`);
+  private async toggle(): Promise<void> {
+    const config = vscode.workspace.getConfiguration("hackl");
+    const enabled = config.get<boolean>(ENABLED_SETTING, true);
+    await config.update(ENABLED_SETTING, !enabled, vscode.ConfigurationTarget.Global);
+  }
+
+  private async reconcile(): Promise<void> {
+    if (!this.shouldManage()) {
+      await this.dispose();
+      await this.refresh();
+      return;
     }
-  });
+    if (!this.lease && !this.starting) {
+      this.starting = this.acquire().finally(() => { this.starting = undefined; });
+      await this.starting;
+    }
+    await this.refresh();
+  }
+
+  private async acquire(): Promise<void> {
+    this.setStarting();
+    try {
+      const acquired = await EngineSessionLease.acquire({
+        kind: "vscode",
+        hostCommand: {
+          command: process.execPath,
+          args: [this.context.asAbsolutePath("dist/engine-host.js")],
+          options: {
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+          },
+        },
+        log: (text) => this.output.appendLine(text),
+      });
+      if (!this.shouldManage()) {
+        await acquired.release();
+        return;
+      }
+      this.lease = acquired;
+    } catch (error) {
+      this.output.appendLine(`error: ${message(error)}`);
+      vscode.window.showErrorMessage(`Hackl local server: ${message(error)}`);
+    }
+  }
+
+  private shouldManage(): boolean {
+    if (process.env.HACKL_TEST_DISABLE_ENGINE === "1") return false;
+    const enabled = vscode.workspace.getConfiguration("hackl").get<boolean>(ENABLED_SETTING, true);
+    return enabled && !readHacklConfig().endpointConfigured;
+  }
+
+  private async refresh(): Promise<void> {
+    const enabled = vscode.workspace.getConfiguration("hackl").get<boolean>(ENABLED_SETTING, true);
+    const external = readHacklConfig().endpointConfigured;
+    let session = external ? undefined : await queryEngineSession();
+    if (!session && enabled && !external) {
+      const detected = await this.engine.status();
+      if (detected.state === "running-external") {
+        session = {
+          state: "running-external",
+          hostMode: "leased",
+          endpoint: detected.endpoint,
+          model: detected.model,
+          leases: 0,
+        };
+      }
+    }
+    const display = engineStatusDisplay(enabled, external, session);
+    this.status.text = display.text;
+    this.status.tooltip = display.tooltip;
+  }
+
+  private setStarting(): void {
+    this.status.text = "$(loading~spin) Hackl server";
+    this.status.tooltip = "Starting the managed llama.cpp session… Click to disable.";
+  }
+
+  private async showStatus(): Promise<void> {
+    const status = await queryEngineSession();
+    if (!status) {
+      vscode.window.showInformationMessage("Hackl local server: not running.");
+      return;
+    }
+    vscode.window.showInformationMessage(
+      `Hackl local server: ${status.alias ?? status.model ?? status.state} · owner ${status.owner ?? "external"} · ${status.leases} client(s).`,
+    );
+  }
+
+  private async selectModel(): Promise<void> {
+    const current = this.engine.config().model;
+    const items = this.engine.listModels().map((model) => ({
+      label: `${model.present ? "$(check) " : "$(cloud) "}${model.alias}`,
+      description: `~${model.approxSizeGB} GiB${model.alias === current ? " · preferred" : ""}`,
+      detail: model.note,
+      alias: model.alias,
+    }));
+    const pick = await vscode.window.showQuickPick(items, {
+      title: "Select local model for the next Hackl server",
+      placeHolder: "The active owner is never restarted",
+    });
+    if (!pick) return;
+    this.engine.setConfig((config) => { config.model = pick.alias; });
+    const active = await queryEngineSession();
+    const suffix = active ? " It applies after the current owner exits." : "";
+    vscode.window.showInformationMessage(`Hackl local model set to ${pick.alias}.${suffix}`);
+    if (!active && this.shouldManage()) await this.reconcile();
+  }
 }
 
-function describe(s: EngineStatus): string {
-  if (s.state === "stopped") return "stopped";
-  const tag = s.state === "running-managed" ? "managed" : "external (adopted, read-only)";
-  return `running ${tag}: ${s.endpoint ?? ""}${s.model ? ` (${s.model})` : ""}`;
-}
-
-function shortModel(s: EngineStatus): string {
-  return (s.model ?? "on").split("/").pop() ?? "on";
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

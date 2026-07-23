@@ -37,9 +37,7 @@ export interface ReadyMessage {
 // Managed-engine control (loopback + token channel only).
 export interface EngineCommandMessage {
   type: "engine";
-  action: "status" | "doctor" | "list" | "up" | "down" | "restart" | "pull";
-  alias?: string;
-  allowRemote?: boolean;
+  action: "status" | "list";
 }
 
 export interface EngineSetMessage {

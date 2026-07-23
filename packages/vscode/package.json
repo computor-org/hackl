@@ -164,43 +164,18 @@
         "category": "Hackl"
       },
       {
-        "command": "hackl.engineMenu",
-        "title": "Engine: Actions",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.engineStart",
-        "title": "Engine: Start Local Model",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.engineStop",
-        "title": "Engine: Stop Local Model",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.engineRestart",
-        "title": "Engine: Restart Local Model",
-        "category": "Hackl"
-      },
-      {
         "command": "hackl.engineStatus",
-        "title": "Engine: Status",
-        "category": "Hackl"
-      },
-      {
-        "command": "hackl.engineDoctor",
-        "title": "Engine: Doctor (hardware + recommendation)",
+        "title": "Local Server: Status",
         "category": "Hackl"
       },
       {
         "command": "hackl.selectModel",
-        "title": "Engine: Select Model",
+        "title": "Local Server: Select Model for Next Start",
         "category": "Hackl"
       },
       {
-        "command": "hackl.pullModel",
-        "title": "Engine: Download Model",
+        "command": "hackl.toggleEngine",
+        "title": "Toggle Managed Local Server",
         "category": "Hackl"
       },
       {
@@ -350,6 +325,12 @@
           "default": "",
           "order": 20,
           "markdownDescription": "Primary model ID for the endpoint above. You can edit it here or select it from Hackl's model dropdown. Leave empty to use the first model reported by the endpoint. Autocomplete reuses this model unless an advanced override is set below."
+        },
+        "hackl.engine.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 25,
+          "markdownDescription": "Let this VS Code window participate in Hackl's temporary managed llama.cpp session. This setting is global and persists across restarts. Turning it off releases VS Code's lease; manual `hackl serve`, other clients, and configured external endpoints are never stopped."
         }
         }
       },
@@ -531,12 +512,12 @@
           {
             "id": "hackl.walkthrough.pickServer",
             "title": "Start a model",
-            "description": "Fastest local setup: let Hackl choose, download, and start llama.cpp plus a model. Or use a server you already have.\n\n[Start recommended local model](command:hackl.engineStart) · [LM Studio](command:hackl.openSetupDoc?%5B%22lmstudio%22%5D) · [llama.cpp](command:hackl.openSetupDoc?%5B%22llamacpp%22%5D) · [Ollama](command:hackl.openSetupDoc?%5B%22ollama%22%5D)\n\nUsing Codex instead? [Log in](command:hackl.codexLogin), then [select it](command:hackl.selectBackend).",
+            "description": "Hackl starts a temporary managed llama.cpp session while clients are using it. The status-bar server item persistently enables or disables that behavior. You can also use a server you already have.\n\n[Enable managed local model](command:hackl.toggleEngine) · [LM Studio](command:hackl.openSetupDoc?%5B%22lmstudio%22%5D) · [llama.cpp](command:hackl.openSetupDoc?%5B%22llamacpp%22%5D) · [Ollama](command:hackl.openSetupDoc?%5B%22ollama%22%5D)\n\nUsing Codex instead? [Log in](command:hackl.codexLogin), then [select it](command:hackl.selectBackend).",
             "media": {
               "markdown": "media/setup-tutorial.md"
             },
             "completionEvents": [
-              "onCommand:hackl.engineStart",
+              "onCommand:hackl.toggleEngine",
               "onCommand:hackl.openSetupDoc"
             ]
           },

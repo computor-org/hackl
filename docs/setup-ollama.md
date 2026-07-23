@@ -78,7 +78,7 @@ llama.cpp server for autocomplete (see the llama.cpp guide's Advanced section):
 
 Hackl detects and adopts a running Ollama server read-only on its default port:
 it uses the server but never starts, stops, or manages Ollama. The hackl-managed
-local engine (`hackl up`, model recommendation, knobs) targets llama.cpp only;
+local engine (`hackl serve`, model recommendation, knobs) targets llama.cpp only;
 see [`setup-llamacpp.md`](setup-llamacpp.md).
 
 ## Sources

@@ -25,13 +25,15 @@ Fixes land in the latest release; older releases are not patched.
   `~/.config/hackl/config.json`, not in a repo-local file.
 - **No telemetry.** The only outbound traffic is the configured model endpoint,
   read-only local-server probes, the MCP servers you configure, and (only when you
-  run `hackl up`) the pinned llama.cpp release and the model you choose.
-- **Managed engine.** `hackl up` binds llama.cpp to `127.0.0.1`; `--allow-remote`
+  start a managed session) the pinned llama.cpp release and the model you choose.
+- **Managed engine.** `hackl serve` and automatic client sessions bind llama.cpp
+  to `127.0.0.1`; `--allow-remote`
   opts into `0.0.0.0` with a warning. The llama.cpp binary is a pinned,
   sha256-verified download (verified against an in-repo table; never fetched at
   `npm install`). Model weights are pulled from Hugging Face and carry their own
   licenses, surfaced on first download. An already-running server is adopted
-  read-only: hackl only stops or restarts an instance it started itself.
+  read-only. Managed automatic sessions stop after their last client lease;
+  foreground sessions stop on Ctrl+C.
   llama.cpp's own web UI is served unauthenticated on the loopback port; do not
   expose it via `0.0.0.0`.
 

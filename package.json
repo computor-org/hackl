@@ -23,6 +23,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "compile": "tsc -b",
     "typecheck": "tsc -b",
     "test": "npm run test --workspaces --if-present",
     "test:coverage": "npm run test -w @hackl/core && npm run test -w @hackl/cli && npm run test -w @hackl/server && npm run test -w @hackl/webui && npm run test:coverage -w hackl",
