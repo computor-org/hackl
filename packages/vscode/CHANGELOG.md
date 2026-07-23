@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 pre-release
+
+- Offer to reload the VS Code window when an update leaves the managed-server
+  setting temporarily unregistered.
+
 ## 0.3.0 pre-release
 
 - Added a managed local llama.cpp setup with hardware-aware model selection.
