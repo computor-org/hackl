@@ -22,6 +22,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Validate release channel
+        if: github.event_name == 'release'
+        shell: bash
+        run: node scripts/release-channel.mjs check-github "$GITHUB_REF_NAME" "${{ github.event.release.prerelease }}"
       - run: npm install -g npm@11
       - run: npm ci
       - run: npm run build -w @hackl/core -w @hackl/protocol -w @hackl/server -w @hackl/webui

@@ -1,6 +1,6 @@
 {
   "name": "hackl-monorepo",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Hackl: local-first AI coding agent. Shared core, VS Code extension, and CLI.",
   "license": "MIT",
   "private": true,
@@ -25,11 +25,13 @@
     "build": "npm run build --workspaces --if-present",
     "compile": "tsc -b",
     "typecheck": "tsc -b",
-    "test": "npm run test --workspaces --if-present",
-    "test:coverage": "npm run test -w @hackl/core && npm run test -w @hackl/cli && npm run test -w @hackl/server && npm run test -w @hackl/webui && npm run test:coverage -w hackl",
+    "test": "npm run test --workspaces --if-present && npm run test:release",
+    "test:release": "node --test tests/release-channel.test.mjs",
+    "test:coverage": "npm run test:release && npm run test -w @hackl/core && npm run test -w @hackl/cli && npm run test -w @hackl/server && npm run test -w @hackl/webui && npm run test:coverage -w hackl",
     "test:ui": "npm run test:ui -w hackl",
     "test:extension": "npm run test:extension -w hackl",
     "package:vsix": "npm run package:vsix -w hackl && cp packages/vscode/*.vsix .",
+    "publish:marketplace": "node scripts/vsce.mjs publish",
     "build:cli": "npm run build -w @hackl/cli"
   },
   "devDependencies": {

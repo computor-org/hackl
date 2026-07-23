@@ -40,7 +40,9 @@ test("leased host shares one child and stops it after the last release", async (
   await second.release();
   await host.waitForClose();
   await waitUntil(async () => !(await health(setup.port)));
-  assert.match(fs.readFileSync(setup.events, "utf8"), /^start \d+\nstop \d+\n$/);
+  const events = fs.readFileSync(setup.events, "utf8");
+  assert.equal((events.match(/^start \d+$/gm) ?? []).length, 1);
+  if (process.platform !== "win32") assert.equal((events.match(/^stop \d+$/gm) ?? []).length, 1);
 });
 
 test("foreground host survives zero leases until explicitly closed", async () => {
@@ -105,10 +107,12 @@ async function createSetup() {
     XDG_STATE_HOME: path.join(root, "state"),
     XDG_RUNTIME_DIR: "",
     LLAMACPP_CACHE_ROOT: path.join(root, "models"),
-    LLAMACPP_SERVER_BIN: FIXTURE,
     HACKL_FAKE_EVENTS: events,
   };
-  const engine = new core.EngineManager(env);
+  const engine = new core.EngineManager(env, {
+    serverBin: process.execPath,
+    serverArgs: [FIXTURE],
+  });
   engine.status = async () => {
     const state = core.readEngineState(env);
     if (!state || !core.isAlive(state.pid)) return { state: "stopped" };

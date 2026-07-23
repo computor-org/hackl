@@ -10,6 +10,23 @@ permissions:
   contents: read
 
 jobs:
+  engine-session:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm run build -w @hackl/core
+      - run: node --test packages/core/tests/engineSession.test.cjs
+
   build:
     runs-on: ubuntu-latest
     steps:

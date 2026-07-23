@@ -4,7 +4,7 @@
 
 <h1 align="center">Hackl</h1>
 
-<p align="center">Hack local-first.</p>
+<p align="center">Hack with local AI.</p>
 
 Hackl is a local-first AI coding assistant. It talks to a local OpenAI-compatible
 server (llama.cpp, LM Studio, Ollama) by default, with no forced sign-in and no
@@ -21,6 +21,21 @@ learns each step under a tool budget instead of getting a finished solution.
 That focus does not limit the tool. Hackl is also a general-purpose local AI
 coding harness: the same shared core drives the CLI, the VS Code extension, and
 MCP tools for everyday work outside any course.
+
+## Install
+
+- **VS Code:** install
+  [computor-org.hackl](https://marketplace.visualstudio.com/items?itemName=computor-org.hackl).
+- **Desktop:** download the build for your platform from
+  [GitHub Releases](https://github.com/computor-org/hackl/releases).
+- **CLI:** download `hackl-<version>.js` from the same release. It requires
+  Node.js 20 or newer. Run it with `node hackl-<version>.js`; on macOS or Linux
+  you can rename it to `hackl`, mark it executable, and put it on `PATH`.
+
+Leave the endpoint empty to use Hackl's managed local llama.cpp session. See
+the [llama.cpp setup](docs/setup-llamacpp.md) or connect
+[LM Studio](docs/setup-lmstudio.md), [Ollama](docs/setup-ollama.md), or
+[OpenRouter](docs/setup-openrouter.md).
 
 ## Responsibility
 
@@ -102,7 +117,6 @@ last clean client leaves or about ten seconds after crashed clients stop
 heartbeating. The first starter owns the model and launch settings. There is no
 installed service, login task, or tray process.
 
-An existing OpenAI-compatible server is adopted read-only and never stopped.
 The managed server binds `127.0.0.1` by default; `--allow-remote` opts into
 `0.0.0.0`. `hackl serve` prints both Hackl's UI and llama.cpp's own WebUI.
 

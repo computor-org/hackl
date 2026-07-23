@@ -1,6 +1,6 @@
 {
   "name": "@hackl/protocol",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Hackl client/server wire protocol shared by the server and web UI.",
   "license": "MIT",
   "private": true,
