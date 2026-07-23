@@ -5,6 +5,7 @@ import {
   queryEngineSession,
 } from "@hackl/core";
 import { readHacklConfig } from "./config";
+import { updateEngineEnabled } from "./engineSetting";
 import { engineStatusDisplay } from "./engineStatus";
 
 const ENABLED_SETTING = "engine.enabled";
@@ -65,7 +66,18 @@ class EngineController {
   private async toggle(): Promise<void> {
     const config = vscode.workspace.getConfiguration("hackl");
     const enabled = config.get<boolean>(ENABLED_SETTING, true);
-    await config.update(ENABLED_SETTING, !enabled, vscode.ConfigurationTarget.Global);
+    const result = await updateEngineEnabled(
+      enabled,
+      (next) => config.update(ENABLED_SETTING, next, vscode.ConfigurationTarget.Global),
+    );
+    if (result !== "reload-required") return;
+    const action = await vscode.window.showWarningMessage(
+      "Reload VS Code to finish updating Hackl.",
+      "Reload Window",
+    );
+    if (action === "Reload Window") {
+      await vscode.commands.executeCommand("workbench.action.reloadWindow");
+    }
   }
 
   private async reconcile(): Promise<void> {
