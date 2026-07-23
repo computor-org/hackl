@@ -60,16 +60,20 @@ model (`recommendModel`, which prefers the 35B-A3B MoE over the dense 27B and
 Qwen 9B over Gemma 12B at ~16 GB), resolves or downloads a pinned, sha256-verified
 llama.cpp binary, pulls a GGUF into the shared cache, and supervises the process.
 
-It binds `127.0.0.1` by default and composes the launch flags (context, n-cpu-moe,
-KV quant, flash-attn, sampler preset, selectable MTP and mmproj) from the probe.
-It detects an already-running server and adopts it read-only: only an instance
-hackl started (tracked in `~/.local/state/hackl/engine.json`) is stoppable;
-external servers are never killed. Durable settings live as an `engine` block in
+It binds `127.0.0.1` by default and composes the launch flags (context,
+n-cpu-moe, KV quant, flash-attn, sampler preset, MTP and mmproj) from the probe.
+A versioned per-user socket or Windows named-pipe coordinator atomically elects
+one owner. `hackl serve` hosts it in the foreground; CLI, VS Code, and desktop
+clients use heartbeating leases. An automatic host stops after its last lease,
+while a foreground host stops only on its terminal signal. Model and launch
+state never change under a live owner.
+
+An already-running server is adopted read-only and external servers are never
+killed. Durable settings live as an `engine` block in
 `~/.config/hackl/config.json` (overrides only; defaults recomputed each launch).
 The model cache (`~/.cache/llama.cpp`) and install dir (`~/.local/llama.cpp`)
 match the conventions of an existing manual/slopcode-infra install, so they
-interoperate. The same EngineManager is exposed to the web/desktop GUI over the
-loopback+token WebSocket and to VS Code via `Hackl: Engine` commands.
+interoperate. No OS service, login task, or system tray is installed.
 
 ## Context And Tools
 

@@ -9,39 +9,42 @@ source, OpenAI-compatible HTTP on a configurable port.
 hackl can install and run llama.cpp for you, sized to your machine:
 
 ```sh
-hackl doctor     # probe hardware, recommend a model, list what's installed
-hackl up         # fetch llama.cpp + the recommended model, start it on localhost
-hackl status     # running (managed) / adopted external / stopped
-hackl down       # stop the managed server
+hackl serve [model]          # foreground engine + Hackl and llama.cpp WebUIs
+hackl models                 # catalog, recommendation, installed and active state
+hackl models remove <model>  # remove a managed model file
 ```
 
-`hackl up` resolves a llama-server binary in this order: an existing install
+`hackl serve` resolves a llama-server binary in this order: an existing install
 (`LLAMACPP_HOME`, your PATH, `~/.local/llama.cpp`), a previous managed install,
 then a **pinned, sha256-verified** ggml-org prebuilt for your platform. It then
 downloads the chosen model into the shared cache (`~/.cache/llama.cpp`, the same
 layout the manual path and slopcode-infra use) and starts the server bound to
 `127.0.0.1`.
 
+The explicit command remains in its terminal and Ctrl+C stops it. Ordinary
+Hackl CLI, VS Code, and desktop clients instead share one temporary automatic
+session. Clean clients release it immediately; crashed clients expire after
+about ten seconds. The first starter owns the model and launch settings until
+that session ends. Hackl installs no service, startup task, or tray process.
+
 **Adoption.** If a llama.cpp (or other OpenAI-compatible) server is already
 listening on 8080/8081/1234, hackl uses it read-only and never stops or restarts
 it; only servers hackl started are managed. So a server you run by hand or via a
 service keeps working unchanged.
 
-**Model choice.** `hackl doctor` recommends the largest catalog model that fits
+**Model choice.** `hackl models` marks the largest catalog model that fits
 your memory, from a 1.5B coder up to the Qwen3.6-35B-A3B MoE. Two rules: the
 **35B-A3B MoE decodes faster than the dense 27B** (about 3B active params), so it
 is preferred when it fits; and at **~16 GB, Qwen 9B is preferred over Gemma 12B**
-(it fits better, ships FIM tokens, and is stronger at code). Switch with
-`hackl model <alias>` or `/model` in the REPL; download extras with
-`hackl pull <alias>`.
+(it fits better, ships FIM tokens, and is stronger at code). Pass an alias to
+`hackl serve`; a successful explicit choice becomes the next default. If an
+owner is already active, later clients must use its model.
 
 **Knobs.** Defaults come from the hardware probe (context, n-cpu-moe split, KV
 quant, threads, flash-attn). MTP speculative decode and the vision projector
-(mmproj) are selectable per model and RAM-aware: `/set mtp on|off|auto`,
-`/set mmproj on|off|auto`, `/set ctx <n>`, `/set n-cpu-moe <n>`, `/set kv q4_0`.
-`/set` with no argument prints the resolved config; `/reset` returns to hardware
-defaults. Config persists in `~/.config/hackl/config.json` (overrides only) and
-is shared by the CLI, the VS Code commands, and the web/desktop Engine panel.
+(mmproj) are model- and RAM-aware. Advanced overrides persist in the `engine`
+block of `~/.config/hackl/config.json`; they apply only when the next owner
+starts.
 
 The sections below cover the manual path if you prefer to run llama.cpp yourself;
 hackl adopts that server automatically.

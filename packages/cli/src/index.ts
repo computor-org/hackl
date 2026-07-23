@@ -3,17 +3,22 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as readline from "node:readline";
 import type { ConversationMessage, PromptMode } from "@hackl/core";
-import { EngineManager } from "@hackl/core";
+import { EngineSessionLease, runLeasedEngineHost } from "@hackl/core";
 import { parseArgs, ArgError, CliArgs } from "./argparse";
 import { loadCliConfig } from "./config";
 import { createApprover } from "./approval";
 import { createAgentContext, runTurn, AgentContext } from "./agent";
 import { Renderer, statusLine } from "./render";
-import { ENGINE_COMMANDS, runEngineCommand, handleEngineSlash, type EngineCommand } from "./engineCli";
+import { runModelsCommand } from "./engineCli";
+import { runServeCommand } from "./serve";
 
 const VERSION = "0.2.1";
 
 async function main(): Promise<void> {
+  if (process.argv[2] === "__engine-host") {
+    await runLeasedEngineHost();
+    return;
+  }
   let args: CliArgs;
   try {
     args = parseArgs(process.argv.slice(2));
@@ -34,14 +39,26 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Engine subcommands (hackl up/down/status/restart/pull/model/doctor) manage
-  // the local llama.cpp server and need no chat backend.
-  if (args.command && ENGINE_COMMANDS.has(args.command)) {
-    process.exit(await runEngineCommand(args.command as EngineCommand, { arg: args.engineArg, allowRemote: args.allowRemote }));
+  if (args.command === "serve") {
+    process.exit(await runServeCommand(args));
+  }
+  if (args.command === "models") {
+    process.exit(await runModelsCommand(args.modelsRemove, args.yes));
   }
 
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd();
   const config = loadCliConfig({ args, cwd });
+  const lease = !args.codex && !config.endpointConfigured
+    ? await EngineSessionLease.acquire({
+        kind: "cli",
+        hostCommand: {
+          command: process.execPath,
+          args: [__filename, "__engine-host"],
+          options: { env: process.env },
+        },
+        log: (text) => process.stderr.write(`${text}\n`),
+      })
+    : undefined;
 
   const piped = !process.stdin.isTTY;
   const stdinPrompt = piped && !args.prompt ? (await readStdin()).trim() : "";
@@ -63,6 +80,7 @@ async function main(): Promise<void> {
     ctx = await createAgentContext({ config, args, cwd, requestApproval: approver });
   } catch (error) {
     process.stderr.write(`hackl: ${(error as Error).message}\n`);
+    await lease?.release();
     rl?.close();
     process.exit(1);
     return;
@@ -76,6 +94,7 @@ async function main(): Promise<void> {
     }
   } finally {
     await ctx.mcp?.close();
+    await lease?.release();
     rl?.close();
   }
 }
@@ -116,13 +135,10 @@ async function runRepl(ctx: AgentContext, rl: readline.Interface, args: CliArgs,
   if (mode === "yolo") process.stdout.write(yoloWarning());
 
   const ask = (): Promise<string> => new Promise((resolve) => rl.question("> ", resolve));
-  const engine = new EngineManager();
-
   for (;;) {
     const line = (await ask()).trim();
     if (line === "") continue;
     if (line.startsWith("/")) {
-      if (await handleEngineSlash(line, engine)) continue;
       const done = handleSlash(line, ctx, color, { get: () => mode, set: (m) => { mode = m; }, history });
       if (done === "quit") break;
       continue;
@@ -210,14 +226,11 @@ Usage:
   hackl review [options] [note]   review staged/commit changes
 
 Local engine (managed llama.cpp, loopback-only):
-  hackl doctor                    probe hardware + recommend a model
-  hackl up [model]                start the engine (fetches llama.cpp + model)
-  hackl down                      stop the managed engine
-  hackl status                    engine status (managed / adopted external)
-  hackl restart [model]           restart the managed engine
-  hackl pull <model>              download a catalog model
-  hackl model [alias]             show or switch the default model
-  --allow-remote                  bind 0.0.0.0 (DANGER: reachable beyond localhost)
+  hackl serve [model]             foreground engine + Hackl and llama.cpp WebUIs
+  hackl models                    list recommended and installed models
+  hackl models remove <model>     remove a managed model (--yes for scripts)
+  serve options: --open, --host, --port, --token, --allow-yolo
+                 --allow-remote binds llama.cpp to 0.0.0.0 (DANGER)
 
 Options:
   --mode ask|edit|work|agent|yolo  tool permissions (default: agent)
@@ -247,14 +260,7 @@ Config:  ~/.config/hackl/config.json, ./.hackl/config.json, HACKL_* env, flags.
 
 const REPL_HELP = `commands:
   /mode ask|edit|work|agent|yolo  change tool permissions (yolo runs any command)
-  /doctor                     probe hardware + recommend a model
-  /up [model]  /down  /restart    manage the local llama.cpp engine
-  /engine  (/status)          engine status
-  /models  (/ls)              catalog (present/missing + size)
-  /pull <model>               download a model
-  /model [alias]              show or switch the local model
-  /set [key value]            show or change engine config (ctx, ngl, n-cpu-moe, kv, mtp, mmproj, host, ...)
-  /reset                      reset engine knobs to hardware defaults
+  /model                      show the model fixed for this session
   /mcp                        show MCP server status
   /clear                      clear conversation context
   /help                       this help

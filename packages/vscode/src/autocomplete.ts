@@ -4,6 +4,7 @@ import { resolveAutocompleteTarget } from "./autocompleteTarget";
 import { FimDetectionResult, FimSupport, detectFim } from "./fimDetect";
 import { requestFim } from "./fimClient";
 import { shortModelLabel } from "@hackl/core";
+import { ensureEngineReady } from "./enginePanel";
 
 const STATUS_PRIORITY = 50;
 const COMMAND_TOGGLE = "hackl.toggleAutocomplete";
@@ -158,6 +159,9 @@ class AutocompleteController {
 
   private async detectRuntime(): Promise<AutocompleteRuntime> {
     const cfg = readHacklConfig();
+    if (!cfg.endpointConfigured && !cfg.autocomplete.endpointConfigured) {
+      await ensureEngineReady();
+    }
     const target = await resolveAutocompleteTarget({
       chatEndpoint: cfg.endpoint,
       chatEndpointConfigured: cfg.endpointConfigured,

@@ -47,7 +47,7 @@ import { handleAnnotationReply, handleDeleteAnnotationThread, handleResolveAnnot
 import { readHacklConfig, hasUserConfigured } from "./config";
 import { resolveReviewTargets } from "./reviewTargets";
 import { registerAutocomplete } from "./autocomplete";
-import { registerEngine } from "./enginePanel";
+import { deactivateEngine, ensureEngineReady, registerEngine } from "./enginePanel";
 import { clearTrustedEndpoints, isEndpointTrusted, trustEndpoint } from "./endpointTrust";
 import { classifyHacklConfigurationChange } from "./configurationChange";
 
@@ -690,11 +690,12 @@ async function reportProbe(probes: ProbeResult[]): Promise<void> {
   await refreshStatus();
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
   statusBarItem = undefined;
   basketService = undefined;
   annotationController = undefined;
   void mcpManager?.close();
+  await deactivateEngine();
   mcpManager = undefined;
   mcpSignature = "";
   disposeDebugLog();
@@ -732,6 +733,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     }
     target = { endpoint: "codex", model };
   } else {
+    await ensureEngineReady();
     const preferredModel = cfg.model || (stored?.kind === "local" ? stored.model : "");
     target = await resolveChatTarget({
       endpoint: cfg.endpoint,

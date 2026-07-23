@@ -20,6 +20,17 @@ await esbuild.build({
   logLevel: "info",
 });
 
+await esbuild.build({
+  entryPoints: ["../vscode/src/engineHost.ts"],
+  outfile: "build/engine-host.js",
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node20",
+  conditions: ["source"],
+  logLevel: "info",
+});
+
 const webuiDist = "../webui/dist";
 if (!existsSync(webuiDist)) {
   throw new Error("Build @hackl/webui first: npm run build -w @hackl/webui");

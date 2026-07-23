@@ -53,3 +53,23 @@ export function createStaticHandler(
     });
   };
 }
+
+export function createStaticAssetHandler(
+  assets: Record<string, string>,
+  baseHeaders: Record<string, string> = {},
+): (req: IncomingMessage, res: ServerResponse) => void {
+  return (req, res) => {
+    const urlPath = decodeURIComponent((req.url ?? "/").split("?")[0]);
+    const name = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "");
+    const exact = assets[name];
+    const body = exact ?? assets["index.html"];
+    if (body === undefined) {
+      res.writeHead(404, baseHeaders);
+      res.end("not found");
+      return;
+    }
+    const ext = path.extname(exact === undefined ? "index.html" : name).toLowerCase();
+    res.writeHead(200, { ...baseHeaders, "content-type": CONTENT_TYPES[ext] ?? "application/octet-stream" });
+    res.end(body);
+  };
+}

@@ -47,9 +47,15 @@ export const STATE_FILES = {
   port: "engine.port",
   state: "engine.json",
   log: "engine.log",
-  activity: "engine.activity",
+  session: "engine.sock",
 } as const;
 
 export function stateFile(name: keyof typeof STATE_FILES, env: NodeJS.ProcessEnv = process.env): string {
   return path.join(stateDir(env), STATE_FILES[name]);
+}
+
+export function sessionEndpoint(env: NodeJS.ProcessEnv = process.env): string {
+  if (process.platform !== "win32") return stateFile("session", env);
+  const user = (env.USERNAME || env.USER || os.homedir()).replace(/[^a-z0-9_-]/gi, "_");
+  return `\\\\.\\pipe\\hackl-engine-${user}`;
 }

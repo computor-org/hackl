@@ -21,14 +21,14 @@ text here and in the copied file's header.
 
 ## Bundled runtime dependencies
 
-The CLI (`packages/cli/dist/index.js`), the GUI server (`packages/server/dist/cli.js`,
-bin `hackl-serve`), and the VS Code extension (`packages/vscode/dist/extension.js`)
-are esbuild bundles. esbuild inlines the `@modelcontextprotocol/sdk` client and
+The CLI (`packages/cli/dist/index.js`) and VS Code extension
+(`packages/vscode/dist/extension.js`, plus its engine host) are esbuild bundles.
+esbuild inlines the `@modelcontextprotocol/sdk` client and
 its reachable transitive dependencies into each single-file artifact, so the
 shipped binary contains the code below. The list is the set esbuild actually
 inlines after tree-shaking; the SDK's server-side dependencies (`express`,
 `hono`, `cors`, `jose`, and others) are not reachable from Hackl's client code
-and are not bundled. `ws` is bundled into the GUI server only.
+and are not bundled. `ws` is bundled into the CLI's embedded GUI server.
 
 | Package | Version | License | Copyright |
 | --- | --- | --- | --- |
@@ -67,7 +67,7 @@ the npm install for the other packages.
 
 ## Managed llama.cpp engine (downloaded on request, not bundled)
 
-`hackl up` can download a llama.cpp prebuilt release from `ggml-org/llama.cpp`
+`hackl serve` or an automatic client session can download a llama.cpp prebuilt release from `ggml-org/llama.cpp`
 (MIT) for the host platform, pinned by tag and verified against an in-repo
 sha256 table. The binary is cached under the user's home, not bundled into any
 hackl artifact, so it is not redistributed by hackl. Model weights (GGUF) are

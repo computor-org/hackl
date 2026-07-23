@@ -23,6 +23,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "compile": "tsc -b",
     "typecheck": "tsc -b",
     "test": "npm run test --workspaces --if-present",
     "test:coverage": "npm run test -w @hackl/core && npm run test -w @hackl/cli && npm run test -w @hackl/server && npm run test -w @hackl/webui && npm run test:coverage -w hackl",
@@ -38,5 +39,10 @@
   },
   "allowScripts": {
     "esbuild@0.24.2": true
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.11",
+    "body-parser": "2.3.0",
+    "fast-uri": "4.1.1"
   }
 }

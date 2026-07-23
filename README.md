@@ -52,19 +52,18 @@ This repository is an npm workspace.
 | --- | --- |
 | [`@hackl/core`](packages/core) | Frontend-agnostic agent loop, tools, backends, MCP client, and session. |
 | [`@hackl/protocol`](packages/protocol) | Client/server WebSocket wire types shared by the server and the web UI. |
-| [`@hackl/server`](packages/server) | `hackl-serve`: a localhost WebSocket server that runs the agent loop for the browser and desktop GUIs. |
+| [`@hackl/server`](packages/server) | Internal localhost WebSocket server used by `hackl serve` and desktop. |
 | [`@hackl/webui`](packages/webui) | The shared browser/desktop chat UI, dependency-free, talking to the server. |
 | [`hackl` (VS Code)](packages/vscode) | In-editor chat with capability modes and Git-anchored annotations, plus inline autocomplete. |
 | [`@hackl/cli`](packages/cli) | The `hackl` terminal frontend: one-shot, REPL, and NDJSON. |
 
 ## Web GUI
 
-`hackl-serve` runs the same agent loop as the CLI and extension behind a
+`hackl serve` runs the same agent loop as the CLI and extension behind a
 loopback WebSocket and serves the shared web UI:
 
 ```bash
-npm run build -w @hackl/webui -w @hackl/server
-node packages/server/dist/cli.js --open
+hackl serve --open
 ```
 
 It binds `127.0.0.1` only and prints a one-time URL carrying an auth token; the
@@ -86,29 +85,26 @@ npm run package:vsix
 The CLI and the VS Code extension are esbuild bundles with no runtime
 `node_modules`: the MCP SDK is inlined into each artifact.
 
-## Local model
-
-Hackl never starts or downloads a model. Point it at a running OpenAI-compatible
-endpoint, or let it auto-discover llama.cpp on port 8080 or LM Studio on port
-1234. See the setup notes under [`docs/`](docs).
-
 ## Managed local engine
 
 `hackl` can set up and run llama.cpp for you, sized to your machine, all on
 localhost:
 
 ```sh
-hackl doctor     # probe hardware, recommend a model, show what's installed
-hackl up         # fetch llama.cpp + the recommended model, start it
-hackl status     # running (managed) / adopted external / stopped
-hackl down       # stop the managed server
+hackl serve [model]          # foreground engine + both browser UIs
+hackl models                 # catalog, recommendation, install and active state
+hackl models remove <model>  # reclaim managed model storage
 ```
 
-It detects an existing server first: if llama.cpp (or another OpenAI-compatible
-server) is already listening, hackl **adopts it read-only** and never stops or
-restarts it. Only servers hackl started are managed. The managed server binds
-`127.0.0.1` only; `--allow-remote` opts into `0.0.0.0` with a warning. llama.cpp's
-own web UI stays reachable at the printed URL.
+`hackl serve` stays in the foreground and Ctrl+C stops it. Ordinary CLI, VS Code,
+and desktop clients share one temporary background session; it exits when the
+last clean client leaves or about ten seconds after crashed clients stop
+heartbeating. The first starter owns the model and launch settings. There is no
+installed service, login task, or tray process.
+
+An existing OpenAI-compatible server is adopted read-only and never stopped.
+The managed server binds `127.0.0.1` by default; `--allow-remote` opts into
+`0.0.0.0`. `hackl serve` prints both Hackl's UI and llama.cpp's own WebUI.
 
 Model choice is hardware-aware (`recommendModel`): it picks the largest catalog
 model that fits, spanning a 1.5B coder up to the Qwen3.6-35B-A3B MoE. Two rules
@@ -118,9 +114,10 @@ preferred over Gemma 12B** (it fits better, ships FIM tokens, and is stronger at
 code). Knobs (context, n-cpu-moe, KV quant, MTP, mmproj, threads, ...) default
 from the probe and are overridable per model.
 
-In the REPL: `/doctor`, `/up`, `/down`, `/models`, `/pull <model>`, `/model
-<alias>`, `/set <key> <value>`. In VS Code: the `Hackl: Engine` commands and the
-status-bar item. In the web/desktop GUI: the Engine panel. See
+VS Code starts or joins the session on activation. Its server status item
+directly toggles the global, persistent `hackl.engine.enabled` setting. Turning
+it off releases VS Code's lease without changing autocomplete, other clients,
+manual `hackl serve`, LM Studio, Ollama, or remote providers. See
 [`docs/setup-llamacpp.md`](docs/setup-llamacpp.md).
 
 ## Remote endpoints (OpenRouter)

@@ -1,7 +1,7 @@
 import * as http from "node:http";
 import * as crypto from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
-import { runHacklPrompt, createNodeWorkspaceHost, EngineManager, applyEngineSet } from "@hackl/core";
+import { runHacklPrompt, createNodeWorkspaceHost, EngineManager, queryEngineSession } from "@hackl/core";
 import type {
   ChatBackend,
   McpManager,
@@ -14,7 +14,7 @@ import type {
 import type { ClientMessage, ServerMessage } from "@hackl/protocol";
 import { ALL_MODES, DEFAULT_MODE } from "@hackl/protocol";
 import { isAllowedHost, isAllowedOrigin, extractToken, timingSafeEqual, TOKEN_COOKIE } from "./auth";
-import { createStaticHandler } from "./static";
+import { createStaticAssetHandler, createStaticHandler } from "./static";
 
 // Strict headers for every served response. CSP keeps the UI same-origin and
 // only lets it reach a loopback WebSocket; Referrer-Policy stops the URL (and
@@ -35,6 +35,7 @@ export interface HacklServerOptions {
   token?: string;
   allowYolo?: boolean;
   staticDir?: string;
+  staticAssets?: Record<string, string>;
   mcp?: McpManager;
   endpoint?: string;
   model?: string;
@@ -53,7 +54,9 @@ export async function createHacklServer(options: HacklServerOptions): Promise<Ha
   const token = options.token ?? crypto.randomBytes(32).toString("hex");
   const allowYolo = options.allowYolo ?? false;
   const workspace = createNodeWorkspaceHost(options.cwd);
-  const serveStatic = options.staticDir ? createStaticHandler(options.staticDir, SECURITY_HEADERS) : undefined;
+  const serveStatic = options.staticAssets
+    ? createStaticAssetHandler(options.staticAssets, SECURITY_HEADERS)
+    : options.staticDir ? createStaticHandler(options.staticDir, SECURITY_HEADERS) : undefined;
 
   const httpServer = http.createServer((req, res) => {
     if ((req.url ?? "").split("?")[0] === "/healthz") {
@@ -161,28 +164,25 @@ function handleConnection(ws: WebSocket, ctx: ConnectionContext): void {
 
   const engine = new EngineManager();
 
-  const handleEngine = async (action: string, alias?: string, allowRemote?: boolean): Promise<void> => {
+  const handleEngine = async (action: string): Promise<void> => {
     try {
       switch (action) {
-        case "status": send({ type: "engineState", status: await engine.status() }); return;
-        case "doctor": send({ type: "engineDoctor", report: await engine.doctor() }); return;
+        case "status": {
+          const status = await queryEngineSession();
+          send({
+            type: "engineState",
+            status: status && status.state !== "stopped"
+              ? {
+                  state: status.state === "running-managed" ? "running-managed" : "running-external",
+                  endpoint: status.endpoint,
+                  model: status.alias ?? status.model,
+                  pid: status.pid,
+                }
+              : { state: "stopped" },
+          });
+          return;
+        }
         case "list": send({ type: "engineModels", models: engine.listModels() }); return;
-        case "up": {
-          await engine.start({ alias, allowDownload: true, allowRemote, log: (t) => send({ type: "engineLog", text: t }) });
-          send({ type: "engineState", status: await engine.status() });
-          return;
-        }
-        case "down": engine.stop(); send({ type: "engineState", status: await engine.status() }); return;
-        case "pull": {
-          if (alias) await engine.pull(alias, (t) => send({ type: "engineLog", text: t }));
-          send({ type: "engineModels", models: engine.listModels() });
-          return;
-        }
-        case "restart": {
-          await engine.restart({ alias, allowDownload: true, allowRemote, log: (t) => send({ type: "engineLog", text: t }) });
-          send({ type: "engineState", status: await engine.status() });
-          return;
-        }
       }
     } catch (error) {
       send({ type: "engineLog", text: `error: ${error instanceof Error ? error.message : String(error)}` });
@@ -284,12 +284,14 @@ function handleConnection(ws: WebSocket, ctx: ConnectionContext): void {
         return;
       }
       case "engine":
-        void handleEngine(message.action, message.alias, message.allowRemote);
+        void handleEngine(message.action);
         return;
       case "engineSet": {
         try {
-          engine.setConfig((c) => applyEngineSet(c, message.key, message.value));
+          if (message.key !== "model") throw new Error("only the next-start model can be changed while an owner is active");
+          engine.setConfig((config) => { config.model = message.value; });
           send({ type: "engineModels", models: engine.listModels() });
+          send({ type: "engineLog", text: `model ${message.value} will apply after the current owner exits` });
         } catch (error) {
           send({ type: "engineLog", text: `error: ${error instanceof Error ? error.message : String(error)}` });
         }

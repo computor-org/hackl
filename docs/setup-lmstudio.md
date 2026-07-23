@@ -80,5 +80,5 @@ autocomplete endpoint at it. See the llama.cpp guide's Advanced section, then:
 - The 35B-A3B is a mixture-of-experts model: about 3B parameters are active per
   token, so it decodes far faster than its size suggests and fits a 32 GB box.
 - Hackl adopts a running LM Studio server read-only (it uses it, never manages
-  it). The hackl-managed engine (`hackl up`) targets llama.cpp; see
+  it). The Hackl-managed session (`hackl serve`) targets llama.cpp; see
   [`setup-llamacpp.md`](setup-llamacpp.md).

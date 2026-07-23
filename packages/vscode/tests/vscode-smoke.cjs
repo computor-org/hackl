@@ -12,6 +12,7 @@ async function run() {
   const properties = Object.assign({}, ...sections.map((section) => section.properties));
   assert.ok(properties["hackl.endpoint"], "hackl.endpoint setting is contributed");
   assert.equal(properties["hackl.endpoint"].default, "");
+  assert.equal(properties["hackl.engine.enabled"].default, true);
   assert.equal(properties["hackl.debug"].default, false);
   assert.ok(extension.packageJSON.contributes.viewsContainers.secondarySidebar, "Hackl contributes a secondary sidebar container");
   assert.ok(extension.packageJSON.contributes.views.hackl, "Hackl view container has views");
@@ -44,10 +45,16 @@ async function run() {
     "hackl.discardLastAnnotations",
     "hackl.reviewStagedChanges",
     "hackl.revealTarget",
+    "hackl.toggleEngine",
+    "hackl.engineStatus",
+    "hackl.selectModel",
   ]) {
     assert.ok(commands.includes(expected), `${expected} command is registered`);
   }
   assert.ok(!commands.includes("hackl.chatEditor"), "hackl.chatEditor command should not exist");
+  for (const removed of ["hackl.engineStart", "hackl.engineStop", "hackl.engineRestart"]) {
+    assert.ok(!commands.includes(removed), `${removed} command should not exist`);
+  }
 
   await testBasketRoundtrip(api);
   await testClearBasket(api);

@@ -79,3 +79,25 @@ test("detectServer adopts a reachable server and marks it external without state
   assert.match(detected.endpoint, /:8080/);
   assert.equal(detected.managed, false);
 });
+
+test("removeModel deletes only the managed catalog cache and clears its preference", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "hackl-model-remove-"));
+  const env = {
+    ...process.env,
+    XDG_CONFIG_HOME: path.join(root, "config"),
+    LLAMACPP_CACHE_ROOT: path.join(root, "models"),
+  };
+  const model = core.findModel("qwen2.5-coder-1.5b-q4");
+  const dir = core.modelCacheDir(model, env);
+  const outside = path.join(root, "keep.gguf");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "weights-q4_k_m.gguf"), "weights");
+  fs.writeFileSync(outside, "user-owned");
+  const engine = new core.EngineManager(env);
+  engine.setConfig((config) => { config.model = model.alias; });
+
+  assert.equal(engine.removeModel(model.alias), 7);
+  assert.equal(fs.existsSync(dir), false);
+  assert.equal(fs.readFileSync(outside, "utf8"), "user-owned");
+  assert.equal(engine.config().model, undefined);
+});

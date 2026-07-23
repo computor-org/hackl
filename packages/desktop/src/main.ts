@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from "electron";
 import * as path from "node:path";
 import { createHacklServer, createServerAgent } from "@hackl/server";
 import type { HacklServer } from "@hackl/server";
+import { EngineSessionLease } from "@hackl/core";
 
 // Thin desktop shell: start the same loopback server the CLI's `hackl serve`
 // uses, then load the shared web UI in a sandboxed window. No agent logic lives
@@ -9,13 +10,28 @@ import type { HacklServer } from "@hackl/server";
 // bootstrap on first load, so it never persists in the window URL.
 const allowYolo = process.argv.includes("--allow-yolo");
 let server: HacklServer | undefined;
+let lease: EngineSessionLease | undefined;
+let quitting = false;
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
 async function start(): Promise<void> {
-  const agent = await createServerAgent();
+  const env = { ...process.env };
+  if (!env.HACKL_ENDPOINT?.trim()) {
+    lease = await EngineSessionLease.acquire({
+      kind: "desktop",
+      hostCommand: {
+        command: process.execPath,
+        args: [path.join(__dirname, "engine-host.js")],
+        options: { env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" } },
+      },
+    });
+    env.HACKL_ENDPOINT = lease.status.endpoint;
+    env.HACKL_MODEL = lease.status.model;
+  }
+  const agent = await createServerAgent(env);
   server = await createHacklServer({
     cwd: process.cwd(),
     host: "127.0.0.1",
@@ -50,8 +66,11 @@ app.whenReady().then(start).catch((error) => {
   app.quit();
 });
 
-app.on("before-quit", () => {
-  void server?.close();
+app.on("before-quit", (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  quitting = true;
+  void Promise.all([server?.close(), lease?.release()]).finally(() => app.exit());
 });
 
 app.on("window-all-closed", () => {
