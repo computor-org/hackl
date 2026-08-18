@@ -127,9 +127,11 @@ is preferred over Gemma 12B** (it fits better, ships FIM tokens, and is stronger
 at code). Knobs (context, KV quant, mmproj, threads, ...) default from the probe
 and are overridable per model.
 
-VS Code starts or joins the session on demand. Its server status item
-directly toggles the global, persistent `hackl.engine.enabled` setting. Turning
-it off releases VS Code's lease without changing autocomplete, other clients,
+VS Code starts or joins the session on demand. Use **Hackl: Local Server:
+Download Model** to prefetch a model with confirmation, visible progress, and
+cancellation; the command can select the downloaded model for the next start.
+Its server status item directly toggles the global, persistent
+`hackl.engine.enabled` setting. Turning it off releases VS Code's lease without changing autocomplete, other clients,
 manual `hackl serve`, LM Studio, Ollama, or remote providers. See
 [`docs/setup-llamacpp.md`](docs/setup-llamacpp.md).
 

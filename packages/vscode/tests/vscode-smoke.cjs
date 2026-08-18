@@ -48,6 +48,7 @@ async function run() {
     "hackl.toggleEngine",
     "hackl.engineStatus",
     "hackl.selectModel",
+    "hackl.downloadModel",
     "hackl.startEngine",
   ]) {
     assert.ok(commands.includes(expected), `${expected} command is registered`);

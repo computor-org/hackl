@@ -98,6 +98,7 @@ export interface PullOptions {
   withMmproj?: boolean;
   env?: NodeJS.ProcessEnv;
   log?: (s: string) => void;
+  signal?: AbortSignal;
 }
 
 // Download a model into the shared cache via the Hugging Face CLI (matches the
@@ -105,7 +106,9 @@ export interface PullOptions {
 export async function pullModel(model: ModelOption, opts: PullOptions = {}): Promise<string> {
   const env = opts.env ?? process.env;
   const log = opts.log ?? (() => {});
-  if (modelPath(model, env)) return modelPath(model, env)!;
+  const existing = modelPath(model, env);
+  const projectorReady = !opts.withMmproj || !model.mmproj || Boolean(mmprojPath(model, env));
+  if (existing && projectorReady) return existing;
 
   const cli = (await commandExists("hf")) ? "hf" : (await commandExists("huggingface-cli")) ? "huggingface-cli" : undefined;
   if (!cli) throw new Error('Hugging Face CLI not found. Install with: uv tool install "huggingface_hub[cli]"');
@@ -114,22 +117,40 @@ export async function pullModel(model: ModelOption, opts: PullOptions = {}): Pro
   const args = ["download", model.repo, "--local-dir", dir, "--include", model.include];
   if (opts.withMmproj && model.mmproj) args.push("--include", model.mmproj);
   log(`downloading ${model.alias} from ${model.repo} (license: ${model.license})`);
-  await runLogged(cli, args, log);
+  await runLogged(cli, args, log, opts.signal);
 
   const resolved = modelPath(model, env);
   if (!resolved) throw new Error(`download finished but no GGUF matched ${model.include} under ${dir}`);
+  if (opts.withMmproj && model.mmproj && !mmprojPath(model, env)) {
+    throw new Error(`download finished but no projector matched ${model.mmproj} under ${dir}`);
+  }
   return resolved;
 }
 
-function runLogged(cmd: string, args: string[], log: (text: string) => void): Promise<void> {
+function runLogged(cmd: string, args: string[], log: (text: string) => void, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let cancelled = Boolean(signal?.aborted);
+    const cancel = (): void => {
+      cancelled = true;
+      child.kill();
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => emitLines(chunk, log));
     child.stderr?.on("data", (chunk: string) => emitLines(chunk, log));
-    child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
+    child.on("error", (error) => {
+      signal?.removeEventListener("abort", cancel);
+      reject(cancelled ? new Error("download cancelled") : error);
+    });
+    child.on("close", (code) => {
+      signal?.removeEventListener("abort", cancel);
+      if (cancelled) reject(new Error("download cancelled"));
+      else if (code === 0) resolve();
+      else reject(new Error(`${cmd} exited ${code}`));
+    });
+    if (cancelled) cancel();
   });
 }
 

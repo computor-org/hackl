@@ -44,6 +44,7 @@ class EngineController {
       vscode.commands.registerCommand("hackl.startEngine", () => this.start()),
       vscode.commands.registerCommand("hackl.engineStatus", () => this.showStatus()),
       vscode.commands.registerCommand("hackl.selectModel", () => this.selectModel()),
+      vscode.commands.registerCommand("hackl.downloadModel", () => this.downloadModel()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("hackl.engine.enabled")
           || event.affectsConfiguration("hackl.endpoint")) {
@@ -180,7 +181,7 @@ class EngineController {
     const current = this.engine.config().model;
     const items = this.engine.listModels().map((model) => ({
       label: `${model.present ? "$(check) " : "$(cloud) "}${model.alias}`,
-      description: `~${model.approxSizeGB} GiB${model.alias === current ? " · preferred" : ""}`,
+      description: `${model.present ? "installed" : "not installed"} · ~${model.approxSizeGB} GiB${model.alias === current ? " · preferred" : ""}`,
       detail: model.note,
       alias: model.alias,
     }));
@@ -189,14 +190,93 @@ class EngineController {
       placeHolder: "The active owner is never restarted",
     });
     if (!pick) return;
-    this.engine.setConfig((config) => { config.model = pick.alias; });
+    await this.useModel(pick.alias);
+  }
+
+  private async downloadModel(): Promise<void> {
+    const items = this.engine.listModels().map((model) => ({
+      label: `${model.present ? "$(check) " : "$(cloud-download) "}${model.alias}`,
+      description: `${model.present ? "already downloaded" : "download"} · ~${model.approxSizeGB} GiB`,
+      detail: model.hasMmproj ? `${model.note ?? ""} Includes the vision projector.`.trim() : model.note,
+      alias: model.alias,
+      present: model.present,
+      hasMmproj: model.hasMmproj,
+      approxSizeGB: model.approxSizeGB,
+    }));
+    const pick = await vscode.window.showQuickPick(items, {
+      title: "Hackl: Download a local model",
+      placeHolder: "Choose a model to cache locally",
+      matchOnDescription: true,
+    });
+    if (!pick) return;
+    if (pick.present) {
+      await this.offerUseModel(pick.alias, "already downloaded");
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Download ${pick.alias} (~${pick.approxSizeGB} GiB)?`,
+      {
+        modal: true,
+        detail: `Hackl will download the GGUF weights${pick.hasMmproj ? " and vision projector" : ""} from Hugging Face. You can cancel while it is running.`,
+      },
+      "Download",
+    );
+    if (confirmed !== "Download") return;
+
+    const controller = new AbortController();
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Hackl: Downloading ${pick.alias}`,
+          cancellable: true,
+        },
+        async (progress, token) => {
+          const cancellation = token.onCancellationRequested(() => controller.abort());
+          try {
+            await this.engine.pull(pick.alias, (text) => {
+              this.output.appendLine(text);
+              progress.report({ message: downloadProgressMessage(text) });
+            }, controller.signal);
+          } finally {
+            cancellation.dispose();
+          }
+        },
+      );
+      await this.offerUseModel(pick.alias, "downloaded");
+    } catch (error) {
+      if (controller.signal.aborted) {
+        vscode.window.showInformationMessage(`Hackl: download of ${pick.alias} cancelled.`);
+        return;
+      }
+      this.output.appendLine(`download error: ${message(error)}`);
+      vscode.window.showErrorMessage(`Hackl model download failed: ${message(error)}`);
+    }
+  }
+
+  private async offerUseModel(alias: string, state: string): Promise<void> {
+    const action = await vscode.window.showInformationMessage(
+      `Hackl: ${alias} is ${state}.`,
+      "Use for next start",
+    );
+    if (action === "Use for next start") await this.useModel(alias);
+  }
+
+  private async useModel(alias: string): Promise<void> {
+    this.engine.setConfig((config) => { config.model = alias; });
     const active = await queryEngineSession();
-    const suffix = active ? " It applies after the current owner exits." : "";
-    vscode.window.showInformationMessage(`Hackl local model set to ${pick.alias}.${suffix}`);
-    if (!active && this.shouldManage()) await this.reconcile();
+    const suffix = active ? " It applies after the current owner exits." : " Start the managed server when you are ready.";
+    vscode.window.showInformationMessage(`Hackl local model set to ${alias}.${suffix}`);
   }
 }
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function downloadProgressMessage(text: string): string {
+  const percent = text.match(/(\d{1,3})%/);
+  if (percent) return `${percent[1]}%`;
+  const compact = text.trim();
+  return compact.length > 90 ? `${compact.slice(0, 87)}...` : compact;
 }

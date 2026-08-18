@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Local-first AI coding with managed llama.cpp, agent tools, and autocomplete.",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -171,6 +171,11 @@
       {
         "command": "hackl.selectModel",
         "title": "Local Server: Select Model for Next Start",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.downloadModel",
+        "title": "Local Server: Download Model",
         "category": "Hackl"
       },
       {
@@ -505,7 +510,7 @@
           {
             "id": "hackl.walkthrough.pickServer",
             "title": "Use a local model",
-            "description": "Leave the endpoint empty. Hackl selects and starts a temporary llama.cpp model while clients are using it. The status-bar server item persistently enables or disables this behavior.\n\n[Toggle managed local server](command:hackl.toggleEngine) · [Choose model for next start](command:hackl.selectModel)",
+            "description": "Leave the endpoint empty. Hackl selects and starts a temporary llama.cpp model while clients are using it. The status-bar server item persistently enables or disables this behavior.\n\n[Download a model](command:hackl.downloadModel) · [Toggle managed local server](command:hackl.toggleEngine) · [Choose model for next start](command:hackl.selectModel)",
             "media": {
               "markdown": "media/setup-tutorial.md"
             },

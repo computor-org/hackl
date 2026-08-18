@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3 pre-release
+
+- Add an explicit VS Code model-download flow with confirmation, progress, and cancellation.
+- Let model selection configure the next start without silently downloading or starting it.
+
 ## 0.3.2 pre-release
 
 - Use lazy managed-engine startup and add an explicit start command.

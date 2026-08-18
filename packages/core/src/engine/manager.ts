@@ -18,6 +18,7 @@ export interface EngineStatus {
 export interface ModelEntry {
   alias: string;
   present: boolean;
+  hasMmproj: boolean;
   approxSizeGB: number;
   sizeBytes: number;
   note?: string;
@@ -76,6 +77,7 @@ export class EngineManager {
     return MODEL_CATALOG.map((m) => ({
       alias: m.alias,
       present: isPresent(m, this.env),
+      hasMmproj: Boolean(m.mmproj),
       approxSizeGB: m.approxSizeGB,
       sizeBytes: managedModelSize(m, this.env),
       note: m.note,
@@ -108,11 +110,16 @@ export class EngineManager {
     return (await resolveServerBin(this.env)) ?? installManaged(this.env, log);
   }
 
-  async pull(alias: string, log?: (s: string) => void): Promise<string> {
+  async pull(alias: string, log?: (s: string) => void, signal?: AbortSignal): Promise<string> {
     const model = findModel(alias);
     if (!model) throw new Error(`unknown model alias: ${alias}`);
     const cfg = this.config();
-    return pullModel(model, { withMmproj: cfg.mmproj !== "off" && Boolean(model.mmproj), env: this.env, log });
+    return pullModel(model, {
+      withMmproj: cfg.mmproj !== "off" && Boolean(model.mmproj),
+      env: this.env,
+      log,
+      signal,
+    });
   }
 
   private async resolveModel(alias?: string): Promise<ModelOption> {
@@ -138,9 +145,11 @@ export class EngineManager {
     const server = await this.ensureServer(log);
     const cfg = this.config();
     let resolvedModelPath = modelPath(model, this.env);
-    if (!resolvedModelPath) {
+    const wantsMmproj = cfg.mmproj !== "off" && Boolean(model.mmproj);
+    const missingMmproj = wantsMmproj && !mmprojPath(model, this.env);
+    if (!resolvedModelPath || missingMmproj) {
       if (!args.allowDownload) throw new Error(`model ${model.alias} is not downloaded. Run: hackl serve ${model.alias}`);
-      resolvedModelPath = await pullModel(model, { withMmproj: cfg.mmproj !== "off" && Boolean(model.mmproj), env: this.env, log });
+      resolvedModelPath = await pullModel(model, { withMmproj: wantsMmproj, env: this.env, log });
     }
     const knobs = resolveKnobs(await this.probe(), model, cfg);
     if (args.allowRemote) knobs.host = "0.0.0.0";

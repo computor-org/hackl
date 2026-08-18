@@ -20,9 +20,12 @@ account or API key. Hackl collects no telemetry.
 3. Open the Hackl view or run **Hackl: Open Chat**. The first use downloads a
    verified llama.cpp build and model when needed.
 
-The first download can take several minutes. The server item in the status bar
-starts the managed server when it is stopped and toggles the persistent global
-startup setting when a session is active.
+The first download can take several minutes. To download in advance, run
+**Hackl: Local Server: Download Model**. Hackl asks for confirmation, shows a
+cancellable progress notification, and offers to select the downloaded model
+for the next start. The server item in the status bar starts the managed server
+when it is stopped and toggles the persistent global startup setting when a
+session is active.
 
 Choose **Hackl: Local Server: Select Model for Next Start** to override the
 recommendation. Model changes apply on the next start.
@@ -82,6 +85,7 @@ non-loopback endpoint.
 - **Hackl: Toggle Managed Local Server**
 - **Hackl: Local Server: Status**
 - **Hackl: Local Server: Select Model for Next Start**
+- **Hackl: Local Server: Download Model**
 - **Hackl: Toggle Inline Autocomplete**
 - **Hackl: Add Selection to Context**
 - **Hackl: Review Staged Changes**
