@@ -14,7 +14,9 @@ async function run() {
   assert.equal(properties["hackl.endpoint"].default, "");
   assert.equal(properties["hackl.engine.enabled"].default, true);
   assert.equal(properties["hackl.debug"].default, false);
+  assert.ok(extension.packageJSON.contributes.viewsContainers.activitybar, "Hackl contributes an Activity Bar fallback");
   assert.ok(extension.packageJSON.contributes.viewsContainers.secondarySidebar, "Hackl contributes a secondary sidebar container");
+  assert.equal(extension.packageJSON.contributes.views["hackl.activitybar"][0].id, "hackl.chatActivitybar");
   assert.ok(extension.packageJSON.contributes.views.hackl, "Hackl view container has views");
   assert.equal(extension.packageJSON.contributes.views.hackl[0].id, "hackl.chatView");
   assert.equal(extension.packageJSON.contributes.views.hackl[0].type, "webview");

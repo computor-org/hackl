@@ -50,6 +50,7 @@ import { registerAutocomplete } from "./autocomplete";
 import { deactivateEngine, ensureEngineReady, registerEngine } from "./enginePanel";
 import { clearTrustedEndpoints, isEndpointTrusted, trustEndpoint } from "./endpointTrust";
 import { classifyHacklConfigurationChange } from "./configurationChange";
+import { chatViewContainer, supportsSecondarySidebar } from "./viewLocation";
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let basketService: BasketService | undefined;
@@ -182,6 +183,13 @@ export interface HacklApi {
 
 export function activate(context: vscode.ExtensionContext): HacklApi {
   extensionContext = context;
+  const useSecondarySidebar = supportsSecondarySidebar(vscode.version);
+  const chatLocation = chatViewContainer(vscode.version);
+  void vscode.commands.executeCommand(
+    "setContext",
+    "hackl.doesNotSupportSecondarySidebar",
+    !useSecondarySidebar,
+  );
   registerEngine(context);
   activationDebug = createDebugLog(readHacklConfig().debug);
   activationDebug?.("extension.activate", {
@@ -225,6 +233,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
   registerAutocomplete(context);
 
   context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider("hackl.chatActivitybar", chatViewProvider),
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (connectionConfigurationWriteDepth > 0) return;
@@ -233,7 +242,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       void refreshConnectionConfiguration(change, chatViewProvider);
     }),
     vscode.commands.registerCommand("hackl.chat", async () => {
-      await vscode.commands.executeCommand("workbench.view.extension.hackl");
+      await vscode.commands.executeCommand(`workbench.view.extension.${chatLocation.container}`);
       chatViewProvider.show();
       chatViewProvider.focusInput();
     }),

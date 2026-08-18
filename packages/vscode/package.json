@@ -206,22 +206,41 @@
       }
     ],
     "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hackl.activitybar",
+          "title": "Hackl",
+          "icon": "media/hackl.svg",
+          "when": "hackl.doesNotSupportSecondarySidebar"
+        }
+      ],
       "secondarySidebar": [
         {
           "id": "hackl",
           "title": "Hackl",
-          "icon": "media/hackl.svg"
+          "icon": "media/hackl.svg",
+          "when": "!hackl.doesNotSupportSecondarySidebar"
         }
       ]
     },
     "views": {
+      "hackl.activitybar": [
+        {
+          "id": "hackl.chatActivitybar",
+          "type": "webview",
+          "name": "Chat",
+          "icon": "media/hackl.svg",
+          "when": "hackl.doesNotSupportSecondarySidebar"
+        }
+      ],
       "hackl": [
         {
           "id": "hackl.chatView",
           "type": "webview",
           "name": "Chat",
           "icon": "media/hackl.svg",
-          "contextualTitle": "Hackl Chat"
+          "contextualTitle": "Hackl Chat",
+          "when": "!hackl.doesNotSupportSecondarySidebar"
         }
       ]
     },
