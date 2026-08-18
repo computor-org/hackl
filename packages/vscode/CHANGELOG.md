@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5 pre-release
+
+- Add a Hackl chat button alongside Claude Code and Codex in the Secondary Side Bar.
+- Fall back to an Activity Bar button on older VS Code and compatible forks.
+
 ## 0.3.4 pre-release
 
 - Respect the live context reported by llama.cpp or LM Studio over local overrides.
