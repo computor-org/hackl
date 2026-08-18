@@ -1,6 +1,6 @@
 {
   "name": "@hackl/core",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Hackl shared local-AI agent backend (frontend-agnostic).",
   "license": "MIT",
   "private": true,

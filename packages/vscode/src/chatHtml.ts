@@ -73,14 +73,14 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
           </button>
           <div class="mode-dropdown">
             <button id="mode-button" class="mode-button" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Mode">
-              <span id="mode-label">Ask</span>
+              <span id="mode-label">Agent</span>
               <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
             </button>
             <div id="mode-menu" class="mode-menu" role="listbox" hidden>
-              <button class="mode-option" type="button" role="option" data-value="ask" aria-selected="true" title="Read-only. Answer questions. No file edits, no commands.">Ask</button>
+              <button class="mode-option" type="button" role="option" data-value="ask" aria-selected="false" title="Read-only. Answer questions. No file edits, no commands.">Ask</button>
               <button class="mode-option" type="button" role="option" data-value="edit" aria-selected="false" title="Read + edit files. No search, no commands.">Edit</button>
               <button class="mode-option" type="button" role="option" data-value="work" aria-selected="false" title="Read + edit + search. Multi-step file changes. No commands.">Work</button>
-              <button class="mode-option" type="button" role="option" data-value="agent" aria-selected="false" title="Read + edit + search + safe commands (approval-gated).">Agent</button>
+              <button class="mode-option" type="button" role="option" data-value="agent" aria-selected="true" title="Read + edit + search + safe commands (approval-gated).">Agent</button>
               <button class="mode-option mode-option-danger" type="button" role="option" data-value="yolo" aria-selected="false" title="DANGER: no command policy, no approval. Runs ANY shell command. You are responsible for what happens.">Yolo</button>
             </div>
           </div>

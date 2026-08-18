@@ -43,7 +43,11 @@
   let statusEntry;
   let assistantDraft;
   let isBusy = false;
-  let selectedMode = "ask";
+  let selectedMode = "agent";
+  const savedState = vscode.getState();
+  if (savedState && typeof savedState.selectedMode === "string") {
+    selectedMode = normalizeMode(savedState.selectedMode);
+  }
   let annotationContextAvailable = false;
   const pendingQueue = [];
   const annotationContextPrompt = "Address the attached annotation comments.";
@@ -52,6 +56,7 @@
   autoResize();
   updateEmptyState();
   vscode.postMessage({ type: "ready" });
+  syncModeSelection();
   focusPrompt();
 
   form.addEventListener("submit", (event) => {
@@ -253,13 +258,10 @@
       if (!option || option.hasAttribute("disabled")) return;
       const value = option.getAttribute("data-value") || "ask";
       selectedMode = normalizeMode(value);
-      if (modeLabel) modeLabel.textContent = option.firstChild ? (option.firstChild.textContent || "").trim() : value;
-      modeMenu.querySelectorAll(".mode-option").forEach((opt) => {
-        opt.setAttribute("aria-selected", String(opt === option));
-      });
+      vscode.setState({ ...(vscode.getState() || {}), selectedMode });
+      syncModeSelection();
       modeMenu.hidden = true;
       modeButton.setAttribute("aria-expanded", "false");
-      updateComboStrip();
       focusPrompt();
     });
     document.addEventListener("click", (event) => {
@@ -358,6 +360,18 @@
 
   function normalizeMode(mode) {
     return ["edit", "work", "agent", "yolo"].includes(mode) ? mode : "ask";
+  }
+
+  function syncModeSelection() {
+    if (modeLabel) {
+      modeLabel.textContent = selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
+    }
+    if (modeMenu) {
+      modeMenu.querySelectorAll(".mode-option").forEach((option) => {
+        option.setAttribute("aria-selected", String(option.getAttribute("data-value") === selectedMode));
+      });
+    }
+    updateComboStrip();
   }
 
   function updateAnnotationContextAvailable(targets) {

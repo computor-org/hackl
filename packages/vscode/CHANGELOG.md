@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.7 pre-release
+
+- Default the VS Code chat mode to Agent, matching the CLI and browser server.
+- Remember the selected chat mode across VS Code webview reloads.
+
 ## 0.3.6 pre-release
 
 - Make Agent mode inspect the workspace before answering orientation questions.
