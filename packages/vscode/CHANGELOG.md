@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 pre-release
+
+- Use lazy managed-engine startup and add an explicit start command.
+- Add `hackl models install` and show the selected engine model in CLI output.
+- Update the managed llama.cpp release to b10488 and use Q8 KV defaults.
+
 ## 0.3.1 pre-release
 
 - Offer to reload the VS Code window when an update leaves the managed-server

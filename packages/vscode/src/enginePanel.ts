@@ -41,6 +41,7 @@ class EngineController {
       this.status,
       this.output,
       vscode.commands.registerCommand("hackl.toggleEngine", () => this.toggle()),
+      vscode.commands.registerCommand("hackl.startEngine", () => this.start()),
       vscode.commands.registerCommand("hackl.engineStatus", () => this.showStatus()),
       vscode.commands.registerCommand("hackl.selectModel", () => this.selectModel()),
       vscode.workspace.onDidChangeConfiguration((event) => {
@@ -51,7 +52,9 @@ class EngineController {
       }),
     );
     this.status.show();
-    void this.reconcile();
+    // Inspect state on activation, but do not download or start a model until
+    // chat, autocomplete, or the explicit start command needs the engine.
+    void this.refresh();
   }
 
   async dispose(): Promise<void> {
@@ -78,6 +81,14 @@ class EngineController {
     if (action === "Reload Window") {
       await vscode.commands.executeCommand("workbench.action.reloadWindow");
     }
+  }
+
+  private async start(): Promise<void> {
+    if (readHacklConfig().endpointConfigured) {
+      vscode.window.showInformationMessage("Hackl is using the configured external endpoint.");
+      return;
+    }
+    await this.reconcile();
   }
 
   private async reconcile(): Promise<void> {
@@ -143,11 +154,15 @@ class EngineController {
     const display = engineStatusDisplay(enabled, external, session);
     this.status.text = display.text;
     this.status.tooltip = display.tooltip;
+    this.status.command = enabled && !external && (!session || session.state === "stopped")
+      ? "hackl.startEngine"
+      : "hackl.toggleEngine";
   }
 
   private setStarting(): void {
     this.status.text = "$(loading~spin) Hackl server";
     this.status.tooltip = "Starting the managed llama.cpp session… Click to disable.";
+    this.status.command = "hackl.toggleEngine";
   }
 
   private async showStatus(): Promise<void> {

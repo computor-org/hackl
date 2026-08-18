@@ -65,7 +65,9 @@ class AutocompleteController {
       }),
       vscode.languages.registerInlineCompletionItemProvider({ pattern: "**" }, this.provider()),
     );
-    void this.refresh();
+    // Keep activation lightweight; the first completion request resolves the
+    // target and starts the managed engine when no external endpoint is set.
+    this.updateStatus();
   }
 
   private async toggle(): Promise<void> {

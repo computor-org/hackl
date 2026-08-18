@@ -26,6 +26,12 @@ test("managed-server display exposes foreground ownership and sharing", () => {
   assert.match(display.tooltip, /3 clients/);
 });
 
+test("unstarted managed server explains the lazy-start action", () => {
+  const display = engineStatusDisplay(true, false);
+  assert.match(display.text, /unavailable/);
+  assert.match(display.tooltip, /start it/);
+});
+
 test("auto-discovered external server is visibly read-only", () => {
   const display = engineStatusDisplay(true, false, {
     state: "running-external",

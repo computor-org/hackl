@@ -14,14 +14,15 @@ account or API key. Hackl collects no telemetry.
 ## Install and start
 
 1. Install Hackl from the Marketplace and open a project.
-2. Leave `hackl.endpoint` empty. Hackl selects a model for your hardware,
-   downloads a verified llama.cpp build and model when needed, and starts them
-   for this VS Code session.
-3. Open the Hackl view or run **Hackl: Open Chat**.
+2. Leave `hackl.endpoint` empty. Hackl selects a model for your hardware and
+   starts it when you open chat, request autocomplete, or run **Hackl: Start
+   Managed Local Server**.
+3. Open the Hackl view or run **Hackl: Open Chat**. The first use downloads a
+   verified llama.cpp build and model when needed.
 
 The first download can take several minutes. The server item in the status bar
-shows progress and toggles automatic local startup. That global choice persists
-across VS Code restarts.
+starts the managed server when it is stopped and toggles the persistent global
+startup setting when a session is active.
 
 Choose **Hackl: Local Server: Select Model for Next Start** to override the
 recommendation. Model changes apply on the next start.

@@ -12,7 +12,7 @@ import { Renderer, statusLine } from "./render";
 import { runModelsCommand } from "./engineCli";
 import { runServeCommand } from "./serve";
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 
 async function main(): Promise<void> {
   if (process.argv[2] === "__engine-host") {
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
     process.exit(await runServeCommand(args));
   }
   if (args.command === "models") {
-    process.exit(await runModelsCommand(args.modelsRemove, args.yes));
+    process.exit(await runModelsCommand(args.modelsRemove, args.modelsInstall, args.yes));
   }
 
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd();
@@ -228,6 +228,7 @@ Usage:
 Local engine (managed llama.cpp, loopback-only):
   hackl serve [model]             foreground engine + Hackl and llama.cpp WebUIs
   hackl models                    list recommended and installed models
+  hackl models install <model>    download a managed model and its projector
   hackl models remove <model>     remove a managed model (--yes for scripts)
   serve options: --open, --host, --port, --token, --allow-yolo
                  --allow-remote binds llama.cpp to 0.0.0.0 (DANGER)

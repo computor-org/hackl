@@ -1,6 +1,6 @@
 {
   "name": "hackl-monorepo",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Hackl: local-first AI coding agent. Shared core, VS Code extension, and CLI.",
   "license": "MIT",
   "private": true,

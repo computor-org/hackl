@@ -25,7 +25,7 @@ export function engineStatusDisplay(
   if (!status || status.state === "stopped") {
     return {
       text: "$(server) Hackl server: unavailable",
-      tooltip: "No managed server is running. Click to disable automatic startup.",
+      tooltip: "No managed server is running. Click to start it, or open chat to start on demand.",
     };
   }
   if (status.state === "running-external") {

@@ -106,9 +106,10 @@ The CLI and the VS Code extension are esbuild bundles with no runtime
 localhost:
 
 ```sh
-hackl serve [model]          # foreground engine + both browser UIs
-hackl models                 # catalog, recommendation, install and active state
-hackl models remove <model>  # reclaim managed model storage
+  hackl serve [model]          # foreground engine + both browser UIs
+  hackl models                 # catalog, recommendation, installed, selected, active
+  hackl models install <model> # download a managed model and its projector
+  hackl models remove <model>  # reclaim managed model storage
 ```
 
 `hackl serve` stays in the foreground and Ctrl+C stops it. Ordinary CLI, VS Code,
@@ -126,7 +127,7 @@ is preferred over Gemma 12B** (it fits better, ships FIM tokens, and is stronger
 at code). Knobs (context, KV quant, mmproj, threads, ...) default from the probe
 and are overridable per model.
 
-VS Code starts or joins the session on activation. Its server status item
+VS Code starts or joins the session on demand. Its server status item
 directly toggles the global, persistent `hackl.engine.enabled` setting. Turning
 it off releases VS Code's lease without changing autocomplete, other clients,
 manual `hackl serve`, LM Studio, Ollama, or remote providers. See

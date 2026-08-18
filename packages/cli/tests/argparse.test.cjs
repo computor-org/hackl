@@ -64,6 +64,8 @@ test("recognizes the minimal local-engine commands", () => {
   const remove = parseArgs(["models", "remove", "qwen3.5-9b-q4", "--yes"]);
   assert.equal(remove.modelsRemove, "qwen3.5-9b-q4");
   assert.equal(remove.yes, true);
+  const install = parseArgs(["models", "install", "qwen3.8-27b-q4"]);
+  assert.equal(install.modelsInstall, "qwen3.8-27b-q4");
   assert.throws(() => parseArgs(["serve", "one", "two"]), ArgError);
   assert.throws(() => parseArgs(["models", "pull", "one"]), ArgError);
   assert.throws(() => parseArgs(["--open", "explain", "this"]), ArgError);

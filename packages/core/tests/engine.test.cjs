@@ -52,6 +52,9 @@ test("resolveKnobs: mac has no CPU-MoE split and no thread pinning", () => {
   assert.equal(knobs.nCpuMoe, 0);
   assert.equal(knobs.threads, undefined);
   assert.equal(knobs.ubatch, undefined);
+  assert.equal(knobs.cacheTypeK, "q8_0");
+  assert.equal(knobs.cacheTypeV, "q8_0");
+  assert.equal(knobs.flashAttn, true);
 });
 
 test("composeServerArgs: loopback, flash-attn, sampler, mmproj, n-cpu-moe, mtp", () => {

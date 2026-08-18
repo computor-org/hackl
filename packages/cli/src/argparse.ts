@@ -3,6 +3,7 @@ export interface CliArgs {
   command?: "review" | "serve" | "models";
   engineArg?: string;
   modelsRemove?: string;
+  modelsInstall?: string;
   allowRemote: boolean;
   host?: string;
   port?: number;
@@ -162,10 +163,11 @@ export function parseArgs(argv: string[]): CliArgs {
       rejectServeOptions(args);
       return args;
     }
-    if (modelArgs[0] !== "remove" || modelArgs.length !== 2) {
-      throw new ArgError("usage: hackl models [remove <model>]");
+    if (modelArgs.length !== 2 || !["remove", "install"].includes(modelArgs[0])) {
+      throw new ArgError("usage: hackl models [install|remove <model>]");
     }
-    args.modelsRemove = modelArgs[1];
+    if (modelArgs[0] === "install") args.modelsInstall = modelArgs[1];
+    else args.modelsRemove = modelArgs[1];
     rejectServeOptions(args);
     return args;
   }

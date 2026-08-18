@@ -5,15 +5,17 @@ const out = (text: string): void => {
   process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
 };
 
-export async function runModelsCommand(alias: string | undefined, yes: boolean): Promise<number> {
+export async function runModelsCommand(removeAlias: string | undefined, installAlias: string | undefined, yes: boolean): Promise<number> {
   const engine = new EngineManager();
-  if (!alias) {
+  if (!removeAlias && !installAlias) {
     const active = await queryEngineSession();
     const recommended = (await engine.recommend()).primary.alias;
+    const selected = engine.config().model;
     for (const model of engine.listModels()) {
       const flags = [
         model.present ? "installed" : "missing",
         model.alias === recommended ? "recommended" : "",
+        model.alias === selected ? "selected" : "",
         model.alias === active?.alias ? "active" : "",
       ].filter(Boolean).join(", ");
       const size = model.sizeBytes ? formatBytes(model.sizeBytes) : `~${model.approxSizeGB} GiB`;
@@ -22,8 +24,18 @@ export async function runModelsCommand(alias: string | undefined, yes: boolean):
     return 0;
   }
 
+  const alias = installAlias ?? removeAlias!;
   const model = engine.listModels().find((entry) => entry.alias === alias);
   if (!model) throw new Error(`unknown model alias: ${alias}`);
+  if (installAlias) {
+    if (model.present) {
+      out(`${alias} is already installed`);
+      return 0;
+    }
+    const path = await engine.pull(alias, out);
+    out(`installed ${alias}: ${path}`);
+    return 0;
+  }
   if (!model.present) throw new Error(`${alias} is not installed`);
   const session = await queryEngineSession();
   if (session?.state === "running-external") {

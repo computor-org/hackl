@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Local-first AI coding with managed llama.cpp, agent tools, and autocomplete.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -176,6 +176,11 @@
       {
         "command": "hackl.toggleEngine",
         "title": "Toggle Managed Local Server",
+        "category": "Hackl"
+      },
+      {
+        "command": "hackl.startEngine",
+        "title": "Start Managed Local Server",
         "category": "Hackl"
       },
       {

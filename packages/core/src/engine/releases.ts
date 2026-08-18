@@ -16,27 +16,27 @@ export interface ReleaseTable {
 }
 
 export const LLAMACPP_RELEASE: ReleaseTable = {
-  tag: "b9575",
+  tag: "b10488",
   assets: {
     "macos-arm64": {
-      name: "llama-b9575-bin-macos-arm64.tar.gz",
-      url: "https://github.com/ggml-org/llama.cpp/releases/download/b9575/llama-b9575-bin-macos-arm64.tar.gz",
-      sha256: "b59933f062edbd0c03f2e1fad7f710f44ca11a41e72d384412297de82f7c3e95",
+      name: "llama-b10488-bin-macos-arm64.tar.gz",
+      url: "https://github.com/ggml-org/llama.cpp/releases/download/b10488/llama-b10488-bin-macos-arm64.tar.gz",
+      sha256: "ada90bbc4787caac49fbb95ed2487a03fb4bbb456057a31e316878e1a895827a",
     },
     "macos-x64": {
-      name: "llama-b9575-bin-macos-x64.tar.gz",
-      url: "https://github.com/ggml-org/llama.cpp/releases/download/b9575/llama-b9575-bin-macos-x64.tar.gz",
-      sha256: "03f9eeb16f92d1305b553558f7ae967903834c3684dd4ca229f833cd3764c24c",
+      name: "llama-b10488-bin-macos-x64.tar.gz",
+      url: "https://github.com/ggml-org/llama.cpp/releases/download/b10488/llama-b10488-bin-macos-x64.tar.gz",
+      sha256: "80567f47511d5e11872835614b99cd678fa276b05553563e8aab3f2cb6b90abd",
     },
     "ubuntu-vulkan-x64": {
-      name: "llama-b9575-bin-ubuntu-vulkan-x64.tar.gz",
-      url: "https://github.com/ggml-org/llama.cpp/releases/download/b9575/llama-b9575-bin-ubuntu-vulkan-x64.tar.gz",
-      sha256: "e82dd9f66831128d7efbb165010700b86830ddb5c0cbdb18902113a2a8577880",
+      name: "llama-b10488-bin-ubuntu-vulkan-x64.tar.gz",
+      url: "https://github.com/ggml-org/llama.cpp/releases/download/b10488/llama-b10488-bin-ubuntu-vulkan-x64.tar.gz",
+      sha256: "f180b1e34714a978b57af5ba0badffaec442a187bf9ebf224045e3df24aa0684",
     },
     "win-vulkan-x64": {
-      name: "llama-b9575-bin-win-vulkan-x64.zip",
-      url: "https://github.com/ggml-org/llama.cpp/releases/download/b9575/llama-b9575-bin-win-vulkan-x64.zip",
-      sha256: "580d8b5d2d947e3207d61f9cdec47bf78ebfd49a69b04504fad937da074d07eb",
+      name: "llama-b10488-bin-win-vulkan-x64.zip",
+      url: "https://github.com/ggml-org/llama.cpp/releases/download/b10488/llama-b10488-bin-win-vulkan-x64.zip",
+      sha256: "8de77b0f912ad9c22bcfcb3798a36f2140fb0232df5defa2ea87d7f3e2652183",
     },
   },
 };

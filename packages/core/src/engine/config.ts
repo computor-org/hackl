@@ -65,7 +65,6 @@ function isMoe(model: ModelOption | undefined): boolean {
 export function resolveKnobs(probe: SystemProbe, model: ModelOption | undefined, cfg: EngineConfig): Knobs {
   const mac = probe.platform === "darwin";
   const budget = memoryBudgetGB(probe);
-  const tightVram = (probe.accelerator === "cuda" || probe.accelerator === "rocm") && (probe.vramGB ?? 0) < 12;
 
   const defaults: Knobs = {
     host: cfg.host || "127.0.0.1",
@@ -75,8 +74,9 @@ export function resolveKnobs(probe: SystemProbe, model: ModelOption | undefined,
     ngl: 99,
     ubatch: mac ? undefined : 1024,
     batch: 2048,
-    cacheTypeK: tightVram ? "q4_0" : "q8_0",
-    cacheTypeV: tightVram ? "q4_0" : "q8_0",
+    // Q8 KV is the quality-first default; constrained machines can override it.
+    cacheTypeK: "q8_0",
+    cacheTypeV: "q8_0",
     threads: mac ? undefined : Math.max(2, probe.cpuCount - 2),
     threadsHttp: mac ? undefined : 4,
     reasoningBudget: 4096,
