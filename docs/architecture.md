@@ -120,6 +120,14 @@ turn and are not stored in the durable transcript. This keeps follow-up prompts
 small and makes cache reuse more plausible because the stable prompt prefix
 changes less.
 
+Before each model turn, Hackl uses the endpoint's effective context when the
+server reports one; a local context setting is only a fallback for servers that
+do not expose it. The tool loop compacts at 75% of that effective window. It
+asks the same backend for a tool-free factual checkpoint capped at 4096 output
+tokens, keeps the latest eight assistant turns, and adds a deterministic
+evidence ledger. If the checkpoint request fails, deterministic pruning keeps
+the agent moving without sending an oversized prompt.
+
 Portable KV-cache or slot-affinity control is not part of the OpenAI-compatible
 contract. The near-term cache strategy is therefore:
 

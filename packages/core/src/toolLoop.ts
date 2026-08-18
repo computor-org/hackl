@@ -2,6 +2,12 @@ import type { ChatBackend, ChatDelta, ChatMessage } from "./chatClient";
 import { splitReasoning } from "./reasoning";
 import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import {
+  compactMessagesIfNeeded,
+  DEFAULT_COMPACT_KEEP_TURNS,
+  DEFAULT_COMPACT_SUMMARY_TOKENS,
+  DEFAULT_MAX_COMPACTIONS,
+} from "./contextCompaction";
+import {
   buildToolResultMessage,
   parseAnyToolRequest,
   isMcpToolRequest,
@@ -32,6 +38,9 @@ export interface ToolLoopOptions {
   extraTools?: ExtraTools;
   maxToolCalls: number;
   maxContextTokens?: number;
+  compactKeepTurns?: number;
+  compactSummaryTokens?: number;
+  maxCompactions?: number;
   progress?: (event: PromptProgress) => void;
   debug?: DebugLog;
   signal?: AbortSignal;
@@ -47,11 +56,33 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
   const toolHistory: ToolInteraction[] = [];
   const requestCounts = new Map<string, number>();
   const invalidToolCalls = new Map<string, number>();
+  let compactions = 0;
   options.debug?.("toolLoop.start", { messages: messages.length, maxToolCalls: options.maxToolCalls });
 
   for (let toolCalls = 0; toolCalls <= options.maxToolCalls; toolCalls++) {
     if (options.signal?.aborted) {
       throw new DOMException("Cancelled", "AbortError");
+    }
+    const compacted = await compactMessagesIfNeeded({
+      backend: options.backend,
+      messages,
+      maxContextTokens: options.maxContextTokens,
+      compactions,
+      keepTurns: options.compactKeepTurns ?? DEFAULT_COMPACT_KEEP_TURNS,
+      summaryTokens: options.compactSummaryTokens ?? DEFAULT_COMPACT_SUMMARY_TOKENS,
+      maxCompactions: options.maxCompactions ?? DEFAULT_MAX_COMPACTIONS,
+      signal: options.signal,
+    });
+    if (compacted.compacted) {
+      messages.splice(0, messages.length, ...compacted.messages);
+      compactions = compacted.compactions;
+      options.debug?.("toolLoop.compaction", compacted);
+      options.progress?.({
+        type: "phase",
+        text: compacted.fallback
+          ? `Context compacted by deterministic pruning (~${compacted.beforeTokens.toLocaleString()} -> ~${compacted.afterTokens.toLocaleString()} tokens).`
+          : `Context compacted (~${compacted.beforeTokens.toLocaleString()} -> ~${compacted.afterTokens.toLocaleString()} tokens).`,
+      });
     }
     const router = new DeltaRouter(options.progress);
     const completion = await completeUntilToolRequest(options, router, messages);

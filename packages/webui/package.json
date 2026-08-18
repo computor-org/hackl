@@ -1,6 +1,6 @@
 {
   "name": "@hackl/webui",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Hackl shared web UI for the browser and the desktop shell.",
   "license": "MIT",
   "private": true,

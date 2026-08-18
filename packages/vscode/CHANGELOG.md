@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4 pre-release
+
+- Respect the live context reported by llama.cpp or LM Studio over local overrides.
+- Automatically compact long agent tool histories below 75% of the effective context.
+- Keep recent turns, bounded factual checkpoints, and deterministic evidence when compaction fails.
+
 ## 0.3.3 pre-release
 
 - Add an explicit VS Code model-download flow with confirmation, progress, and cancellation.

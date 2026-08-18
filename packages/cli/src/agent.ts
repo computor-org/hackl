@@ -1,6 +1,6 @@
 import {
   resolveChatTarget,
-  detectMaxContextTokens,
+  resolveEffectiveContextTokens,
   buildBackend,
   createNodeWorkspaceHost,
   createMcpManager,
@@ -61,15 +61,16 @@ export async function createAgentContext(input: CreateAgentInput): Promise<Agent
         apiKey: config.apiKey || undefined,
       });
 
-  // Match the VS Code extension: when the user has not pinned a context window,
-  // detect it from the local server (llama.cpp /props reports n_ctx, e.g.
-  // 131072 for our Qwen3.8) instead of the conservative 32768 default.
+  // A live server context is authoritative. The configured value is only a
+  // fallback for endpoints that do not expose their effective context.
   let maxContextTokens = config.maxContextTokens;
-  if (!config.maxContextTokensConfigured && !args.codex) {
-    const detected = await detectMaxContextTokens(target.endpoint).catch(() => undefined);
-    if (detected) {
-      maxContextTokens = detected;
-    }
+  if (!args.codex) {
+    maxContextTokens = await resolveEffectiveContextTokens(
+      target.endpoint,
+      maxContextTokens,
+      fetch,
+      target.model,
+    );
   }
 
   let mcp: McpManager | undefined;

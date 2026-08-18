@@ -252,6 +252,7 @@ export async function probeAll(
 export async function detectMaxContextTokens(
   endpoint: string,
   fetchImpl: typeof fetch = fetch,
+  preferredModel?: string,
 ): Promise<number | undefined> {
   const base = normalizeOpenAIEndpoint(endpoint);
   const root = base.replace(/\/v1$/, "");
@@ -260,12 +261,12 @@ export async function detectMaxContextTokens(
     ?? await tryFetchNumber(`${root}/props`, fetchImpl, contextFromProps);
   if (llamaCtx) return llamaCtx;
 
-  const modelCtx = await tryFetchNumber(`${base}/models`, fetchImpl, contextFromModels);
-  if (modelCtx) return modelCtx;
-
   const lmStudioCtx = await tryFetchNumber(`${root}/api/v0/models`, fetchImpl, (data) => {
     if (!isRecord(data) || !Array.isArray(data.data)) return undefined;
-    for (const model of data.data) {
+    const models = preferredModel
+      ? [...data.data].sort((a, b) => modelMatchScore(b, preferredModel) - modelMatchScore(a, preferredModel))
+      : data.data;
+    for (const model of models) {
       if (!isRecord(model)) continue;
       const loaded = positiveNumber(model.loaded_context_length);
       if (loaded) return loaded;
@@ -274,7 +275,24 @@ export async function detectMaxContextTokens(
     }
     return undefined;
   });
-  return lmStudioCtx;
+  if (lmStudioCtx) return lmStudioCtx;
+
+  return await tryFetchNumber(`${base}/models`, fetchImpl, contextFromModels);
+}
+
+export async function resolveEffectiveContextTokens(
+  endpoint: string,
+  fallback: number,
+  fetchImpl: typeof fetch = fetch,
+  preferredModel?: string,
+): Promise<number> {
+  const detected = await detectMaxContextTokens(endpoint, fetchImpl, preferredModel).catch(() => undefined);
+  return detected ?? fallback;
+}
+
+function modelMatchScore(value: unknown, preferredModel: string): number {
+  if (!isRecord(value) || typeof value.id !== "string") return 0;
+  return value.id === preferredModel ? 2 : 1;
 }
 
 function contextFromProps(data: unknown): number | undefined {

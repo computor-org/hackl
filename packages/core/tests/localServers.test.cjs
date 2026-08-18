@@ -4,6 +4,7 @@ const {
   detectMaxContextTokens,
   listModelIds,
   requiresNonLocalEndpointApproval,
+  resolveEffectiveContextTokens,
   resolveChatTarget,
 } = require("../dist/localServers.js");
 const { normalizeOpenAIEndpoint } = require("../dist/openAIEndpoint.js");
@@ -220,6 +221,43 @@ test("detectMaxContextTokens falls back to model metadata context", async () => 
   });
 
   assert.equal(detected, 262144);
+});
+
+test("detectMaxContextTokens prefers LM Studio's loaded context for the selected model", async () => {
+  const calls = [];
+  const detected = await detectMaxContextTokens("http://localhost:1234/v1", async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/props")) return new Response("not found", { status: 404 });
+    if (String(url) === "http://localhost:1234/api/v0/models") {
+      return new Response(JSON.stringify({ data: [
+        { id: "other", loaded_context_length: 16384, max_context_length: 262144 },
+        { id: "qwen", loaded_context_length: 70912, max_context_length: 262144 },
+      ] }));
+    }
+    throw new Error(`unexpected probe: ${url}`);
+  }, "qwen");
+
+  assert.equal(detected, 70912);
+  assert.equal(calls.at(-1), "http://localhost:1234/api/v0/models");
+});
+
+test("resolveEffectiveContextTokens ignores a fallback override when the server reports one", async () => {
+  const resolved = await resolveEffectiveContextTokens(
+    "http://localhost:1234/v1",
+    131072,
+    async (url) => {
+      if (String(url).endsWith("/props")) return new Response("not found", { status: 404 });
+      if (String(url) === "http://localhost:1234/api/v0/models") {
+        return new Response(JSON.stringify({ data: [{
+          id: "qwen", loaded_context_length: 70912, max_context_length: 262144,
+        }] }));
+      }
+      throw new Error(`unexpected probe: ${url}`);
+    },
+    "qwen",
+  );
+
+  assert.equal(resolved, 70912);
 });
 
 test("resolveChatTarget honors an explicit chat model over the endpoint's first model", async () => {

@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Local-first AI coding with managed llama.cpp, agent tools, and autocomplete.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -369,7 +369,7 @@
           "default": 32768,
           "minimum": 1024,
           "order": 30,
-          "description": "Override for the model context window used by the token budget indicator. When unset, Hackl auto-detects from llama.cpp /props or LM Studio /api/v0/models and falls back to 32768."
+          "description": "Fallback context window used when the configured server does not report one. A live server-reported context always wins. Hackl compacts below that effective limit."
         },
         "hackl.enableThinking": {
           "type": "boolean",

@@ -154,6 +154,41 @@ test("completeWithTools reports token metrics after tool results", async () => {
   assert.match(metrics[0].text, /Context ~\d+ \/ 1,000 tokens/);
 });
 
+test("completeWithTools auto-compacts before the next model turn", async () => {
+  const calls = [];
+  const backend = {
+    async complete(messages, options) {
+      calls.push({ messages, options });
+      if (messages[0].content.includes("Checkpoint older context")) {
+        return { content: "Summary of the older coding trajectory." };
+      }
+      return { content: "done" };
+    },
+  };
+  const messages = [
+    { role: "system", content: "system" },
+    { role: "user", content: "current task" },
+    { role: "assistant", content: `HACKL_TOOL ${"old evidence ".repeat(1800)}` },
+    { role: "user", content: `HACKL_TOOL_RESULT run_command ok\n\n${"old output ".repeat(1800)}` },
+    { role: "assistant", content: "recent observation" },
+  ];
+
+  const answer = await completeWithTools({
+    backend,
+    messages,
+    maxToolCalls: 1,
+    maxContextTokens: 8192,
+    compactKeepTurns: 1,
+    runTool: async () => ({ ok: true, content: "unused" }),
+  });
+
+  assert.equal(answer.content, "done");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.enableThinking, false);
+  assert.equal(calls[0].options.maxOutputTokens, 4096);
+  assert.match(calls[1].messages[2].content, /CONTEXT CHECKPOINT/);
+});
+
 test("completeWithTools reports token metrics after invalid tool feedback", async () => {
   const progress = [];
   let calls = 0;

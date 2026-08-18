@@ -1,6 +1,6 @@
 {
   "name": "@hackl/server",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Hackl local session server: runs the agent loop behind a localhost WebSocket for the web and desktop GUIs.",
   "license": "MIT",
   "private": true,

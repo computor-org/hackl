@@ -11,6 +11,7 @@ export * from "./commandPolicy";
 export * from "./prompt";
 export * from "./reasoning";
 export * from "./tokenBudget";
+export * from "./contextCompaction";
 export * from "./modelLabel";
 export * from "./backendRegistry";
 export * from "./codexBackend";

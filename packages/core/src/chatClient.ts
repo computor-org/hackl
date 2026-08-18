@@ -29,6 +29,8 @@ export interface ChatBackend {
 export interface ChatCompleteOptions {
   onDelta?: (delta: ChatDelta) => void;
   signal?: AbortSignal;
+  maxOutputTokens?: number;
+  enableThinking?: boolean;
 }
 
 export type ChatDelta =
@@ -71,7 +73,7 @@ class OpenAICompatibleBackend implements ChatBackend {
     const response = await this.fetchImpl(`${this.endpoint}/chat/completions`, {
       method: "POST",
       headers: this.buildHeaders(),
-      body: JSON.stringify(this.buildRequestBody(messages, Boolean(options.onDelta))),
+      body: JSON.stringify(this.buildRequestBody(messages, Boolean(options.onDelta), options)),
       signal: options.signal,
     });
 
@@ -103,14 +105,22 @@ class OpenAICompatibleBackend implements ChatBackend {
     return headers;
   }
 
-  private buildRequestBody(messages: ChatMessage[], stream: boolean): Record<string, unknown> {
+  private buildRequestBody(
+    messages: ChatMessage[],
+    stream: boolean,
+    requestOptions: ChatCompleteOptions,
+  ): Record<string, unknown> {
     const body: Record<string, unknown> = {
         model: this.options.model,
         messages,
         stream,
         temperature: 0.2,
     };
-    if (this.options.enableThinking === false) {
+    if (typeof requestOptions.maxOutputTokens === "number" && Number.isFinite(requestOptions.maxOutputTokens)) {
+      body.max_tokens = Math.max(1, Math.floor(requestOptions.maxOutputTokens));
+    }
+    const enableThinking = requestOptions.enableThinking ?? this.options.enableThinking;
+    if (enableThinking === false) {
       body.chat_template_kwargs = { enable_thinking: false };
       body.enable_thinking = false;
     } else if (typeof this.options.reasoningBudget === "number" && Number.isFinite(this.options.reasoningBudget)) {

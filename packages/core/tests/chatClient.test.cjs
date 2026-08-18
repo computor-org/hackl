@@ -132,6 +132,24 @@ test("sendChat omits the reasoning budget when thinking is disabled", async () =
   assert.equal("thinking_budget_tokens" in body, false);
 });
 
+test("backend accepts a bounded non-thinking compaction request", async () => {
+  let request;
+  const backend = createOpenAICompatibleBackend({
+    endpoint: "http://localhost:1234/v1",
+    model: "loaded-model",
+    reasoningBudget: 4096,
+    fetchImpl: async (_url, init) => {
+      request = JSON.parse(init.body);
+      return jsonResponse({ choices: [{ message: { content: "checkpoint" } }] });
+    },
+  });
+
+  await backend.complete(messages, { maxOutputTokens: 4096, enableThinking: false });
+  assert.equal(request.max_tokens, 4096);
+  assert.equal(request.enable_thinking, false);
+  assert.equal("thinking_budget_tokens" in request, false);
+});
+
 test("OpenAI-compatible backend returns response model metadata", async () => {
   const backend = createOpenAICompatibleBackend({
     endpoint: "http://localhost:8080/v1",

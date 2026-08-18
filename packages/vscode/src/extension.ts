@@ -744,12 +744,13 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
   const maxToolFileChars = cfg.maxToolFileChars;
   const debug = createDebugLog(cfg.debug);
-  const configuredMaxContext = cfg.maxContextTokensConfigured ? cfg.maxContextTokens : undefined;
   const codexMaxContext = useCodex ? codexDetection?.modelContextWindows[target.model] : undefined;
-  const detectedMaxContext = configuredMaxContext === undefined && !useCodex
-    ? await getDetectedMaxContext(target.endpoint)
+  const detectedMaxContext = !useCodex
+    ? await getDetectedMaxContext(target.endpoint, target.model)
     : undefined;
-  const maxContextTokens = configuredMaxContext ?? codexMaxContext ?? detectedMaxContext ?? 32768;
+  const maxContextTokens = useCodex
+    ? (codexMaxContext ?? cfg.maxContextTokens)
+    : (detectedMaxContext ?? cfg.maxContextTokens ?? 32768);
   const enableThinking = cfg.enableThinking;
   const reasoningBudget = cfg.reasoningBudget;
   debug?.("prompt.start", {
@@ -1014,11 +1015,12 @@ function buildBackendsState(
   };
 }
 
-async function getDetectedMaxContext(endpoint: string): Promise<number | undefined> {
-  if (detectedContextCache.has(endpoint)) {
-    return detectedContextCache.get(endpoint);
+async function getDetectedMaxContext(endpoint: string, model?: string): Promise<number | undefined> {
+  const cacheKey = `${endpoint}\n${model ?? ""}`;
+  if (detectedContextCache.has(cacheKey)) {
+    return detectedContextCache.get(cacheKey);
   }
-  const detected = await detectMaxContextTokens(endpoint).catch(() => undefined);
-  detectedContextCache.set(endpoint, detected);
+  const detected = await detectMaxContextTokens(endpoint, fetch, model).catch(() => undefined);
+  detectedContextCache.set(cacheKey, detected);
   return detected;
 }

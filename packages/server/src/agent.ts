@@ -1,4 +1,4 @@
-import { resolveChatTarget, detectMaxContextTokens, buildBackend } from "@hackl/core";
+import { resolveChatTarget, resolveEffectiveContextTokens, buildBackend } from "@hackl/core";
 import type { ChatBackend, SessionConfig } from "@hackl/core";
 
 export interface ServerAgent {
@@ -28,11 +28,10 @@ export async function createServerAgent(env: NodeJS.ProcessEnv = process.env): P
     preferredModel: model,
   });
 
+  // A live server context is authoritative; the environment value is only a
+  // fallback for endpoints that do not expose their effective context.
   let maxContextTokens = numberFromEnv(env.HACKL_MAX_CONTEXT_TOKENS) ?? 32768;
-  if (env.HACKL_MAX_CONTEXT_TOKENS === undefined) {
-    const detected = await detectMaxContextTokens(target.endpoint).catch(() => undefined);
-    if (detected) maxContextTokens = detected;
-  }
+  maxContextTokens = await resolveEffectiveContextTokens(target.endpoint, maxContextTokens, fetch, target.model);
 
   const backend = buildBackend({
     choice: { kind: "local", endpoint: target.endpoint, model: target.model },
