@@ -1,6 +1,6 @@
 {
   "name": "@hackl/cli",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Hackl CLI: local-first AI coding agent in the terminal.",
   "license": "MIT",
   "private": true,

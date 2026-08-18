@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Local-first AI coding with managed llama.cpp, agent tools, and autocomplete.",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {

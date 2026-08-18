@@ -73,6 +73,7 @@ async function nodeSearchFiles(
   try {
     const files = await listNodeFiles(root, request.glob, spawnImpl);
     const matcher = createSearchMatcher(request.query);
+    const listOnly = request.query.trim() === "";
     const limit = request.max_results ?? 20;
     const results: string[] = [];
     for (const relative of files) {
@@ -80,6 +81,7 @@ async function nodeSearchFiles(
         results.push(`${relative}: file name match`);
       }
       if (results.length >= limit) break;
+      if (listOnly) continue;
       await addNodeTextMatches(root, relative, matcher, results, limit);
       if (results.length >= limit) break;
     }

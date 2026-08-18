@@ -102,6 +102,7 @@ async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFile
     const files = await vscode.workspace.findFiles(request.glob || "**/*", "**/{node_modules,.git,dist,out,build}/**", 200);
     const results: string[] = [];
     const matcher = createSearchMatcher(request.query);
+    const listOnly = request.query.trim() === "";
     for (const uri of files) {
       const safeUri = await safeVsCodeFileUri(vscode, uri);
       if (!safeUri) {
@@ -112,6 +113,7 @@ async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFile
         results.push(`${relative}: file name match`);
       }
       if (results.length >= limit) break;
+      if (listOnly) continue;
       await addVsCodeTextMatches(vscode, safeUri, matcher, results, limit);
       if (results.length >= limit) break;
     }
@@ -179,7 +181,9 @@ async function safeVsCodeFileUri(vscode: typeof vscodeTypes, uri: vscodeTypes.Ur
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     const realRoot = await realpath(folder.uri.fsPath);
     if (realRoot && isWithin(realRoot, realCandidate)) {
-      return vscode.Uri.file(realCandidate);
+      // Keep the original URI so VS Code renders a workspace-relative path
+      // correctly on macOS, where /var is commonly a symlink to /private/var.
+      return uri;
     }
   }
   return undefined;

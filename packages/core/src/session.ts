@@ -4,9 +4,10 @@ import { createWorkspaceToolRunner } from "./toolRunner";
 import { completeWithTools, ToolLoopAnswer } from "./toolLoop";
 import { buildHacklMessages, ConversationMessage, PromptMode } from "./prompt";
 import { renderToolCatalog } from "./toolCatalog";
+import { estimateChatTokens, formatTokenBudget } from "./tokenBudget";
 import type { McpManager } from "./mcp/manager";
 import type { HacklTarget } from "./types";
-import type { ToolResult } from "./tools";
+import type { ToolRequest, ToolResult } from "./tools";
 import type { DebugLog } from "./debugLog";
 
 // Approval surfaced to a frontend (terminal y/N, VS Code modal, future HTTP).
@@ -90,18 +91,6 @@ export async function runHacklPrompt(
   const permissions = permissionsForMode(input.mode);
   const mcpTools = deps.mcp?.tools() ?? [];
 
-  const messages: ChatMessage[] = buildHacklMessages(
-    input.prompt,
-    input.contextText,
-    input.history ?? [],
-    input.mode,
-    {
-      targets: input.targets,
-      createAnnotations: input.createAnnotations,
-      toolCatalog: renderToolCatalog(mcpTools),
-    },
-  );
-
   const runTool = createWorkspaceToolRunner({
     maxFileChars: deps.config.maxToolFileChars,
     allowSearch: permissions.allowSearch,
@@ -112,6 +101,26 @@ export async function runHacklPrompt(
     workspace: deps.workspace,
     signal: input.signal,
   });
+  const orientation = await collectWorkspaceOrientation(input, runTool, onEvent);
+  const toolRunner = orientation?.ok
+    ? cacheWorkspaceOrientation(orientation.content, runTool)
+    : runTool;
+  const contextText = renderWorkspaceContext(input.contextText, deps.workspace.root(), orientation);
+
+  const messages: ChatMessage[] = buildHacklMessages(
+    input.prompt,
+    contextText,
+    input.history ?? [],
+    input.mode,
+    {
+      targets: input.targets,
+      createAnnotations: input.createAnnotations,
+      toolCatalog: renderToolCatalog(mcpTools),
+    },
+  );
+  const inputTokens = estimateChatTokens(messages);
+  onEvent({ type: "token_budget", inputTokens, maxContextTokens: deps.config.maxContextTokens });
+  onEvent({ type: "phase", text: `Prompt ready · ${formatTokenBudget(inputTokens, deps.config.maxContextTokens)}` });
 
   const extraTools = deps.mcp && mcpTools.length
     ? {
@@ -125,7 +134,7 @@ export async function runHacklPrompt(
     const answer = await completeWithTools({
       backend: deps.backend,
       messages,
-      runTool,
+      runTool: toolRunner,
       extraTools,
       maxToolCalls: input.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
       maxContextTokens: deps.config.maxContextTokens,
@@ -149,6 +158,61 @@ export async function runHacklPrompt(
     onEvent({ type: "error", message });
     throw error;
   }
+}
+
+async function collectWorkspaceOrientation(
+  input: PromptInput,
+  runTool: (request: ToolRequest) => Promise<ToolResult>,
+  onEvent: (event: SessionEvent) => void,
+): Promise<ToolResult | undefined> {
+  if (!canInspectWorkspace(input.mode) || !isWorkspaceOrientationPrompt(input.prompt)) {
+    return undefined;
+  }
+  onEvent({ type: "phase", text: "Inspecting workspace files..." });
+  try {
+    return await runTool({ name: "search_files", query: "", glob: "**/*", max_results: 50 });
+  } catch (error) {
+    return { ok: false, content: `Workspace listing failed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+function cacheWorkspaceOrientation(
+  content: string,
+  runTool: (request: ToolRequest) => Promise<ToolResult>,
+): (request: ToolRequest) => Promise<ToolResult> {
+  return async (request) => {
+    if (request.name !== "search_files" || request.query.trim() !== "") {
+      return runTool(request);
+    }
+    const lines = content.split("\n");
+    const limit = request.max_results ?? lines.length;
+    return { ok: true, content: lines.slice(0, limit).join("\n") };
+  };
+}
+
+function canInspectWorkspace(mode: PromptMode): boolean {
+  return mode === "work" || mode === "agent" || mode === "yolo";
+}
+
+export function isWorkspaceOrientationPrompt(prompt: string): boolean {
+  const normalized = prompt.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return /\b(?:list|show|enumerate)\b.*\bfiles?\b/.test(normalized)
+    || /\bwhat\s+is\s+this\s+(?:place|directory|folder|workspace|project|repo|repository)\b/.test(normalized)
+    || /\bwhat\s+is\s+in\s+(?:this|the)\s+(?:directory|folder|workspace|project|repo|repository)\b/.test(normalized)
+    || /\bwhere\s+am\s+i\b/.test(normalized)
+    || /\b(?:current|working)\s+(?:directory|folder|workspace|project|repo|repository)\b/.test(normalized);
+}
+
+function renderWorkspaceContext(contextText: string, root: string | undefined, orientation?: ToolResult): string {
+  const sections = [`workspace root: ${root ?? "[no workspace folder]"}`, contextText || "[no editor context]"];
+  if (orientation) {
+    sections.push([
+      "workspace files (collected by Hackl):",
+      orientation.content,
+      "Use this inventory for orientation; do not repeat an empty search unless more detail is needed.",
+    ].join("\n"));
+  }
+  return sections.join("\n\n");
 }
 
 // MCP tools are untrusted by default: every call goes through the approval gate.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6 pre-release
+
+- Make Agent mode inspect the workspace before answering orientation questions.
+- Use the shared core session loop in VS Code, CLI, and server paths.
+- Keep workspace listings filename-only and reuse repeated orientation searches.
+
 ## 0.3.5 pre-release
 
 - Add a Hackl chat button alongside Claude Code and Codex in the Secondary Side Bar.

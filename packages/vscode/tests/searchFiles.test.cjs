@@ -40,6 +40,7 @@ test("search_files with empty query lists files matched by glob", async () => {
     assert.equal(result.ok, true);
     assert.match(result.content, /src\/chatSession\.ts: file name match/);
     assert.match(result.content, /README\.md: file name match/);
+    assert.doesNotMatch(result.content, /export class ChatSession/);
   });
 });
 

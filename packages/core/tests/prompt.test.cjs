@@ -67,6 +67,7 @@ test("buildHacklMessages enables command instructions in agent mode", () => {
 
   assert.match(agent[0].content, /Local coding agent/);
   assert.match(agent[0].content, /run_command/);
+  assert.match(agent[0].content, /workspace-orientation/);
   assert.doesNotMatch(agent[0].content, /skips approval prompts/);
 });
 

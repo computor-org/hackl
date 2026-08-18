@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { ChatMessage } from "@hackl/core";
 import {
   ApprovalRequester,
   BasketBridge,
@@ -23,12 +22,9 @@ import {
   resolveChatTarget,
 } from "@hackl/core";
 import { shortModelLabel } from "@hackl/core";
-import { buildHacklMessages, PromptMode } from "@hackl/core";
-import { completeWithTools } from "@hackl/core";
-import { createMcpManager, renderToolCatalog } from "@hackl/core";
-import type { McpManager, ToolResult, HacklConfig as CoreHacklConfig } from "@hackl/core";
-import { estimateChatTokens, formatTokenBudget } from "@hackl/core";
-import { createWorkspaceToolRunner } from "./workspaceTools";
+import { PromptMode, createMcpManager, runHacklPrompt } from "@hackl/core";
+import type { McpManager, HacklConfig as CoreHacklConfig } from "@hackl/core";
+import { createVsCodeWorkspaceHost } from "./workspaceTools";
 import { createDebugLog, disposeDebugLog } from "./debugLog";
 import {
   BasketService,
@@ -95,32 +91,6 @@ async function reconnectMcpManager(): Promise<void> {
   await mcpManager?.close();
   mcpManager = undefined;
   mcpSignature = "";
-}
-
-function buildMcpExtraTools(
-  manager: McpManager,
-  requestApproval: ((request: { title: string; detail: string; approveLabel: string; denyLabel: string }) => Promise<boolean>) | undefined,
-): { names: ReadonlySet<string>; run: (name: string, args: Record<string, unknown>) => Promise<ToolResult> } {
-  return {
-    names: manager.toolNames(),
-    run: async (name, args) => {
-      const detail = `${name}\n\n${truncateArgs(args)}`;
-      const approved = await requestApproval?.({ title: "Run MCP tool?", detail, approveLabel: "Run", denyLabel: "Deny" });
-      if (!approved) {
-        return { ok: false, content: "MCP tool call denied by user." };
-      }
-      return manager.callTool(name, args);
-    },
-  };
-}
-
-function truncateArgs(args: Record<string, unknown>): string {
-  try {
-    const json = JSON.stringify(args);
-    return json.length > 500 ? `${json.slice(0, 500)}...` : json;
-  } catch {
-    return "(unserializable arguments)";
-  }
 }
 
 const API_KEY_SECRET = "hackl.apiKey";
@@ -715,7 +685,6 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   const targets: HacklTarget[] = args.targets ?? [];
   const options = args.options ?? {};
   const createAnnotations = Boolean(options.createAnnotations);
-  const startedAt = Date.now();
   progress?.({ type: "phase", text: "Preprocessing prompt..." });
   const cfg = readHacklConfig();
   const endpointApproval = await requireEndpointApproval(cfg.endpoint, cfg.endpointConfigured, requestApproval);
@@ -774,29 +743,11 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   });
   const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
   const mcp = await ensureMcpManager(cfg, debug);
-  const mcpTools = mcp?.tools() ?? [];
-  const messages: ChatMessage[] = buildHacklMessages(prompt, contextText, history, mode, {
-    targets,
-    createAnnotations,
-    toolCatalog: renderToolCatalog(mcpTools),
-  });
-  const inputTokens = estimateChatTokens(messages);
-  debug?.("prompt.context", { inputTokens, maxContextTokens, messages: messages.length });
-  progress?.({
-    type: "phase",
-    text: `Preprocessing ${Date.now() - startedAt} ms · ${formatTokenBudget(inputTokens, maxContextTokens)}`,
-    inputTokens,
-    maxContextTokens,
-  });
-  progress?.({ type: "phase", text: "Model request..." });
-
-  const modelStartedAt = Date.now();
-  const allowEdits = mode === "edit" || mode === "work" || mode === "agent" || mode === "yolo";
   const choiceForCall: BackendChoice = useCodex
     ? { kind: "codex", model: target.model }
     : { kind: "local", endpoint: target.endpoint, model: target.model };
   const apiKey = useCodex ? undefined : await readApiKey();
-  const answer = await completeWithTools({
+  const answer = await runHacklPrompt({
     backend: buildBackend({
       choice: choiceForCall,
       enableThinking,
@@ -806,25 +757,35 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
       clientVersion: extensionContext?.extension.packageJSON?.version,
     }),
-    messages,
-    runTool: createWorkspaceToolRunner({
-      maxFileChars: maxToolFileChars,
-      allowEdits,
-      allowSearch: mode === "work" || mode === "agent" || mode === "yolo",
-      allowCommands: mode === "agent" || mode === "yolo",
-      yolo: mode === "yolo",
-      requestApproval,
-      signal,
-    }),
-    extraTools: mcp && mcpTools.length ? buildMcpExtraTools(mcp, requestApproval) : undefined,
-    maxToolCalls: cfg.maxToolCalls,
-    maxContextTokens,
-    progress,
+    workspace: createVsCodeWorkspaceHost(),
+    config: { maxToolFileChars, maxContextTokens },
+    mcp,
+    requestApproval,
     debug,
+  }, {
+    prompt,
+    contextText,
+    history,
+    mode,
+    targets,
+    createAnnotations,
+    maxToolCalls: cfg.maxToolCalls,
     signal,
+  }, (event) => {
+    if (event.type === "delta" || event.type === "phase") {
+      progress?.(event);
+      return;
+    }
+    if (event.type === "token_budget") {
+      progress?.({
+        type: "phase",
+        text: "Context budget updated.",
+        inputTokens: event.inputTokens,
+        maxContextTokens: event.maxContextTokens,
+      });
+    }
   });
   debug?.("prompt.answer", answer);
-  progress?.({ type: "phase", text: `Model finished in ${Date.now() - modelStartedAt} ms` });
 
   const result: ChatAnswer = { content: answer.content, reasoning: answer.reasoning };
   let createdAnnotations: HacklAnnotation[] = [];
