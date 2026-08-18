@@ -61,7 +61,7 @@ of autocomplete and never stops a manual or external server.
 It binds `127.0.0.1` by default; the managed llama.cpp binary is a pinned,
 sha256-verified download (never at npm install). Defaults derive from the
 slopcode-infra launch profile; the public model catalog is a curated subset.
-Model guidance: prefer the 35B-A3B MoE over the dense 27B (faster decode), and
+Model guidance: Qwen3.8 27B is the largest catalog model for a 32 GB Mac; prefer
 Qwen 9B over Gemma 12B at ~16 GB. Engine config: `~/.config/hackl/config.json`
 (`engine` block, overrides only); runtime state: `~/.local/state/hackl/`; model
 cache `~/.cache/llama.cpp`; binary `~/.local/llama.cpp` or the managed cache.

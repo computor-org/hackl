@@ -121,12 +121,10 @@ The managed server binds `127.0.0.1` by default; `--allow-remote` opts into
 `0.0.0.0`. `hackl serve` prints both Hackl's UI and llama.cpp's own WebUI.
 
 Model choice is hardware-aware (`recommendModel`): it picks the largest catalog
-model that fits, spanning a 1.5B coder up to the Qwen3.6-35B-A3B MoE. Two rules
-worth knowing: the **35B-A3B MoE decodes faster than the dense 27B** (about 3B
-active params), so it is preferred when it fits; and at **~16 GB, Qwen 9B is
-preferred over Gemma 12B** (it fits better, ships FIM tokens, and is stronger at
-code). Knobs (context, n-cpu-moe, KV quant, MTP, mmproj, threads, ...) default
-from the probe and are overridable per model.
+model that fits, spanning a 1.5B coder up to Qwen3.8-27B. At **~16 GB, Qwen 9B
+is preferred over Gemma 12B** (it fits better, ships FIM tokens, and is stronger
+at code). Knobs (context, KV quant, mmproj, threads, ...) default from the probe
+and are overridable per model.
 
 VS Code starts or joins the session on activation. Its server status item
 directly toggles the global, persistent `hackl.engine.enabled` setting. Turning

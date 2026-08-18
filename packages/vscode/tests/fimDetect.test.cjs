@@ -4,7 +4,7 @@ const { detectFim, toRootBase, buildQwenPrompt, fimCapableByModelName, fimSuppor
 
 test("fimCapableByModelName treats the Qwen line as FIM-capable", () => {
   assert.equal(fimCapableByModelName("qwen"), true);
-  assert.equal(fimCapableByModelName("Qwen3.6-35B-A3B"), true);
+  assert.equal(fimCapableByModelName("Qwen3.8-27B"), true);
   assert.equal(fimCapableByModelName("qwen2.5-coder-7b-instruct"), true);
 });
 
@@ -20,7 +20,7 @@ test("fimCapableByModelName returns undefined for unknown or empty ids", () => {
 });
 
 test("fimSupportByModelName maps known model families to their dialect", () => {
-  assert.equal(fimSupportByModelName("unsloth/qwen3.6:27b@128k")?.dialect, "qwen");
+  assert.equal(fimSupportByModelName("unsloth/qwen3.8:27b@128k")?.dialect, "qwen");
   assert.equal(fimSupportByModelName("codegemma-7b")?.dialect, "codegemma");
   assert.equal(fimSupportByModelName("CodeLlama-13b")?.dialect, "codellama");
   assert.equal(fimSupportByModelName("codestral")?.dialect, undefined);

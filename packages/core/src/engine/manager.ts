@@ -168,7 +168,7 @@ export class EngineManager {
       status,
       models: this.listModels(),
       notes: [
-        "The 35B-A3B MoE decodes faster than the dense 27B (~3B active params); prefer it when it fits.",
+        "Qwen3.8 27B is the largest catalog model for a 32 GB Mac; use Qwen 9B on ~16 GB machines.",
         "At ~16 GB, prefer Qwen 9B over Gemma 12B (fits better, ships FIM tokens, stronger at code).",
       ],
     };

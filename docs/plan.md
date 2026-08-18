@@ -91,7 +91,7 @@ infill tokens, so it does chat, edit, and agent but not autocomplete):
 
 - Small RAM or weak GPU: Qwen3.5 4B, or Gemma 4 E2B.
 - Normal laptop or desktop: Qwen3.5 9B, or Gemma 4 E4B.
-- Large local machine (24-32 GB): Qwen3.6 35B-A3B, or Gemma 4 26B-A4B.
+- Large local machine (24-32 GB): Qwen3.8 27B, or Gemma 4 26B-A4B.
 
 Each runs Qwen's "thinking + precise coding" sampler (temp 0.6, top-p 0.95,
 top-k 20, min-p 0). Reasoning is capped at 4096 tokens so a thinking model does

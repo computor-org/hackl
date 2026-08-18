@@ -63,7 +63,7 @@ export async function createAgentContext(input: CreateAgentInput): Promise<Agent
 
   // Match the VS Code extension: when the user has not pinned a context window,
   // detect it from the local server (llama.cpp /props reports n_ctx, e.g.
-  // 131072 for our Qwen3.6) instead of the conservative 32768 default.
+  // 131072 for our Qwen3.8) instead of the conservative 32768 default.
   let maxContextTokens = config.maxContextTokens;
   if (!config.maxContextTokensConfigured && !args.codex) {
     const detected = await detectMaxContextTokens(target.endpoint).catch(() => undefined);

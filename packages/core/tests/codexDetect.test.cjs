@@ -42,13 +42,13 @@ test("codexCommandCandidates preserves explicit command paths", () => {
 });
 
 test("parseModelsFromTomlText collects only the top-level Codex model", () => {
-  const text = `model = "gpt-5.5"\n[profiles.work]\nmodel = "qwen"\n[profiles.openrouter]\nmodel = "qwen/qwen3.6-plus-preview:free"\n`;
+  const text = `model = "gpt-5.5"\n[profiles.work]\nmodel = "qwen"\n[profiles.openrouter]\nmodel = "qwen/qwen3.8-27b:free"\n`;
   const result = parseModelsFromTomlText(text);
   assert.deepEqual(result, ["gpt-5.5"]);
 });
 
 test("parseModelsFromTomlText ignores profile-only provider models", () => {
-  const text = `[profiles.local]\nmodel = "qwen"\n[profiles.openrouter]\nmodel = "qwen/qwen3.6-plus-preview:free"\n`;
+  const text = `[profiles.local]\nmodel = "qwen"\n[profiles.openrouter]\nmodel = "qwen/qwen3.8-27b:free"\n`;
   assert.deepEqual(parseModelsFromTomlText(text), []);
 });
 

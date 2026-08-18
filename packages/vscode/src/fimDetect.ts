@@ -50,7 +50,7 @@ export function buildQwenPrompt(prefix: string, suffix: string): string {
 }
 
 // Model families that ship infill tokens, so the main chat model can also drive
-// autocomplete. The whole Qwen line (Qwen3.6 instruct included, not just the
+// autocomplete. The whole Qwen line (Qwen3.8 instruct included, not just the
 // Coder variants) carries <|fim_prefix|> etc.
 const FIM_CAPABLE_HINTS = [
   "qwen",

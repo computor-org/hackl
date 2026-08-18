@@ -3,7 +3,7 @@ const test = require("node:test");
 const { shortModelLabel } = require("../dist/modelLabel.js");
 
 test("shortModelLabel keeps the size for a bare family name", () => {
-  assert.equal(shortModelLabel("unsloth/qwen3.6:35b-a3b@128k"), "qwen3.6:35b");
+  assert.equal(shortModelLabel("unsloth/qwen3.8:27b@128k"), "qwen3.8:27b");
   assert.equal(shortModelLabel("unsloth/qwen3.5:122b-a10b@128k"), "qwen3.5:122b");
 });
 

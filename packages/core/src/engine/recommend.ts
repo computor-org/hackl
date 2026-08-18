@@ -30,13 +30,6 @@ export function recommendModel(probe: Pick<SystemProbe, "accelerator" | "totalRa
   if (budget >= 12 && budget <= 18 && primary.alias === "gemma-12b-q4") {
     primary = sorted.find((m) => m.alias === "qwen3.5-9b-q4") ?? primary;
   }
-  // 2. Prefer the 35B-A3B MoE over the dense 27B when both fit (MoE ~3B active
-  //    decodes faster and is stronger).
-  if (primary.alias === "qwen3.6-27b-q4") {
-    const moe = sorted.find((m) => m.alias === "qwen3.6-35b-a3b-q4");
-    if (moe && moe.recommendedRamGB <= budget) primary = moe;
-  }
-
   const tight = primary.recommendedRamGB > budget;
   const accel = probe.accelerator + (probe.vramGB ? `, ${probe.vramGB} GiB VRAM` : "");
   const reason = tight

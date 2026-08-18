@@ -63,12 +63,12 @@ test("autocomplete ignores a stale autocomplete.model when reusing the chat endp
       endpointConfigured: false,
       model: "qwen3-coder-next",
     },
-  }, {
-    resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "Qwen3.6-35B-A3B" }),
+    }, {
+      resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "Qwen3.8-27B" }),
   });
 
   assert.equal(result.available, true);
-  assert.equal(result.model, "Qwen3.6-35B-A3B");
+  assert.equal(result.model, "Qwen3.8-27B");
   assert.equal(result.source, "chat-fallback");
 });
 
@@ -121,15 +121,15 @@ test("autocomplete reuses a Qwen chat model for FIM", async () => {
       endpointConfigured: false,
       model: "",
     },
-  }, {
-    resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "Qwen3.6-35B-A3B" }),
+    }, {
+      resolveChatTargetImpl: async ({ endpoint }) => ({ endpoint, model: "Qwen3.8-27B" }),
   });
 
   assert.deepEqual(result, {
     available: true,
     endpoint: "http://localhost:8080/v1",
     root: "http://localhost:8080",
-    model: "Qwen3.6-35B-A3B",
+    model: "Qwen3.8-27B",
     source: "chat-fallback",
     remote: false,
   });

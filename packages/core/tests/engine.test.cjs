@@ -26,12 +26,13 @@ test("recommend: a small machine picks a small coder model", () => {
   assert.equal(core.recommendModel({ accelerator: "cpu", totalRamGB: 8 }).primary.alias, "qwen2.5-coder-3b-q4");
 });
 
-test("recommend: a big machine prefers the 35B-A3B MoE over the dense 27B", () => {
-  assert.match(core.recommendModel({ accelerator: "cuda", totalRamGB: 64, vramGB: 24 }).primary.alias, /35b-a3b/);
+test("recommend: a big machine picks Qwen3.8 27B", () => {
+  assert.equal(core.recommendModel({ accelerator: "cuda", totalRamGB: 64, vramGB: 24 }).primary.alias, "qwen3.8-27b-q4");
 });
 
 test("resolveKnobs: linux MoE gets CPU-MoE split, q8 KV, loopback, MTP, thread cap", () => {
-  const knobs = core.resolveKnobs(LINUX_GPU, core.findModel("qwen3.6-35b-a3b-mtp-q4"), core.DEFAULT_ENGINE_CONFIG);
+  const model = { ...core.findModel("qwen3.8-27b-q4"), alias: "qwen3.8-27b-mtp-test", kind: "moe", mtp: true };
+  const knobs = core.resolveKnobs(LINUX_GPU, model, core.DEFAULT_ENGINE_CONFIG);
   assert.equal(knobs.host, "127.0.0.1");
   assert.equal(knobs.nCpuMoe, 35);
   assert.equal(knobs.cacheTypeK, "q8_0");
@@ -41,19 +42,20 @@ test("resolveKnobs: linux MoE gets CPU-MoE split, q8 KV, loopback, MTP, thread c
 
 test("resolveKnobs: mtp 'off' disables spec decode even for an MTP model", () => {
   const cfg = { ...core.DEFAULT_ENGINE_CONFIG, mtp: "off" };
-  assert.equal(core.resolveKnobs(LINUX_GPU, core.findModel("qwen3.6-35b-a3b-mtp-q4"), cfg).mtp, false);
+  const model = { ...core.findModel("qwen3.8-27b-q4"), alias: "qwen3.8-27b-mtp-test", kind: "moe", mtp: true };
+  assert.equal(core.resolveKnobs(LINUX_GPU, model, cfg).mtp, false);
 });
 
 test("resolveKnobs: mac has no CPU-MoE split and no thread pinning", () => {
   const mac = { platform: "darwin", arch: "arm64", cpuCount: 10, totalRamGB: 32, freeRamGB: 20, accelerator: "metal", vramGB: 32 };
-  const knobs = core.resolveKnobs(mac, core.findModel("qwen3.6-35b-a3b-q4"), core.DEFAULT_ENGINE_CONFIG);
+  const knobs = core.resolveKnobs(mac, core.findModel("qwen3.8-27b-q4"), core.DEFAULT_ENGINE_CONFIG);
   assert.equal(knobs.nCpuMoe, 0);
   assert.equal(knobs.threads, undefined);
   assert.equal(knobs.ubatch, undefined);
 });
 
 test("composeServerArgs: loopback, flash-attn, sampler, mmproj, n-cpu-moe, mtp", () => {
-  const model = core.findModel("qwen3.6-35b-a3b-mtp-q4");
+  const model = { ...core.findModel("qwen3.8-27b-q4"), alias: "qwen3.8-27b-mtp-test", kind: "moe", mtp: true };
   const knobs = core.resolveKnobs(LINUX_GPU, model, core.DEFAULT_ENGINE_CONFIG);
   const s = core.composeServerArgs("/m/model.gguf", "/m/mmproj.gguf", model, knobs).join(" ");
   assert.match(s, /--host 127\.0\.0\.1/);
