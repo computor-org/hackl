@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+First stable release of the 0.4 line. It includes the local-first agent, CLI,
+managed llama.cpp engine, VS Code chat and autocomplete, and the repaired
+release UI smoke test.
+
 ## 0.3.7 pre-release
 
 - Default the VS Code chat mode to Agent, matching the CLI and browser server.

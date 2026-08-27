@@ -29,11 +29,21 @@ Module._load = function load(request, parent, isMain) {
 const { renderChatHtml } = require("../dist/chatHtml.js");
 const vscodeApiShim = `<script>
   window.__hacklPosted = [];
-  window.acquireVsCodeApi = () => ({
+  window.acquireVsCodeApi = () => {
+    let state;
+    return ({
     postMessage(message) {
       window.__hacklPosted.push(message);
-    }
+    },
+    getState() {
+      return state;
+    },
+    setState(next) {
+      state = next;
+      return next;
+    },
   });
+  };
 </script>`;
 
 const server = await startStaticServer(process.cwd());
@@ -116,7 +126,7 @@ try {
   await waitFor(page, () => window.__hacklPosted?.some((message) => message.type === "prompt"), diagnostics);
   assert.deepEqual(
     await page.evaluate(() => window.__hacklPosted.find((message) => message.type === "prompt")),
-    { type: "prompt", prompt: "Explain energy", mode: "ask" },
+    { type: "prompt", prompt: "Explain energy", mode: "agent" },
   );
 
   await page.evaluate(() => {
@@ -266,7 +276,10 @@ async function startStaticServer(root) {
       response.end("not found");
       return;
     }
-    response.writeHead(200, { "Content-Type": mimeType(file) });
+    response.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Content-Type": mimeType(file),
+    });
     response.end(require("node:fs").readFileSync(file));
   });
   await new Promise((resolve) => listener.listen(0, "127.0.0.1", resolve));

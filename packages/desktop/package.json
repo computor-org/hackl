@@ -1,6 +1,6 @@
 {
   "name": "@hackl/desktop",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "description": "Hackl desktop app: an Electron shell around the local server and the shared web UI.",
   "author": "Christopher Albert",
   "license": "MIT",
