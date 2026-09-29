@@ -1,0 +1,36 @@
+# Dependabot version updates with a supply-chain cooldown.
+#
+# `cooldown` delays *version* updates until a release has aged; it does not
+# apply to *security* updates, which open as soon as an advisory is published
+# (GitHub docs: dependabot-options-reference#cooldown).
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
+    groups:
+      npm-dev-tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+      npm-runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
