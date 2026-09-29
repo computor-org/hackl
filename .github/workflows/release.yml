@@ -6,14 +6,22 @@ on:
       - published
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  # npm 11 (pinned below) age gate: any tree npm resolves without a lockfile in CI
+  # (e.g. the ad-hoc `npx electron-builder`) only takes versions >= 7 days old.
+  # `npm ci` itself installs the exact lockfile tree.
+  NPM_CONFIG_MIN_RELEASE_AGE: "7"
 
 jobs:
   vsix:
+    permissions:
+      contents: write # gh release upload
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -21,8 +29,8 @@ jobs:
         run: node scripts/release-channel.mjs check-github "$GITHUB_REF_NAME" "${{ github.event.release.prerelease }}"
       # npm >= 11 honors the package.json "allowScripts" allowlist and blocks
       # unapproved dependency install scripts; the bundled npm 10 does not.
-      - run: npm install -g npm@11
-      - run: npm ci
+      - run: npm install -g npm@11.19.1
+      - run: npm ci --ignore-scripts
       - run: npm run test:coverage
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
