@@ -35,7 +35,7 @@
     "build:cli": "npm run build -w @hackl/cli"
   },
   "devDependencies": {
-    "@types/node": "^20.14.10",
+    "@types/node": "^26.4.0",
     "esbuild": "^0.24.2",
     "typescript": "^5.5.4"
   },
