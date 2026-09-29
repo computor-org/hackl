@@ -37,7 +37,7 @@
   "devDependencies": {
     "@types/node": "^20.14.10",
     "esbuild": "^0.24.2",
-    "typescript": "^5.5.4"
+    "typescript": "^7.0.2"
   },
   "allowScripts": {
     "esbuild@0.24.2": true
