@@ -579,7 +579,7 @@
   },
   "devDependencies": {
     "@hackl/core": "*",
-    "@modelcontextprotocol/sdk": "^1.21.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@playwright/test": "^1.60.0",
     "@types/node": "^20.14.10",
     "@types/vscode": "^1.106.0",
