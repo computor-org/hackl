@@ -580,14 +580,14 @@
   "devDependencies": {
     "@hackl/core": "*",
     "@modelcontextprotocol/sdk": "^1.21.0",
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^20.14.10",
-    "@types/vscode": "^1.106.0",
+    "@types/vscode": "^1.137.0",
     "@vscode/codicons": "^0.0.45",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.9.1",
-    "esbuild": "^0.24.2",
-    "katex": "^0.16.45",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
+    "katex": "^0.18.7",
     "markdown-it": "^14.1.1",
     "typescript": "^5.5.4"
   }
