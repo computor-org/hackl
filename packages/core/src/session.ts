@@ -9,6 +9,8 @@ import type { McpManager } from "./mcp/manager";
 import type { HacklTarget } from "./types";
 import type { ToolRequest, ToolResult } from "./tools";
 import type { DebugLog } from "./debugLog";
+import { CoursePolicy, courseAllowsMode, courseAllowsMcp, courseAllowsRead, validateCoursePolicy } from "./coursePolicy";
+import { validateImageDataUrls } from "./imageContext";
 
 // Approval surfaced to a frontend (terminal y/N, VS Code modal, future HTTP).
 export interface ApprovalRequest {
@@ -42,6 +44,10 @@ export interface SessionDeps {
 }
 
 export interface PromptInput {
+  imageDataUrls?: readonly string[];
+  coursePolicy?: CoursePolicy;
+  courseReadPaths?: readonly string[];
+  teachingPrompt?: string;
   prompt: string;
   contextText: string;
   mode: PromptMode;
@@ -88,10 +94,14 @@ export async function runHacklPrompt(
   input: PromptInput,
   onEvent: (event: SessionEvent) => void,
 ): Promise<ToolLoopAnswer> {
+  const policy = input.coursePolicy === undefined ? undefined : validateCoursePolicy(input.coursePolicy);
+  if (!courseAllowsMode(policy, input.mode)) {
+    throw new Error("This action is disabled by the course assistant policy");
+  }
   const permissions = permissionsForMode(input.mode);
-  const mcpTools = deps.mcp?.tools() ?? [];
+  const mcpTools = courseAllowsMcp(policy) ? deps.mcp?.tools() ?? [] : [];
 
-  const runTool = createWorkspaceToolRunner({
+  const workspaceRunner = createWorkspaceToolRunner({
     maxFileChars: deps.config.maxToolFileChars,
     allowSearch: permissions.allowSearch,
     allowEdits: permissions.allowEdits,
@@ -101,6 +111,13 @@ export async function runHacklPrompt(
     workspace: deps.workspace,
     signal: input.signal,
   });
+  const runTool = async (request: ToolRequest): Promise<ToolResult> => {
+    if (input.signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+    if (policy && request.name === "read_file" && !courseAllowsRead(request.path, input.courseReadPaths)) {
+      return { ok: false, content: "Course mode can read only attached or visible non-hidden files." };
+    }
+    return workspaceRunner(request);
+  };
   const orientation = await collectWorkspaceOrientation(input, runTool, onEvent);
   const toolRunner = orientation?.ok
     ? cacheWorkspaceOrientation(orientation.content, runTool)
@@ -114,8 +131,10 @@ export async function runHacklPrompt(
     input.mode,
     {
       targets: input.targets,
+      imageDataUrls: validateImageDataUrls(input.imageDataUrls),
       createAnnotations: input.createAnnotations,
       toolCatalog: renderToolCatalog(mcpTools),
+      teachingPrompt: input.teachingPrompt,
     },
   );
   const inputTokens = estimateChatTokens(messages);
@@ -136,7 +155,7 @@ export async function runHacklPrompt(
       messages,
       runTool: toolRunner,
       extraTools,
-      maxToolCalls: input.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
+      maxToolCalls: policy ? Math.min(input.maxToolCalls ?? 8, 8) : input.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
       maxContextTokens: deps.config.maxContextTokens,
       debug: deps.debug,
       signal: input.signal,

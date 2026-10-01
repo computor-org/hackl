@@ -137,25 +137,18 @@ contract. The near-term cache strategy is therefore:
 - backend-specific options only behind provider adapters, for example
   llama.cpp prompt-cache or slot controls where available.
 
-## Computor And Luna
+## Computor course integration
 
-Computor's current message views are course/thread scoped and useful for human
-communication, but they are not the right generic coding-chat foundation. Hackl
-keeps the AI backend, prompt, and context layers separate so Computor or Luna
-can later reuse them without inheriting Hackl's webview.
+Computor supplies teaching guidance, permitted assignment context and a scoped
+course policy through Hackl's versioned extension API. Hackl owns interactive
+chat, model transport and learner credentials. Computor's human course messages
+and legacy background reviews remain separate services.
 
-Future integration choices stay open:
-
-- A combined human and AI tutor conversation can route Computor messages into
-  the same backend boundary.
-- Assignment chat can route `@luna` to the local/BYO AI tutor and `@tutor` to
-  the human Computor tutor thread with transcript and assignment context.
-- A separate AI assistant panel can stay beside Computor's human message UI.
-- VS Code native chat can replace the webview if it fits the desired UX and
-  extension API stability.
-
-The invariant is that Computor/Luna integration should depend on backend and
-prompt contracts, not on a specific Hackl chat surface.
+Host policy gates generation and tools independently of prompts. Existing courses
+use Ask-only without inline completion; independent checks disable all generation.
+Policy changes cancel requests and clear prior task context. The course API retains
+the basket API and supports optional integration without a mandatory extension
+dependency. See [Computor mode](computor-mode.md) for the contract and BYOK setup.
 
 ## Learning-Through-Use Pattern
 
@@ -177,7 +170,7 @@ For Hackl, the stages are:
 - Agent: delegate bounded checks and tool use.
 - Review: inspect staged changes, annotations, and commit intent.
 
-Computor/Luna can later turn these stages into curriculum, assignments,
+Computor can turn these stages into curriculum, assignments,
 rubrics, and progress tracking. Hackl must expose the underlying workflow events:
 selected context, mode used, tool requests, edits, checks, annotations, replies,
 review state, and commit/staged context.

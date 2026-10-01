@@ -32,6 +32,7 @@ export interface ChatIncomingMessage {
 }
 
 export interface HacklRequestOptions {
+  imageDataUrls?: readonly string[];
   createAnnotations?: boolean;
 }
 
@@ -103,6 +104,7 @@ export interface ChatBackendsState {
 }
 
 export interface ChatState {
+  coursePolicy?: import('@hackl/core').CoursePolicy;
   type: "state";
   enableThinking?: boolean;
   connected?: boolean;
@@ -178,6 +180,7 @@ export class ChatSession {
     }
     if (message.type === "clear") {
       this.currentController?.abort();
+      this.rejectApprovals();
       this.history.length = 0;
       await post({ type: "cleared" });
       return;
@@ -236,13 +239,18 @@ export class ChatSession {
 
     await post({ type: "status", text: "Preprocessing..." });
     const previousHistory = [...this.history];
-    this.history.push({ role: "user", content: prompt });
+    const userMessage: ConversationMessage = { role: "user", content: prompt };
+    this.history.push(userMessage);
+    const removeUserMessage = () => {
+      const index = this.history.indexOf(userMessage);
+      if (index >= 0) this.history.splice(index, 1);
+    };
     const controller = new AbortController();
     this.currentController = controller;
     try {
       const targets = await this.targetsForPrompt(parsed);
       if ("error" in targets) {
-        this.history.pop();
+        removeUserMessage();
         await post({ type: "error", text: targets.error });
         return;
       }
@@ -267,7 +275,7 @@ export class ChatSession {
         options: effectiveOptions,
       });
       if (controller.signal.aborted) {
-        this.history.pop();
+        removeUserMessage();
         return;
       }
       const answer = normalizeAnswer(rawAnswer);
@@ -278,7 +286,7 @@ export class ChatSession {
       }
       await post(out);
     } catch (error) {
-      this.history.pop();
+      removeUserMessage();
       if (controller.signal.aborted || isAbortError(error)) {
         return;
       }

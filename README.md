@@ -22,6 +22,15 @@ That focus does not limit the tool. Hackl is also a general-purpose local AI
 coding harness: the same shared core drives the CLI, the VS Code extension, and
 MCP tools for everyday work outside any course.
 
+## Computor courses
+
+Install the Computor extension alongside Hackl for course-aware tutoring. Computor
+supplies teaching context and enforced capability limits; Hackl uses your chosen
+local model or personal HTTPS provider key. Existing courses use Ask-only, and
+independent checks disable generation. See [Computor mode](docs/computor-mode.md).
+GitHub Codespaces uses an external provider and your key; its managed local
+inference engine stays disabled.
+
 ## Install
 
 - **VS Code:** install
@@ -44,7 +53,7 @@ files and system. Read the diff before you keep it, work on a clean branch or in
 a sandbox, and keep backups. Local models are fallible and will sometimes
 propose wrong or destructive changes.
 
-Modes set how much the agent may do without asking:
+Modes set the agent's permitted actions:
 
 | Mode | Capability |
 | --- | --- |

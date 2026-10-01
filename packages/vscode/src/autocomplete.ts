@@ -5,6 +5,8 @@ import { FimDetectionResult, FimSupport, detectFim } from "./fimDetect";
 import { requestFim } from "./fimClient";
 import { shortModelLabel } from "@hackl/core";
 import { ensureEngineReady } from "./enginePanel";
+import { courseCompletion, limitCourseCompletion } from "@hackl/core";
+import { coursePolicyController } from "./coursePolicy";
 
 const STATUS_PRIORITY = 50;
 const COMMAND_TOGGLE = "hackl.toggleAutocomplete";
@@ -53,6 +55,7 @@ class AutocompleteController {
 
   register(): void {
     this.context.subscriptions.push(
+      coursePolicyController.onChange(() => { this.invalidate(); this.updateStatus(); }),
       vscode.commands.registerCommand(COMMAND_TOGGLE, () => this.toggle()),
       vscode.commands.registerCommand(COMMAND_STATUS_CLICK, () => this.statusClick()),
       vscode.workspace.onDidChangeConfiguration((event) => {
@@ -71,6 +74,10 @@ class AutocompleteController {
   }
 
   private async toggle(): Promise<void> {
+    if (courseCompletion(coursePolicyController.current?.policy) === "off") {
+      void vscode.window.showInformationMessage("Inline autocomplete is disabled by the course policy.");
+      return;
+    }
     const cfg = vscode.workspace.getConfiguration("hackl");
     const current = cfg.get<boolean>("autocomplete.enabled", true);
     await cfg.update("autocomplete.enabled", !current, vscode.ConfigurationTarget.Global);
@@ -83,6 +90,7 @@ class AutocompleteController {
   // endpoint: clicking a warning state retries resolution instead, so a user
   // reacting to "no suggestions" does not silently turn autocomplete off.
   private async statusClick(): Promise<void> {
+    if (courseCompletion(coursePolicyController.current?.policy) === "off") return;
     const cfg = vscode.workspace.getConfiguration("hackl");
     if (!cfg.get<boolean>("autocomplete.enabled", true)) {
       await cfg.update("autocomplete.enabled", true, vscode.ConfigurationTarget.Global);
@@ -111,10 +119,13 @@ class AutocompleteController {
     position: vscode.Position,
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionItem[] | undefined> {
+    const policySignal = coursePolicyController.signal;
+    if (courseCompletion(coursePolicyController.current?.policy) === "off") return undefined;
     const cfg = readHacklConfig();
     if (!cfg.autocomplete.enabled || !shouldProvideForDocument(document)) return undefined;
 
     const runtime = await this.resolveRuntime();
+    if (policySignal.aborted) return undefined;
     this.updateStatus(runtime);
     if (!isSupportedRuntime(runtime)) return undefined;
 
@@ -122,11 +133,14 @@ class AutocompleteController {
     const controller = new AbortController();
     this.inflight = controller;
     const cancelSubscription = token.onCancellationRequested(() => controller.abort());
+    const abort = () => controller.abort();
+    policySignal.addEventListener("abort", abort, { once: true });
 
     try {
       return await this.complete(document, position, cfg.autocomplete, runtime, controller);
     } finally {
       cancelSubscription.dispose();
+      policySignal.removeEventListener("abort", abort);
       this.finishRequest(controller);
     }
   }
@@ -145,9 +159,11 @@ class AutocompleteController {
     if (controller.signal.aborted) return undefined;
 
     const completion = await fetchCompletion(document, request.position, cfg, runtime, controller.signal);
-    if (!completion || isStaleRequest(document, request)) return undefined;
+    if (!completion || controller.signal.aborted || isStaleRequest(document, request)) return undefined;
+    const allowed = limitCourseCompletion(completion, coursePolicyController.current?.policy);
+    if (!allowed) return undefined;
 
-    return [new vscode.InlineCompletionItem(completion, new vscode.Range(request.position, request.position))];
+    return [new vscode.InlineCompletionItem(allowed, new vscode.Range(request.position, request.position))];
   }
 
   private async resolveRuntime(): Promise<AutocompleteRuntime | undefined> {
@@ -194,6 +210,11 @@ class AutocompleteController {
   }
 
   private updateStatus(runtime?: AutocompleteRuntime): void {
+    if (courseCompletion(coursePolicyController.current?.policy) === "off") {
+      this.status.text = "$(lock) Hackl AC";
+      this.status.tooltip = "Inline autocomplete disabled by the course assistant policy.";
+      return;
+    }
     const state = statusState(readHacklConfig().autocomplete.enabled, runtime);
     this.status.text = state.text;
     this.status.tooltip = state.tooltip;
