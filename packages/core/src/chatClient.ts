@@ -1,6 +1,8 @@
-import { normalizeOpenAIEndpoint } from "./openAIEndpoint";
+import { normalizeOpenAIEndpoint, validateModelEndpoint } from "./openAIEndpoint";
+import { validateImageDataUrls } from "./imageContext";
 
 export interface ChatMessage {
+  imageDataUrls?: readonly string[];
   role: "system" | "user" | "assistant";
   content: string;
 }
@@ -66,6 +68,7 @@ class OpenAICompatibleBackend implements ChatBackend {
 
   constructor(private readonly options: ChatClientOptions) {
     this.endpoint = normalizeOpenAIEndpoint(options.endpoint);
+    validateModelEndpoint(this.endpoint, Boolean(options.apiKey?.trim()));
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -75,6 +78,8 @@ class OpenAICompatibleBackend implements ChatBackend {
       headers: this.buildHeaders(),
       body: JSON.stringify(this.buildRequestBody(messages, Boolean(options.onDelta), options)),
       signal: options.signal,
+      // Endpoint approval covers this origin only, including the prompt body.
+      redirect: "error",
     });
 
     if (!response.ok) {
@@ -112,7 +117,11 @@ class OpenAICompatibleBackend implements ChatBackend {
   ): Record<string, unknown> {
     const body: Record<string, unknown> = {
         model: this.options.model,
-        messages,
+        messages: messages.map(message => message.imageDataUrls?.length ? {
+          role: message.role,
+          content: [{ type: "text", text: message.content },
+            ...validateImageDataUrls(message.imageDataUrls).map(url => ({ type: "image_url", image_url: { url } }))],
+        } : { role: message.role, content: message.content }),
         stream,
         temperature: 0.2,
     };

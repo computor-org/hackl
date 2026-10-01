@@ -44,6 +44,8 @@
   let assistantDraft;
   let isBusy = false;
   let selectedMode = "agent";
+  let coursePolicy;
+  let preferredMode;
   const savedState = vscode.getState();
   if (savedState && typeof savedState.selectedMode === "string") {
     selectedMode = normalizeMode(savedState.selectedMode);
@@ -559,6 +561,20 @@
   updateComboStrip();
 
   function applyState(message) {
+    const previous = coursePolicy;
+    coursePolicy = message.coursePolicy;
+    if (coursePolicy && !previous) preferredMode = selectedMode;
+    const modes = ["ask", "edit", "work", "agent"];
+    for (const option of modeMenu?.querySelectorAll(".mode-option") || []) {
+      const mode = option.getAttribute("data-value");
+      const allowed = !coursePolicy || (!coursePolicy.independentCheck && mode !== "yolo"
+        && modes.indexOf(mode) >= 0 && modes.indexOf(mode) <= modes.indexOf(coursePolicy.actionMode));
+      option.toggleAttribute("disabled", !allowed);
+    }
+    if (coursePolicy && (selectedMode === "yolo" || modes.indexOf(selectedMode) > modes.indexOf(coursePolicy.actionMode))) selectedMode = "ask";
+    if (!coursePolicy && previous && preferredMode) selectedMode = preferredMode;
+    syncModeSelection();
+    updateSendState();
     if (reasoningToggle && typeof message.enableThinking === "boolean") {
       reasoningToggle.setAttribute("aria-pressed", String(message.enableThinking));
     }
@@ -610,7 +626,7 @@
     send.title = "Send (Enter)";
     send.setAttribute("aria-label", "Send");
     const hasText = prompt.value.trim().length > 0;
-    send.disabled = !(hasText || annotationContextAvailable);
+    send.disabled = Boolean(coursePolicy?.independentCheck) || !(hasText || annotationContextAvailable);
   }
 
   function setSendIcon(name) {

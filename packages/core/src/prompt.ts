@@ -58,6 +58,8 @@ const YOLO_SYSTEM_PROMPT = [
 const MAX_HISTORY_MESSAGES = 8;
 
 export interface BuildOptions {
+  imageDataUrls?: readonly string[];
+  teachingPrompt?: string;
   targets?: HacklTarget[];
   createAnnotations?: boolean;
   // Rendered catalog of extra (MCP) tools, appended to the system prompt.
@@ -72,13 +74,16 @@ export function buildHacklMessages(
   options: BuildOptions = {},
 ): ChatMessage[] {
   const userBody = composeUserBody(prompt, contextText, options);
-  const system = options.toolCatalog
+  const baseSystem = options.toolCatalog
     ? `${systemPrompt(mode)}\n${options.toolCatalog}`
     : systemPrompt(mode);
+  const system = options.teachingPrompt
+    ? `${baseSystem}\n\nCourse teaching guidance:\n${options.teachingPrompt}`
+    : baseSystem;
   return [
     { role: "system", content: system },
     ...trimHistory(history),
-    { role: "user", content: userBody },
+    { role: "user", content: userBody, ...(options.imageDataUrls?.length ? { imageDataUrls: options.imageDataUrls } : {}) },
   ];
 }
 

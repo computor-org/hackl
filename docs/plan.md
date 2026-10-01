@@ -18,8 +18,8 @@ Hackl owns the generic editor assistant workflow:
 - optional native VS Code AI integration when it helps without requiring
   Copilot.
 
-Computor and Luna are integrations on top of this layer. Computor owns course
-operations: tests, grading, and human messages. Luna owns the didactic tutor
+Computor integrates with this layer. Computor owns course
+operations: tests, grading, and human messages. Computor supplies the didactic tutor
 behavior and assignment-aware prompts.
 
 ## Teaching Path
@@ -117,7 +117,7 @@ support a dedicated endpoint/model alias for routed local deployments.
 4. Cache-aware provider adapters for local backends, starting with stable
    prompt prefixes and later backend-specific prompt-cache or slot controls
    where the server exposes them.
-5. Assignment-aware Luna prompt mode and Computor context bridge.
+5. Assignment-aware Computor prompt mode and Computor context bridge.
 6. Inline FIM autocomplete with a dedicated endpoint option.
 7. Selection/file edit commands that produce normal workspace edits.
 8. Agent mode with approved structured commands, test/diff output, and optional
