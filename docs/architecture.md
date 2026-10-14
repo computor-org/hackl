@@ -137,24 +137,24 @@ contract. The near-term cache strategy is therefore:
 - backend-specific options only behind provider adapters, for example
   llama.cpp prompt-cache or slot controls where available.
 
-## Computor And Luna
+## Computor And Lena
 
 Computor's current message views are course/thread scoped and useful for human
 communication, but they are not the right generic coding-chat foundation. Hackl
-keeps the AI backend, prompt, and context layers separate so Computor or Luna
+keeps the AI backend, prompt, and context layers separate so Computor or Lena
 can later reuse them without inheriting Hackl's webview.
 
 Future integration choices stay open:
 
 - A combined human and AI tutor conversation can route Computor messages into
   the same backend boundary.
-- Assignment chat can route `@luna` to the local/BYO AI tutor and `@tutor` to
+- Assignment chat can route `@lena` to the local/BYO AI tutor and `@tutor` to
   the human Computor tutor thread with transcript and assignment context.
 - A separate AI assistant panel can stay beside Computor's human message UI.
 - VS Code native chat can replace the webview if it fits the desired UX and
   extension API stability.
 
-The invariant is that Computor/Luna integration should depend on backend and
+The invariant is that Computor/Lena integration should depend on backend and
 prompt contracts, not on a specific Hackl chat surface.
 
 ## Learning-Through-Use Pattern
@@ -177,7 +177,7 @@ For Hackl, the stages are:
 - Agent: delegate bounded checks and tool use.
 - Review: inspect staged changes, annotations, and commit intent.
 
-Computor/Luna can later turn these stages into curriculum, assignments,
+Computor/Lena can later turn these stages into curriculum, assignments,
 rubrics, and progress tracking. Hackl must expose the underlying workflow events:
 selected context, mode used, tool requests, edits, checks, annotations, replies,
 review state, and commit/staged context.
@@ -233,7 +233,7 @@ The renderer should stay small and local:
 - clear busy/error states, Enter-to-send, and transcript clearing;
 - compact context controls;
 - discard-last-annotations control;
-- future room for `@luna` and `@tutor`.
+- future room for `@lena` and `@tutor`.
 
 Native VS Code chat remains a candidate once the product needs deeper built-in
 chat affordances. It is an optional bridge, not the default UI, because Hackl
@@ -297,3 +297,8 @@ the same checks and upload the generated VSIX to the GitHub release.
   `https://code.visualstudio.com/api/working-with-extensions/publishing-extension`
 - Syntorial:
   `https://en.wikipedia.org/wiki/Syntorial`
+
+The teaching assistant is named Lena. Computor course messages retain
+`@luna` and `@ai` as aliases of `@lena` once the matching backend update is
+deployed; all three resolve to the same existing tutor identity. The routing
+plans above do not imply a separate new tutor account.

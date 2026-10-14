@@ -18,8 +18,8 @@ Hackl owns the generic editor assistant workflow:
 - optional native VS Code AI integration when it helps without requiring
   Copilot.
 
-Computor and Luna are integrations on top of this layer. Computor owns course
-operations: tests, grading, and human messages. Luna owns the didactic tutor
+Computor and Lena are integrations on top of this layer. Computor owns course
+operations: tests, grading, and human messages. Lena owns the didactic tutor
 behavior and assignment-aware prompts.
 
 ## Teaching Path
@@ -42,7 +42,7 @@ constraints.
 
 Assignment chat should become the primary support surface:
 
-- `@luna` routes to the assignment-aware AI tutor.
+- `@lena` routes to the assignment-aware AI tutor.
 - `@tutor` escalates to a human tutor in the same assignment thread.
 - The escalation carries assignment context plus file/test state and the
   transcript.
@@ -72,7 +72,7 @@ The chat UI should be Hackl-owned rather than Copilot-owned:
 - local LaTeX math rendering for physics and mathematics teaching;
 - context chips for editor/selection state plus assignment and model state;
 - phase timing, reasoning visibility, and token/context budget feedback;
-- `@luna` and `@tutor` routing in the same conversation model;
+- `@lena` and `@tutor` routing in the same conversation model;
 - normal editor files and Git diffs for future edit/agent review.
 
 Keep an editor-tab chat command as a secondary surface for long sessions. Add a
@@ -117,7 +117,7 @@ support a dedicated endpoint/model alias for routed local deployments.
 4. Cache-aware provider adapters for local backends, starting with stable
    prompt prefixes and later backend-specific prompt-cache or slot controls
    where the server exposes them.
-5. Assignment-aware Luna prompt mode and Computor context bridge.
+5. Assignment-aware Lena prompt mode and Computor context bridge.
 6. Inline FIM autocomplete with a dedicated endpoint option.
 7. Selection/file edit commands that produce normal workspace edits.
 8. Agent mode with approved structured commands, test/diff output, and optional
