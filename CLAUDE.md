@@ -13,10 +13,10 @@ Brand:
 Relationship to Computor:
 - `computor-vscode` remains course-management UI: login, repositories,
   submissions, grading, tests, course data, and manual/course setup.
-- Luna remains the Computor-specific teaching assistant: didactic prompts,
+- Lena remains the Computor-specific teaching assistant: didactic prompts,
   hints, Socratic behavior, student/course context, optional tutor analytics.
 - Hackl owns the generic editor/backend local-AI layer.
-- Luna may eventually build on Hackl instead of duplicating editor/backend
+- Lena may eventually build on Hackl instead of duplicating editor/backend
   plumbing.
 
 ## Product Rules
