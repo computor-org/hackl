@@ -5,6 +5,7 @@ import { getVscode } from "./vscodeShim";
 import {
   createWorkspaceToolRunner as coreCreateWorkspaceToolRunner,
   createNodeWorkspaceHost,
+  formatDirectoryListing,
 } from "@hackl/core";
 import type {
   WorkspaceToolHost,
@@ -78,6 +79,9 @@ async function vscodeReadFile(
   }
 
   try {
+    if ((await fsp.stat(uri.fsPath)).isDirectory()) {
+      return await listVsCodeDirectory(uri.fsPath, maxFileChars);
+    }
     const guard = await validateVsCodeTextFile(uri.fsPath);
     if (!guard.ok) return guard;
     const document = await vscode.workspace.openTextDocument(uri);
@@ -89,6 +93,11 @@ async function vscodeReadFile(
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, content: message };
   }
+}
+
+async function listVsCodeDirectory(dirPath: string, maxFileChars: number): Promise<ToolResult> {
+  const entries = await fsp.readdir(dirPath, { withFileTypes: true });
+  return { ok: true, content: formatDirectoryListing(entries, maxFileChars) };
 }
 
 async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFilesRequest): Promise<ToolResult> {
