@@ -18,7 +18,7 @@ import type {
 } from "@hackl/core";
 import type { CliArgs } from "./argparse";
 import { gatherContext } from "./context";
-import { Renderer } from "./render";
+import { Renderer, ReportedError } from "./render";
 
 export interface AgentContext {
   deps: SessionDeps;
@@ -125,7 +125,10 @@ export async function runTurn(ctx: AgentContext, input: RunTurnInput): Promise<s
       signal: input.signal,
     },
     (event) => input.renderer.handle(event),
-  );
+  ).catch((error: unknown) => {
+    // The error event reached the terminal already; say it once.
+    throw input.renderer.errorShown ? new ReportedError(error) : error;
+  });
   return answer.content;
 }
 

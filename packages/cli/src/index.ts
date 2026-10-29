@@ -8,7 +8,7 @@ import { parseArgs, ArgError, CliArgs } from "./argparse";
 import { loadCliConfig } from "./config";
 import { createApprover } from "./approval";
 import { createAgentContext, runTurn, AgentContext } from "./agent";
-import { Renderer, statusLine } from "./render";
+import { Renderer, ReportedError, statusLine } from "./render";
 import { runModelsCommand } from "./engineCli";
 import { runServeCommand } from "./serve";
 import { HELP } from "./help";
@@ -150,7 +150,9 @@ async function runRepl(ctx: AgentContext, rl: readline.Interface, args: CliArgs,
       const answer = await runTurn(ctx, { prompt: line, mode, history: history.slice(0, -1), renderer, staged: args.staged });
       history.push({ role: "assistant", content: answer });
     } catch (error) {
-      process.stderr.write(`error: ${(error as Error).message}\n`);
+      if (!(error instanceof ReportedError)) {
+        process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
     }
   }
 }
@@ -230,6 +232,10 @@ mention files with @path or @path:start-end.
 `;
 
 main().catch((error) => {
-  process.stderr.write(`hackl: ${error instanceof Error ? error.message : String(error)}\n`);
+  // Turn failures are printed by the Renderer; this handler only covers the rest
+  // and always keeps the non-zero exit code.
+  if (!(error instanceof ReportedError)) {
+    process.stderr.write(`hackl: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
   process.exit(1);
 });

@@ -29,6 +29,7 @@ export interface ExtraTools {
 
 export type PromptProgress =
   | { type: "phase"; text: string; inputTokens?: number; maxContextTokens?: number }
+  | { type: "tool_result"; name: string; args: string; ok: boolean; reason?: string }
   | { type: "delta"; channel: "answer" | "reasoning"; text: string };
 
 export interface ToolLoopOptions {
@@ -131,6 +132,13 @@ export async function completeWithTools(options: ToolLoopOptions): Promise<ToolL
     options.progress?.({ type: "phase", text: `Running tool: ${formatToolRequest(request)}` });
     const result = await runAnyTool(request, options);
     toolHistory.push({ request, result });
+    options.progress?.({
+      type: "tool_result",
+      name: request.name,
+      args: toolArgs(request),
+      ok: result.ok,
+      reason: result.ok ? undefined : failureReason(result.content),
+    });
     options.debug?.("toolLoop.toolResult", { toolCalls, request, result });
     messages.push({ role: "user", content: buildToolResultMessage(request, result) });
     reportTokenBudget(messages, options);
@@ -155,16 +163,28 @@ async function runAnyTool(request: AnyToolRequest, options: ToolLoopOptions): Pr
 }
 
 function formatToolRequest(request: AnyToolRequest): string {
+  const args = toolArgs(request);
+  return args ? `${request.name} ${args}` : request.name;
+}
+
+function toolArgs(request: AnyToolRequest): string {
   if (isMcpToolRequest(request)) {
-    return request.name;
+    return "";
   }
   if ("path" in request) {
-    return `${request.name} ${request.path}`;
+    return request.path;
   }
   if (request.name === "run_command") {
-    return `${request.name} ${[request.cmd, ...(request.args ?? [])].join(" ")}`;
+    return [request.cmd, ...(request.args ?? [])].join(" ");
   }
-  return `${request.name} ${request.query}`;
+  return request.query;
+}
+
+// A failed tool call is shown to the user, so the reason is its first line and
+// short enough to read in one terminal line.
+function failureReason(content: string): string {
+  const line = content.split("\n").map((part) => part.trim()).find(Boolean) ?? "the tool returned no reason";
+  return line.length > 120 ? `${line.slice(0, 117)}...` : line;
 }
 
 async function forceFinalAnswer(

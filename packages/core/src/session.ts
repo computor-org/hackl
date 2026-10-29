@@ -22,6 +22,7 @@ export interface ApprovalRequest {
 // the CLI and VS Code extension render them. Keep every field JSON-plain.
 export type SessionEvent =
   | { type: "phase"; text: string }
+  | { type: "tool_result"; name: string; args: string; ok: boolean; reason?: string }
   | { type: "delta"; channel: "answer" | "reasoning"; text: string }
   | { type: "token_budget"; inputTokens: number; maxContextTokens: number }
   | { type: "done"; content: string; reasoning?: string }
@@ -143,6 +144,10 @@ export async function runHacklPrompt(
       progress: (event) => {
         if (event.type === "delta") {
           onEvent({ type: "delta", channel: event.channel, text: event.text });
+          return;
+        }
+        if (event.type === "tool_result") {
+          onEvent({ type: "tool_result", name: event.name, args: event.args, ok: event.ok, reason: event.reason });
           return;
         }
         if (event.inputTokens !== undefined && event.maxContextTokens !== undefined) {

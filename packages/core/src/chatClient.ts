@@ -70,16 +70,27 @@ class OpenAICompatibleBackend implements ChatBackend {
   }
 
   async complete(messages: ChatMessage[], options: ChatCompleteOptions = {}): Promise<ChatCompletion> {
-    const response = await this.fetchImpl(`${this.endpoint}/chat/completions`, {
-      method: "POST",
-      headers: this.buildHeaders(),
-      body: JSON.stringify(this.buildRequestBody(messages, Boolean(options.onDelta), options)),
-      signal: options.signal,
-    });
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.endpoint}/chat/completions`, {
+        method: "POST",
+        headers: this.buildHeaders(),
+        body: JSON.stringify(this.buildRequestBody(messages, Boolean(options.onDelta), options)),
+        signal: options.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw error;
+      }
+      throw new Error(
+        `Cannot reach ${this.endpoint}: ${failureCause(error)}. `
+        + "Start a server there, or choose another endpoint (--endpoint or HACKL_ENDPOINT).",
+      );
+    }
 
     if (!response.ok) {
       const payload = await readJson(response);
-      throw new Error(payload.error?.message ?? `Chat request failed with HTTP ${response.status}`);
+      throw chatRequestError(this.endpoint, response.status, payload.error?.message, Boolean(this.options.apiKey?.trim()));
     }
 
     if (options.onDelta) {
@@ -132,6 +143,29 @@ class OpenAICompatibleBackend implements ChatBackend {
     }
     return body;
   }
+}
+
+// The key lives in three places depending on the frontend; naming all three
+// keeps one shared message useful in the CLI and in the VS Code chat alike.
+const API_KEY_HINT = "Set it with --api-key or HACKL_API_KEY (in VS Code: Hackl: Set API Key).";
+
+function chatRequestError(endpoint: string, status: number, serverMessage: string | undefined, hasApiKey: boolean): Error {
+  if (status === 401 || status === 403) {
+    const reason = hasApiKey ? "the API key was rejected" : "no API key set";
+    return new Error(`The endpoint ${endpoint} rejected the request (HTTP ${status}): ${reason}. ${API_KEY_HINT}`);
+  }
+  return new Error(`The endpoint ${endpoint} returned HTTP ${status}: ${serverMessage ?? "the request failed."}`);
+}
+
+// fetch reports only "fetch failed"; the reason that matters sits on cause.
+function failureCause(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = error.cause;
+    if (cause instanceof Error && cause.message) return cause.message;
+    if (typeof cause === "string" && cause) return cause;
+    return error.message;
+  }
+  return String(error);
 }
 
 async function readJson(response: Response): Promise<ChatCompletionResponse> {

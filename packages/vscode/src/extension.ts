@@ -788,6 +788,11 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       progress?.(event);
       return;
     }
+    if (event.type === "tool_result" && !event.ok) {
+      const target = event.args ? `${event.name} ${event.args}` : event.name;
+      progress?.({ type: "phase", text: `${target} failed: ${event.reason ?? "no reason given"}` });
+      return;
+    }
     if (event.type === "token_budget") {
       progress?.({
         type: "phase",
