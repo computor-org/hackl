@@ -13,7 +13,7 @@ import { runModelsCommand } from "./engineCli";
 import { runServeCommand } from "./serve";
 import { HELP } from "./help";
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 async function main(): Promise<void> {
   if (process.argv[2] === "__engine-host") {

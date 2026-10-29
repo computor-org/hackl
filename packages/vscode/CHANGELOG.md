@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 pre-release
+
+- Chat answers render as markdown with math in the web UI and the VS Code chat.
+- New `create_file` tool; missing files are reported as missing; read-only modes can list directories and search.
+- `hackl serve` can use a configured endpoint without starting an engine; the API key is sent when discovering models.
+- Autocomplete falls back to `/v1/completions` when the llama.cpp fill-in-the-middle routes are missing.
+- Errors are shown once and name the endpoint for connection and key problems; failed tool calls are reported.
+- Requires Node.js 22 or newer for the CLI and VS Code 1.139 or newer for the extension.
+
 ## 0.4.0
 
 First stable release of the 0.4 line. It includes the local-first agent, CLI,
