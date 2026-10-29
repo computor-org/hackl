@@ -51,18 +51,20 @@ are loaded from the extension package and not from a network CDN.
 ### markdown-it
 
 - Package: `markdown-it`
-- Version: 14.1.1
+- Version: 15.0.3
 - Source: `https://github.com/markdown-it/markdown-it`
 - Bundled files: `media/vendor/markdown-it/markdown-it.min.js`,
   `media/vendor/licenses/markdown-it/LICENSE`
 - License: MIT
 - Copyright notice: Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin.
-- Changes: none.
+- Changes: none. The bundled file is upstream
+  `dist/browser/markdown-it.umd.min.js`, committed under the name the webview
+  loads.
 
 ### KaTeX
 
 - Package: `katex`
-- Version: 0.16.45
+- Version: 0.19.0
 - Source: `https://github.com/KaTeX/KaTeX`
 - Bundled files: `media/vendor/katex/katex.min.js`,
   `media/vendor/katex/katex.min.css`, `media/vendor/katex/fonts/**`,
@@ -71,6 +73,11 @@ are loaded from the extension package and not from a network CDN.
 - Copyright notice: Copyright (c) 2013-2020 Khan Academy and other
   contributors.
 - Changes: none.
+
+These assets are regenerated from the versions locked in `package-lock.json`
+by `npm ci && npm run sync:vendor` in `packages/vscode`.
+`tests/vendorSync.test.cjs` fails when a committed copy no longer matches the
+locked package.
 
 ### VS Code Codicons
 

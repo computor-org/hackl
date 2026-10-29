@@ -570,6 +570,7 @@
     "build": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "bundle": "node esbuild.mjs",
+    "sync:vendor": "node scripts/sync-vendor.mjs",
     "test": "npm run compile && node --test tests/*.test.cjs tests/**/*.test.cjs",
     "test:ui": "npm run compile && node scripts/run-webview-ui-smoke.mjs",
     "test:coverage": "npm run compile && node --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=dist/context.js --test tests/*.test.cjs",
