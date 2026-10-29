@@ -24,6 +24,9 @@ export interface EngineSessionHostOptions {
   env?: NodeJS.ProcessEnv;
   leaseTimeoutMs?: number;
   allowRemote?: boolean;
+  // Callers that may not download llama.cpp or a model pass false; the default
+  // keeps the behaviour of the callers that own that consent.
+  allowDownload?: boolean;
   manager?: EngineManager;
 }
 
@@ -206,7 +209,7 @@ export class EngineSessionHost {
     this.starting = (async () => {
       const state = await this.manager.start({
         alias,
-        allowDownload: true,
+        allowDownload: this.options.allowDownload ?? true,
         allowRemote: this.options.allowRemote,
         log,
       });

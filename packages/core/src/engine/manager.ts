@@ -105,9 +105,14 @@ export class EngineManager {
     };
   }
 
-  async ensureServer(log: (s: string) => void = () => {}): Promise<ResolvedServer> {
+  async ensureServer(log: (s: string) => void = () => {}, allowDownload = true): Promise<ResolvedServer> {
     if (this.options.serverBin) return { bin: this.options.serverBin, source: "env" };
-    return (await resolveServerBin(this.env)) ?? installManaged(this.env, log);
+    const installed = await resolveServerBin(this.env);
+    if (installed) return installed;
+    if (!allowDownload) {
+      throw new Error("no llama-server found and downloading was not allowed; install llama.cpp or set LLAMACPP_HOME");
+    }
+    return installManaged(this.env, log);
   }
 
   async pull(alias: string, log?: (s: string) => void, signal?: AbortSignal): Promise<string> {
@@ -142,13 +147,13 @@ export class EngineManager {
       return readEngineState(this.env)!;
     }
     const model = await this.resolveModel(args.alias);
-    const server = await this.ensureServer(log);
+    const server = await this.ensureServer(log, args.allowDownload ?? true);
     const cfg = this.config();
     let resolvedModelPath = modelPath(model, this.env);
     const wantsMmproj = cfg.mmproj !== "off" && Boolean(model.mmproj);
     const missingMmproj = wantsMmproj && !mmprojPath(model, this.env);
     if (!resolvedModelPath || missingMmproj) {
-      if (!args.allowDownload) throw new Error(`model ${model.alias} is not downloaded. Run: hackl serve ${model.alias}`);
+      if (!args.allowDownload) throw new Error(`model ${model.alias} is not downloaded. Run: hackl models install ${model.alias}`);
       resolvedModelPath = await pullModel(model, { withMmproj: wantsMmproj, env: this.env, log });
     }
     const knobs = resolveKnobs(await this.probe(), model, cfg);

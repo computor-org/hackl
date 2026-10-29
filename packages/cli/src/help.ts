@@ -9,11 +9,12 @@ Usage:
   hackl review [options] [note]   review staged/commit changes
 
 Local engine (managed llama.cpp, loopback-only):
-  hackl serve [model]             foreground engine + Hackl and llama.cpp WebUIs
+  hackl serve [model]             foreground engine + Hackl WebUI, downloads nothing
   hackl models                    list recommended and installed models
   hackl models install <model>    download a managed model and its projector
   hackl models remove <model>     remove a managed model (--yes for scripts)
   serve options: --open, --no-open, --host, --port, --token, --allow-yolo
+                 --endpoint <url> serves the WebUI against that server and starts no engine
                  --allow-remote binds llama.cpp to 0.0.0.0 (DANGER)
 
 Options:
