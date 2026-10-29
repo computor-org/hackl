@@ -132,3 +132,13 @@ test("detectFim falls back to openai-completions when /tokenize is unreachable",
   assert.deepEqual(result.stop, []);
   assert.ok(calls[0].endsWith("/tokenize"));
 });
+
+test("detectFim sends the bearer key on /tokenize only when given one", async () => {
+  const calls = [];
+  const fetchImpl = captureFetch({ "<|fim_prefix|>": 1 }, calls);
+  await detectFim({ root: "http://localhost:8080", apiKey: "k-123", fetchImpl });
+  assert.equal(calls[0].headers.Authorization, "Bearer k-123");
+  calls.length = 0;
+  await detectFim({ root: "http://localhost:8080", fetchImpl });
+  assert.equal(calls[0].headers.Authorization, undefined);
+});

@@ -17,6 +17,7 @@ type ReadyRuntime = {
   endpoint: string;
   root: string;
   model?: string;
+  apiKey?: string;
   detection: FimDetectionResult;
 };
 
@@ -31,13 +32,16 @@ type AutocompleteRuntime =
       reason: string;
     };
 
-export function registerAutocomplete(context: vscode.ExtensionContext): void {
+export function registerAutocomplete(
+  context: vscode.ExtensionContext,
+  readApiKey: () => Promise<string | undefined>,
+): void {
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, STATUS_PRIORITY);
   status.command = COMMAND_STATUS_CLICK;
   status.show();
   context.subscriptions.push(status);
 
-  new AutocompleteController(context, status).register();
+  new AutocompleteController(context, status, readApiKey).register();
 }
 
 class AutocompleteController {
@@ -50,6 +54,7 @@ class AutocompleteController {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly status: vscode.StatusBarItem,
+    private readonly readApiKey: () => Promise<string | undefined>,
   ) {}
 
   register(): void {
@@ -60,6 +65,12 @@ class AutocompleteController {
         if (event.affectsConfiguration("hackl.autocomplete")
           || event.affectsConfiguration("hackl.endpoint")
           || event.affectsConfiguration("hackl.model")) {
+          this.invalidate();
+          void this.refresh();
+        }
+      }),
+      this.context.secrets.onDidChange((event) => {
+        if (event.key === "hackl.apiKey") {
           this.invalidate();
           void this.refresh();
         }
@@ -176,17 +187,19 @@ class AutocompleteController {
       chatEndpoint: cfg.endpoint,
       chatEndpointConfigured: cfg.endpointConfigured,
       chatModel: cfg.model,
+      apiKey: await this.readApiKey(),
       autocomplete: cfg.autocomplete,
     });
     if (!target.available) {
       return this.cache({ kind: "unavailable", reason: target.reason });
     }
-    const detection = await detectFim({ root: target.root, model: target.model });
+    const detection = await detectFim({ root: target.root, model: target.model, apiKey: target.apiKey });
     return this.cache({
       kind: "ready",
       endpoint: target.endpoint,
       root: target.root,
       model: target.model,
+      apiKey: target.apiKey,
       detection,
     });
   }
@@ -308,6 +321,7 @@ async function fetchCompletion(
       root: runtime.root,
       endpoint: runtime.endpoint,
       model: runtime.model,
+      apiKey: runtime.apiKey,
       support: runtime.detection,
       maxPredictMs: cfg.maxPredictMs,
     },

@@ -6,6 +6,8 @@ export interface ResolveAutocompleteTargetInput {
   chatEndpoint: string;
   chatEndpointConfigured: boolean;
   chatModel?: string;
+  // Chat API key; used only for targets that resolve to the chat endpoint.
+  apiKey?: string;
   autocomplete: Pick<AutocompleteConfig, "endpoint" | "endpointConfigured" | "model">;
 }
 
@@ -16,6 +18,8 @@ export type AutocompleteTargetResolution =
       root: string;
       model?: string;
       source: "configured" | "chat-fallback";
+      // Set only when the target is the chat endpoint.
+      apiKey?: string;
       remote: boolean;
     }
   | {
@@ -34,11 +38,17 @@ export async function resolveAutocompleteTarget(
   const resolveChatTargetImpl = deps.resolveChatTargetImpl ?? resolveChatTarget;
 
   if (input.autocomplete.endpointConfigured && input.autocomplete.endpoint) {
+    const sharesChatEndpoint = toRootBase(input.autocomplete.endpoint) === toRootBase(input.chatEndpoint);
+    const apiKey = sharesChatEndpoint ? input.apiKey : undefined;
     const resolved = await resolve(
       resolveChatTargetImpl,
       input.autocomplete.endpoint,
       true,
       input.autocomplete.model,
+      apiKey,
+      sharesChatEndpoint
+        ? "Set the key with \"Hackl: Set API Key\"."
+        : "The chat API key is not sent to a separate autocomplete endpoint; use a keyless server or the chat endpoint.",
     );
     if (!resolved.ok) return { available: false, reason: resolved.reason };
     return gateFimCapability({
@@ -47,6 +57,7 @@ export async function resolveAutocompleteTarget(
       root: toRootBase(resolved.endpoint),
       model: resolvedModel(input.autocomplete.model, resolved.model),
       source: "configured",
+      ...(apiKey ? { apiKey } : {}),
       remote: requiresNonLocalEndpointApproval(resolved.endpoint),
     });
   }
@@ -59,6 +70,8 @@ export async function resolveAutocompleteTarget(
     input.chatEndpoint,
     input.chatEndpointConfigured,
     input.chatModel,
+    input.apiKey,
+    "Set the key with \"Hackl: Set API Key\".",
   );
   if (!resolved.ok) return { available: false, reason: resolved.reason };
   return gateFimCapability({
@@ -67,24 +80,32 @@ export async function resolveAutocompleteTarget(
     root: toRootBase(resolved.endpoint),
     model: resolvedModel("", resolved.model),
     source: "chat-fallback",
+    ...(input.apiKey ? { apiKey: input.apiKey } : {}),
     remote: requiresNonLocalEndpointApproval(resolved.endpoint),
   });
 }
 
 // A configured endpoint that advertises no model makes resolveChatTarget raise.
-// Autocomplete sends no credentials at all, so it stays off instead of failing
-// every completion request.
+// Autocomplete stays off instead of failing every completion request.
 async function resolve(
   impl: typeof resolveChatTarget,
   endpoint: string,
   endpointConfigured: boolean,
   preferredModel: string | undefined,
+  apiKey: string | undefined,
+  authHint: string,
 ): Promise<{ ok: true; endpoint: string; model: string } | { ok: false; reason: string }> {
   try {
-    const target = await impl({ endpoint, endpointConfigured, preferredModel });
+    const target = await impl({ endpoint, endpointConfigured, preferredModel, apiKey });
     return { ok: true, endpoint: target.endpoint, model: target.model };
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    const message = error instanceof Error ? error.message : String(error);
+    // The core 401 text points at hackl.model and chat flags, which do not apply here.
+    const rejected = /refused the request with HTTP (\d+)/.exec(message);
+    if (rejected) {
+      return { ok: false, reason: `${endpoint} refused the autocomplete request with HTTP ${rejected[1]}. ${authHint}` };
+    }
+    return { ok: false, reason: message };
   }
 }
 

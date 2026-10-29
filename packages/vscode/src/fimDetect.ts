@@ -17,6 +17,7 @@ export type FimDetectionResult = FimSupport | FimUnsupported;
 export interface FimDetectOptions {
   root: string;
   model?: string;
+  apiKey?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -119,7 +120,10 @@ export async function detectFim(options: FimDetectOptions): Promise<FimDetection
     try {
       const response = await fetchImpl(`${root}/tokenize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {}),
+        },
         body: JSON.stringify({ content, add_special: false, ...(options.model ? { model: options.model } : {}) }),
         signal: controller.signal,
       });
