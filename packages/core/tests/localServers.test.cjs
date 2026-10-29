@@ -441,3 +441,53 @@ function modelResponse(id) {
     headers: { "content-type": "application/json" },
   });
 }
+
+// A fetch stub whose answer arrives after `delayMs` of (mocked) time and that
+// honours the abort signal, like a real fetch.
+function slowFetch(delayMs, body) {
+  return (url, init) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(new Response(JSON.stringify(body))), delayMs);
+    init?.signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(new Error("aborted"));
+    });
+  });
+}
+
+async function settleWithMockedTime(t, start) {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let done = false;
+  const result = start().then((v) => ({ v }), (e) => ({ e })).finally(() => { done = true; });
+  for (let i = 0; i < 200 && !done; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(100);
+  }
+  return result;
+}
+
+test("resolveChatTarget waits for a slow /models on a configured endpoint", async (t) => {
+  const outcome = await settleWithMockedTime(t, () => resolveChatTarget({
+    endpoint: "http://localhost:9999",
+    endpointConfigured: true,
+    fetchImpl: slowFetch(900, { data: [{ id: "slow-model" }] }),
+  }));
+  assert.deepEqual(outcome.v, { endpoint: "http://localhost:9999/v1", model: "slow-model" });
+});
+
+test("resolveChatTarget names the endpoint and the model setting when /models never arrives", async (t) => {
+  const outcome = await settleWithMockedTime(t, () => resolveChatTarget({
+    endpoint: "http://localhost:9999",
+    endpointConfigured: true,
+    fetchImpl: slowFetch(60000, { data: [] }),
+  }));
+  assert.match(outcome.e?.message ?? "", /http:\/\/localhost:9999\/v1.*did not arrive.*hackl\.model, --model or HACKL_MODEL/s);
+});
+
+test("auto-detection still gives up on a slow port after the short timeout", async (t) => {
+  const outcome = await settleWithMockedTime(t, () => resolveChatTarget({
+    endpointConfigured: false,
+    candidates: [{ name: "slow", endpoint: "http://localhost:9999/v1" }],
+    fetchImpl: slowFetch(900, { data: [{ id: "slow-model" }] }),
+  }));
+  assert.equal(outcome.v?.model, "local-model");
+});
