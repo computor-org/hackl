@@ -29,7 +29,7 @@ MCP tools for everyday work outside any course.
 - **Desktop:** download the build for your platform from
   [GitHub Releases](https://github.com/computor-org/hackl/releases).
 - **CLI:** download `hackl-<version>.js` from the same release. It requires
-  Node.js 20 or newer. Run it with `node hackl-<version>.js`; on macOS or Linux
+  Node.js 22 or newer. Run it with `node hackl-<version>.js`; on macOS or Linux
   you can rename it to `hackl`, mark it executable, and put it on `PATH`.
 
 Leave the endpoint empty to use Hackl's managed local llama.cpp session. See
