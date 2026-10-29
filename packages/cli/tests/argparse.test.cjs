@@ -1,6 +1,17 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 const { parseArgs, ArgError } = require("../dist/argparse.js");
+
+const CLI = path.join(__dirname, "..", "dist", "index.js");
+// Unreachable endpoint so a mistaken live run fails fast instead of hanging.
+const DEAD_ENV = { ...process.env, HACKL_ENDPOINT: "http://127.0.0.1:1/v1" };
+const parserFlags = (source) =>
+  new Set([...source.matchAll(/case "(-{1,2}[a-z][a-z0-9-]*)":/g)].map((m) => m[1]));
+const helpFlags = (text) =>
+  new Set([...text.matchAll(/(?:^|\s)(--?[a-z][a-z0-9-]*)/gm)].map((m) => m[1]));
 
 test("defaults to agent mode and treats positionals as the prompt", () => {
   const args = parseArgs(["fix", "the", "bug"]);
@@ -74,13 +85,28 @@ test("recognizes the minimal local-engine commands", () => {
   assert.equal(parseArgs(["explain", "this"]).command, undefined);
 });
 
-test("recognizes the review subcommand and resume/session", () => {
+test("recognizes the review subcommand", () => {
   const a = parseArgs(["review", "--staged"]);
   assert.equal(a.command, "review");
   assert.equal(a.staged, true);
-  const b = parseArgs(["--resume", "--session", "hs-1", "go"]);
-  assert.equal(b.resume, true);
-  assert.equal(b.session, "hs-1");
+});
+
+test("rejects --resume and --session because the CLI stores no sessions", () => {
+  assert.throws(() => parseArgs(["--resume", "go"]), ArgError);
+  assert.throws(() => parseArgs(["--session", "hs-1", "go"]), ArgError);
+  const run = spawnSync(process.execPath, [CLI, "--resume", "--session", "hs-1", "go"],
+    { encoding: "utf8", env: DEAD_ENV, input: "", timeout: 20000 });
+  assert.equal(run.status, 2, run.stderr);
+  assert.match(run.stderr, /unknown option: --resume/);
+});
+
+test("--help lists every option the parser accepts and no others", () => {
+  const accepted = parserFlags(fs.readFileSync(path.join(__dirname, "..", "src", "argparse.ts"), "utf8"));
+  const help = spawnSync(process.execPath, [CLI, "--help"], { encoding: "utf8", timeout: 20000 });
+  assert.equal(help.status, 0, help.stderr);
+  const documented = helpFlags(help.stdout);
+  assert.deepEqual([...accepted].filter((flag) => !documented.has(flag)).sort(), []);
+  assert.deepEqual([...documented].filter((flag) => !accepted.has(flag)).sort(), []);
 });
 
 test("-- stops flag parsing", () => {
