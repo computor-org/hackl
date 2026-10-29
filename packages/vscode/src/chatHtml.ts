@@ -14,11 +14,14 @@ export function renderChatHtml(webview: vscode.Webview, extensionUri: vscode.Uri
   const nonce = getNonce();
   const assets = getChatAssets(webview, extensionUri);
 
+  // 'unsafe-inline' in style-src only: KaTeX positions super/subscripts and fractions
+  // with inline top offsets. markdown-it renders with html: false, so model output
+  // cannot carry style attributes, and scripts stay nonce-only.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hackl</title>
   <link rel="stylesheet" href="${assets.codiconStyle}">

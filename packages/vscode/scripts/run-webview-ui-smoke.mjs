@@ -147,8 +147,6 @@ try {
 
   // One message with Markdown structure and an inline formula renders through
   // the vendored markdown-it and KaTeX, so a stale vendor copy shows up here.
-  // Vertical layout is not asserted: the webview CSP has no 'unsafe-inline' in
-  // style-src, so KaTeX's inline top offsets are dropped in any harness.
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", {
       data: {
@@ -165,6 +163,12 @@ try {
   assert.equal(await euler.locator(".katex annotation").getAttribute("encoding"), "application/x-tex");
   assert.equal(await euler.locator(".katex annotation").textContent(), "e^{i\\pi}+1=0");
   assert.ok(await euler.locator(".katex").first().isVisible());
+  // KaTeX moves superscripts off the baseline with inline style="top:…" on the
+  // spans inside its vlist; if style-src drops inline styles the parts collapse
+  // onto one baseline (#27).
+  const supTop = await euler.locator(".katex .vlist > span").first().evaluate((node) => getComputedStyle(node).top);
+  const supOffset = Number.parseFloat(supTop);
+  assert.ok(Number.isFinite(supOffset) && supOffset !== 0, `superscript should be offset from the baseline, got top ${supTop}`);
   assert.ok(
     await page.evaluate(() => document.fonts.check("16px codicon")),
     "the vendored codicon font should be loaded",
