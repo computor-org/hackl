@@ -1,8 +1,10 @@
 const assert = require("node:assert/strict");
+const http = require("node:http");
 const test = require("node:test");
 const {
   detectMaxContextTokens,
   listModelIds,
+  probeAll,
   requiresNonLocalEndpointApproval,
   resolveEffectiveContextTokens,
   resolveChatTarget,
@@ -92,17 +94,22 @@ test("resolveChatTarget falls back when discovery finds no server", async () => 
   });
 });
 
-test("resolveChatTarget falls back to compatibility model for explicit endpoint without models", async () => {
-  const target = await resolveChatTarget({
-    endpoint: "http://localhost:7777/v1",
-    endpointConfigured: true,
-    fetchImpl: async () => new Response("not found", { status: 404 }),
-  });
-
-  assert.deepEqual(target, {
-    endpoint: "http://localhost:7777/v1",
-    model: "local-model",
-  });
+test("resolveChatTarget rejects when a configured endpoint lists no model", async () => {
+  await assert.rejects(
+    resolveChatTarget({
+      endpoint: "http://localhost:7777/v1",
+      endpointConfigured: true,
+      fetchImpl: async () => new Response("not found", { status: 404 }),
+    }),
+    (error) => {
+      const message = error.message;
+      assert.match(message, /No model found at http:\/\/localhost:7777\/v1/);
+      assert.match(message, /hackl\.model/);
+      assert.match(message, /--model/);
+      assert.match(message, /HACKL_MODEL/);
+      return true;
+    },
+  );
 });
 
 test("resolveChatTarget skips blank model ids from /v1/models", async () => {
@@ -151,27 +158,21 @@ test("resolveChatTarget uses first advertised model when server requires a model
   });
 });
 
-test("resolveChatTarget accepts llama.cpp health when model listing is unavailable", async () => {
-  const calls = [];
-  const target = await resolveChatTarget({
-    endpoint: "http://localhost:8080/v1",
-    endpointConfigured: true,
-    fetchImpl: async (url) => {
-      calls.push(String(url));
-      if (String(url).endsWith("/models")) return new Response("not found", { status: 404 });
-      if (String(url) === "http://localhost:8080/health") return new Response("ok", { status: 200 });
-      throw new Error("unexpected");
-    },
-  });
-
-  assert.deepEqual(target, {
-    endpoint: "http://localhost:8080/v1",
-    model: "local-model",
-  });
-  assert.deepEqual(calls, [
-    "http://localhost:8080/v1/models",
-    "http://localhost:8080/health",
-  ]);
+test("resolveChatTarget rejects a reachable endpoint that lists no model", async () => {
+  // A gateway can answer /health without a key and /models only with one, so
+  // health alone must not guess a model name that the gateway rejects.
+  await assert.rejects(
+    resolveChatTarget({
+      endpoint: "http://localhost:8080/v1",
+      endpointConfigured: true,
+      fetchImpl: async (url) => {
+        if (String(url).endsWith("/models")) return new Response("unauthorized", { status: 401 });
+        if (String(url) === "http://localhost:8080/health") return new Response("ok", { status: 200 });
+        throw new Error("unexpected");
+      },
+    }),
+    /No model found at http:\/\/localhost:8080\/v1/,
+  );
 });
 
 test("requiresNonLocalEndpointApproval only flags configured non-loopback endpoints", () => {
@@ -306,6 +307,88 @@ test("listModelIds returns an empty list when the endpoint is unreachable", asyn
     throw new Error("offline");
   });
   assert.deepEqual(ids, []);
+});
+
+// Stub of a key-protected OpenAI-compatible endpoint: /models and
+// /chat/completions answer 401 without the bearer token, /health answers freely
+// the way a gateway in front of llama.cpp does.
+async function withAuthStub(handler) {
+  const server = http.createServer((request, response) => {
+    const authed = request.headers.authorization === "Bearer stub-key";
+    if (request.url === "/health") {
+      response.writeHead(200);
+      response.end("ok");
+      return;
+    }
+    if (request.url === "/v1/models") {
+      if (!authed) {
+        response.writeHead(401);
+        response.end("unauthorized");
+        return;
+      }
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ data: [{ id: "gateway-model" }] }));
+      return;
+    }
+    if (request.url === "/v1/chat/completions") {
+      if (!authed) {
+        response.writeHead(401);
+        response.end(JSON.stringify({ error: { code: "unknown_model" } }));
+        return;
+      }
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({
+        choices: [{ message: { content: "stub answer" } }],
+        model: "gateway-model",
+      }));
+      return;
+    }
+    response.writeHead(404);
+    response.end("not found");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const endpoint = `http://127.0.0.1:${server.address().port}/v1`;
+  try {
+    return await handler(endpoint);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+test("resolveChatTarget authenticates the model probe of a configured endpoint", async () => {
+  await withAuthStub(async (endpoint) => {
+    const target = await resolveChatTarget({
+      endpoint,
+      endpointConfigured: true,
+      apiKey: "stub-key",
+    });
+
+    assert.deepEqual(target, { endpoint, model: "gateway-model" });
+  });
+});
+
+test("resolveChatTarget reports no model instead of a guessed one when the key is missing", async () => {
+  await withAuthStub(async (endpoint) => {
+    await assert.rejects(
+      resolveChatTarget({ endpoint, endpointConfigured: true }),
+      new RegExp(`No model found at ${endpoint.replace(/\./g, "\\.")}`),
+    );
+  });
+});
+
+test("listModelIds authenticates the model listing", async () => {
+  await withAuthStub(async (endpoint) => {
+    assert.deepEqual(await listModelIds(endpoint, fetch, "stub-key"), ["gateway-model"]);
+    assert.deepEqual(await listModelIds(endpoint, fetch), []);
+  });
+});
+
+test("probeAll authenticates the configured endpoint", async () => {
+  await withAuthStub(async (endpoint) => {
+    const [withKey] = await probeAll([{ name: "configured", endpoint }], fetch, "stub-key");
+    assert.equal(withKey.ok, true);
+    assert.equal(withKey.model, "gateway-model");
+  });
 });
 
 function modelResponse(id) {

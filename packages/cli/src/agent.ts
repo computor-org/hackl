@@ -46,6 +46,7 @@ export async function createAgentContext(input: CreateAgentInput): Promise<Agent
     endpoint: config.endpoint || undefined,
     endpointConfigured: config.endpointConfigured,
     preferredModel: config.model || undefined,
+    apiKey: config.apiKey || undefined,
   });
 
   const backend = args.codex

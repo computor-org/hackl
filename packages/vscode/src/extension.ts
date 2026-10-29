@@ -522,7 +522,7 @@ async function pickBackend(view: ChatViewProvider): Promise<void> {
   const items: Array<vscode.QuickPickItem & { choice: BackendChoice }> = [];
   const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
   if (probe?.ok) {
-    const localModels = await listModelIds(probe.endpoint).catch(() => []);
+    const localModels = await listModels(probe.endpoint, cfg.endpointConfigured);
     const models = localModels.length ? localModels : [probe.model ?? ""];
     for (const model of models) {
       items.push({
@@ -576,7 +576,7 @@ async function configurePrimaryConnection(view: ChatViewProvider): Promise<void>
 
   const endpoint = enteredEndpoint.trim() ? normalizeOpenAIEndpoint(enteredEndpoint) : "";
   const probe = await tryProbe(endpoint, Boolean(endpoint));
-  const models = probe?.ok ? await listModelIds(probe.endpoint).catch(() => []) : [];
+  const models = probe?.ok ? await listModels(probe.endpoint, Boolean(endpoint)) : [];
   let model = cfg.model;
 
   if (models.length > 0) {
@@ -640,8 +640,17 @@ async function tryProbe(endpoint: string, endpointConfigured: boolean): Promise<
   const candidates = endpointConfigured && endpoint
     ? [{ name: "configured", endpoint }]
     : LOCAL_SERVER_CANDIDATES;
-  const results = await probeAll(candidates);
+  // The key belongs to the configured endpoint alone; auto-discovered local
+  // servers must not receive it.
+  const results = await probeAll(candidates, fetch, endpointConfigured ? await readApiKey() : undefined);
   return results.find((r) => r.ok);
+}
+
+// Listing models needs the same credentials as chat: without the key an
+// authenticated endpoint answers 401 and the picker shows no model.
+async function listModels(endpoint: string, endpointConfigured: boolean): Promise<string[]> {
+  const apiKey = endpointConfigured ? await readApiKey() : undefined;
+  return listModelIds(endpoint, fetch, apiKey).catch(() => []);
 }
 
 async function runProbe(): Promise<ProbeResult[]> {
@@ -649,7 +658,7 @@ async function runProbe(): Promise<ProbeResult[]> {
   const candidates = cfg.endpointConfigured && cfg.endpoint
     ? [{ name: "configured", endpoint: cfg.endpoint }]
     : LOCAL_SERVER_CANDIDATES;
-  return probeAll(candidates);
+  return probeAll(candidates, fetch, cfg.endpointConfigured ? await readApiKey() : undefined);
 }
 
 async function reportProbe(probes: ProbeResult[]): Promise<void> {
@@ -696,6 +705,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   let codexCommand = cfg.codexCommand;
   let codexDetection: CodexDetection | undefined;
   let target: { endpoint: string; model: string };
+  let apiKey: string | undefined;
   if (useCodex) {
     codexDetection = await detectCodex({ command: cfg.codexCommand });
     if (!codexDetection.available) {
@@ -713,10 +723,12 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   } else {
     await ensureEngineReady();
     const preferredModel = cfg.model || (stored?.kind === "local" ? stored.model : "");
+    apiKey = await readApiKey();
     target = await resolveChatTarget({
       endpoint: cfg.endpoint,
       endpointConfigured: cfg.endpointConfigured,
       preferredModel,
+      apiKey,
     });
   }
   progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
@@ -746,7 +758,6 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   const choiceForCall: BackendChoice = useCodex
     ? { kind: "codex", model: target.model }
     : { kind: "local", endpoint: target.endpoint, model: target.model };
-  const apiKey = useCodex ? undefined : await readApiKey();
   const answer = await runHacklPrompt({
     backend: buildBackend({
       choice: choiceForCall,
@@ -908,7 +919,7 @@ async function currentChatState(): Promise<ChatState> {
   // privacy boundary. Skipping the probe here made a reachable non-local
   // endpoint render as "Not reachable" and silently fall back to codex.
   const probe = await tryProbe(cfg.endpoint, cfg.endpointConfigured);
-  const localModels = probe?.ok ? await listModelIds(probe.endpoint).catch(() => []) : [];
+  const localModels = probe?.ok ? await listModels(probe.endpoint, cfg.endpointConfigured) : [];
   const choice = effectiveBackendChoice(probe, codex, cfg.model);
   const backends = buildBackendsState(choice, probe, codex, localModels);
   const base: ChatState = {

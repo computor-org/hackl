@@ -26,6 +26,7 @@ export async function createServerAgent(env: NodeJS.ProcessEnv = process.env): P
     endpoint,
     endpointConfigured: Boolean(endpoint),
     preferredModel: model,
+    apiKey,
   });
 
   // A live server context is authoritative; the environment value is only a
