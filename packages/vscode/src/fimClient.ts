@@ -10,6 +10,8 @@ export interface FimRequest {
 
 export interface FimClientOptions {
   root: string;
+  // Full endpoint including /v1; needed by the OpenAI /v1/completions fallback.
+  endpoint?: string;
   model?: string;
   support: FimSupport;
   fetchImpl?: typeof fetch;
@@ -61,6 +63,7 @@ export function dedupeAgainstSuffix(completion: string, suffix: string): string 
   return completion;
 }
 
+// undefined: no route answered. "": the endpoint answered with nothing to insert.
 export async function requestFim(options: FimClientOptions, request: FimRequest): Promise<string | undefined> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const root = options.root.replace(/\/+$/, "");
@@ -69,6 +72,25 @@ export async function requestFim(options: FimClientOptions, request: FimRequest)
   const stops = request.multiLine
     ? [...options.support.stop, "\n\n\n"]
     : [...options.support.stop, "\n"];
+
+  if (options.support.dialect === "openai-completions") {
+    const text = await tryPost(
+      fetchImpl,
+      openAiCompletionsUrl(options.endpoint ?? root),
+      {
+        prompt: prefix,
+        suffix,
+        max_tokens: request.maxTokens,
+        temperature: 0.15,
+        stop: stops,
+        stream: false,
+        ...(options.model ? { model: options.model } : {}),
+      },
+      request.signal,
+      "openai",
+    );
+    return text === undefined ? undefined : finalise(text, suffix, stops);
+  }
 
   const sharedBody = {
     n_predict: request.maxTokens,
@@ -118,6 +140,7 @@ async function tryPost(
   url: string,
   body: unknown,
   signal: AbortSignal | undefined,
+  shape: "llama" | "openai" = "llama",
 ): Promise<string | undefined> {
   try {
     const response = await fetchImpl(url, {
@@ -127,14 +150,22 @@ async function tryPost(
       signal,
     });
     if (!response.ok) return undefined;
-    const data = await response.json() as { content?: unknown };
+    const data = await response.json() as { content?: unknown; choices?: unknown };
+    if (shape === "openai") {
+      const first = Array.isArray(data.choices) ? data.choices[0] as { text?: unknown } : undefined;
+      return typeof first?.text === "string" ? first.text : undefined;
+    }
     return typeof data.content === "string" ? data.content : undefined;
   } catch {
     return undefined;
   }
 }
 
-function finalise(content: string, suffix: string, stops: string[]): string | undefined {
-  const text = dedupeAgainstSuffix(trimAtStops(content, stops), suffix);
-  return text.length > 0 ? text : undefined;
+function openAiCompletionsUrl(endpoint: string): string {
+  const base = endpoint.replace(/\/+$/, "");
+  return `${base.endsWith("/v1") ? base : `${base}/v1`}/completions`;
+}
+
+function finalise(content: string, suffix: string, stops: string[]): string {
+  return dedupeAgainstSuffix(trimAtStops(content, stops), suffix);
 }

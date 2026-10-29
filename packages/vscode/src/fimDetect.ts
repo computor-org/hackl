@@ -1,4 +1,4 @@
-export type FimDialect = "qwen" | "codegemma" | "codellama";
+export type FimDialect = "qwen" | "codegemma" | "codellama" | "openai-completions";
 
 export interface FimSupport {
   supported: true;
@@ -136,7 +136,9 @@ export async function detectFim(options: FimDetectOptions): Promise<FimDetection
 
   const fimPrefix = await tokenize("<|fim_prefix|>");
   if (fimPrefix === undefined) {
-    return { supported: false, reason: "Could not reach /tokenize on the autocomplete endpoint." };
+    // No /tokenize means this is not a llama.cpp server; it may still offer
+    // OpenAI /v1/completions, which needs no FIM token knowledge.
+    return openaiCompletionsSupport();
   }
 
   if (fimPrefix === 1) {
@@ -168,6 +170,12 @@ function codeGemmaSupport(): FimSupport {
 
 function codeLlamaSupport(): FimSupport {
   return { supported: true, dialect: "codellama", stop: CODELLAMA_STOP, template: buildCodeLlamaPrompt };
+}
+
+function openaiCompletionsSupport(): FimSupport {
+  // No FIM marker tokens are known on OpenAI-only endpoints, so no marker
+  // stops and the template is unused; the request sends prompt + suffix.
+  return { supported: true, dialect: "openai-completions", stop: [], template: (prefix) => prefix };
 }
 
 function trimSlash(value: string): string {

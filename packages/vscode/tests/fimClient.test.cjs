@@ -90,3 +90,61 @@ test("requestFim returns undefined when both endpoints fail", async () => {
   );
   assert.equal(result, undefined);
 });
+
+test("requestFim returns an empty string when the endpoint answers with nothing to insert", async () => {
+  // The model answered, but the stop at the first newline leaves nothing. That
+  // is an empty suggestion, not an unreachable endpoint.
+  const result = await requestFim(
+    { root: "http://localhost:8080", support: QWEN_SUPPORT, fetchImpl: async () => ({ ok: true, json: async () => ({ content: "\nfoo" }) }) },
+    { prefix: "p", suffix: "s", maxTokens: 16 },
+  );
+  assert.equal(result, "");
+});
+
+const OPENAI_SUPPORT = {
+  supported: true,
+  dialect: "openai-completions",
+  stop: [],
+  template: (prefix) => prefix,
+};
+
+test("requestFim uses POST /v1/completions on the openai-completions dialect", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url: String(url), body: JSON.parse(init.body) });
+    return { ok: true, json: async () => ({ choices: [{ text: "n*n" }] }) };
+  };
+  const result = await requestFim(
+    {
+      root: "https://gateway.example",
+      endpoint: "https://gateway.example/v1",
+      model: "local",
+      support: OPENAI_SUPPORT,
+      fetchImpl,
+    },
+    { prefix: "def squared(n):\n    return", suffix: "\n", maxTokens: 16 },
+  );
+  assert.equal(result, "n*n");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://gateway.example/v1/completions");
+  assert.equal(calls[0].body.prompt, "def squared(n):\n    return");
+  assert.equal(calls[0].body.suffix, "\n");
+  assert.equal(calls[0].body.max_tokens, 16);
+  assert.equal(calls[0].body.model, "local");
+  assert.deepEqual(calls[0].body.stop, ["\n"]);
+  assert.equal(calls[0].body.stream, false);
+});
+
+test("requestFim adds /v1 to the openai fallback url when the endpoint lacks it", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push(String(url));
+    return { ok: true, json: async () => ({ choices: [{ text: "x" }] }) };
+  };
+  await requestFim(
+    { root: "https://gateway.example", endpoint: "https://gateway.example/", support: OPENAI_SUPPORT, fetchImpl },
+    { prefix: "p", suffix: "s", maxTokens: 8, multiLine: true },
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0], "https://gateway.example/v1/completions");
+});
