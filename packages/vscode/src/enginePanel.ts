@@ -131,6 +131,7 @@ class EngineController {
   }
 
   private shouldManage(): boolean {
+    if (process.env.CODESPACES === "true") return false;
     if (process.env.HACKL_TEST_DISABLE_ENGINE === "1") return false;
     const enabled = vscode.workspace.getConfiguration("hackl").get<boolean>(ENABLED_SETTING, true);
     return enabled && !readHacklConfig().endpointConfigured;

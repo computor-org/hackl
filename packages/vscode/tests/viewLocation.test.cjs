@@ -15,7 +15,7 @@ test("secondary sidebar support follows the VS Code 1.106 boundary", () => {
 
 test("chat opens in the matching fallback or secondary-sidebar view", () => {
   assert.deepEqual(chatViewContainer("1.105.2"), {
-    container: "hackl.activitybar",
+    container: "hackl_activitybar",
     view: "hackl.chatActivitybar",
   });
   assert.deepEqual(chatViewContainer("1.106.0"), {

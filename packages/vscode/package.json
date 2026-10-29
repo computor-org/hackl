@@ -2,7 +2,7 @@
   "name": "hackl",
   "displayName": "Hackl",
   "description": "Local-first AI coding with managed llama.cpp, agent tools, and autocomplete.",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "publisher": "computor-org",
   "license": "MIT",
   "repository": {
@@ -208,7 +208,7 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "hackl.activitybar",
+          "id": "hackl_activitybar",
           "title": "Hackl",
           "icon": "media/hackl.svg",
           "when": "hackl.doesNotSupportSecondarySidebar"
@@ -224,7 +224,7 @@
       ]
     },
     "views": {
-      "hackl.activitybar": [
+      "hackl_activitybar": [
         {
           "id": "hackl.chatActivitybar",
           "type": "webview",

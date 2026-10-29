@@ -24,5 +24,7 @@ export * from "./mcp/manager";
 export * from "./mcp/config";
 export * from "./toolCatalog";
 export * from "./session";
+export * from "./coursePolicy";
+export * from "./imageContext";
 export * from "./jsonStore";
 export * from "./engine";

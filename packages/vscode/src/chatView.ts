@@ -36,6 +36,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.setBackend = setter;
   }
 
+  async resetCourseContext(): Promise<void> {
+    await this.session.handle({ type: "clear" }, response => this.view
+      ? post(this.view.webview, response) : Promise.resolve(false));
+  }
+
   async postState(): Promise<void> {
     if (!this.view) return;
     const state = await this.getState();
@@ -97,7 +102,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  submitPreset(prompt: string, mode: import("@hackl/core").PromptMode, options: { createAnnotations?: boolean }): Promise<void> {
+  submitPreset(prompt: string, mode: import("@hackl/core").PromptMode, options: import('./chatSession').HacklRequestOptions): Promise<void> {
     return this.session.runDirect(prompt, mode, options, (response) => {
       if (!this.view) return Promise.resolve(false);
       return post(this.view.webview, response);

@@ -16,7 +16,7 @@ async function run() {
   assert.equal(properties["hackl.debug"].default, false);
   assert.ok(extension.packageJSON.contributes.viewsContainers.activitybar, "Hackl contributes an Activity Bar fallback");
   assert.ok(extension.packageJSON.contributes.viewsContainers.secondarySidebar, "Hackl contributes a secondary sidebar container");
-  assert.equal(extension.packageJSON.contributes.views["hackl.activitybar"][0].id, "hackl.chatActivitybar");
+  assert.equal(extension.packageJSON.contributes.views["hackl_activitybar"][0].id, "hackl.chatActivitybar");
   assert.ok(extension.packageJSON.contributes.views.hackl, "Hackl view container has views");
   assert.equal(extension.packageJSON.contributes.views.hackl[0].id, "hackl.chatView");
   assert.equal(extension.packageJSON.contributes.views.hackl[0].type, "webview");
@@ -26,6 +26,13 @@ async function run() {
   }
 
   const api = await extension.activate();
+  assert.equal(api.coursePolicyVersion, 1);
+  const userMode = vscode.workspace.getConfiguration('hackl').get('autocomplete.enabled');
+  api.applyCoursePolicy({ scope: 'synthetic-exam', policy: {
+    actionMode: 'ask', completion: 'off', independentCheck: true } });
+  await api.reviewFigure('invalid-image-cannot-be-dispatched-during-independent-check');
+  api.clearCoursePolicy('synthetic-exam');
+  assert.equal(vscode.workspace.getConfiguration('hackl').get('autocomplete.enabled'), userMode);
   assert.ok(api && typeof api === "object", "extension export an API");
   assert.equal(typeof api.openChat, "function");
   assert.equal(typeof api.getBasket, "function");

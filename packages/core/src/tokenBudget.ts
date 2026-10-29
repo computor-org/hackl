@@ -8,7 +8,8 @@ export function estimateTextTokens(text: string): number {
 
 export function estimateChatTokens(messages: ChatMessage[]): number {
   return messages.reduce((total, message) => {
-    return total + estimateTextTokens(message.role) + estimateTextTokens(message.content) + 4;
+    return total + estimateTextTokens(message.role) + estimateTextTokens(message.content) + 4
+      + (message.imageDataUrls?.length ?? 0) * 2048;
   }, 0);
 }
 

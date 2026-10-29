@@ -9,10 +9,10 @@ export function supportsSecondarySidebar(version: string): boolean {
 }
 
 export function chatViewContainer(version: string): {
-  container: "hackl" | "hackl.activitybar";
+  container: "hackl" | "hackl_activitybar";
   view: "hackl.chatView" | "hackl.chatActivitybar";
 } {
   return supportsSecondarySidebar(version)
     ? { container: "hackl", view: "hackl.chatView" }
-    : { container: "hackl.activitybar", view: "hackl.chatActivitybar" };
+    : { container: "hackl_activitybar", view: "hackl.chatActivitybar" };
 }

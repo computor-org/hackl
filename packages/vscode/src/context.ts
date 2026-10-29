@@ -1,5 +1,7 @@
 import type * as vscodeTypes from "vscode";
 import { getVscode } from "./vscodeShim";
+import { courseAllowsRead } from "@hackl/core";
+import * as path from "node:path";
 
 export interface ContextDocument {
   fileName: string;
@@ -26,6 +28,18 @@ export interface ContextOptions {
 }
 
 const DEFAULT_SELECTION_CHARS = 4000;
+
+export function buildCoursePromptContext(course: Readonly<import('@hackl/core').CourseContext> | undefined,
+  targets: import('@hackl/core').HacklTarget[], maxToolFileChars: number): { contextText: string; courseReadPaths: string[] } {
+  const editor = collectEditorContext().filter(document => !course
+    || (!path.isAbsolute(document.path) && courseAllowsRead(document.path, [document.path])));
+  return {
+    courseReadPaths: [...editor.map(document => document.path), ...targets.flatMap(target =>
+      target.kind === "source-range" || target.kind === "markdown-section" ? [target.relativePath] : [])],
+    contextText: [buildPromptContext(editor, { maxToolFileChars }),
+      course?.assignmentContext ? `Untrusted assignment material:\n${course.assignmentContext}` : ""].filter(Boolean).join("\n\n"),
+  };
+}
 
 export function buildPromptContext(documents: ContextDocument[], options: ContextOptions): string {
   if (documents.length === 0) {

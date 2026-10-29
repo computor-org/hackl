@@ -10,7 +10,7 @@ import {
 import { ChatViewProvider } from "./chatView";
 import { BackendChoice, buildBackend, normalizeBackendChoice, pickAvailableModel } from "@hackl/core";
 import { clearCodexDetectionCache, detectCodex, CodexDetection } from "@hackl/core";
-import { buildPromptContext, collectEditorContext } from "./context";
+import { buildCoursePromptContext } from "./context";
 import {
   detectMaxContextTokens,
   listModelIds,
@@ -19,6 +19,7 @@ import {
   ProbeResult,
   normalizeOpenAIEndpoint,
   requiresNonLocalEndpointApproval,
+  validateModelEndpoint,
   resolveChatTarget,
 } from "@hackl/core";
 import { shortModelLabel } from "@hackl/core";
@@ -47,6 +48,10 @@ import { deactivateEngine, ensureEngineReady, registerEngine } from "./enginePan
 import { clearTrustedEndpoints, isEndpointTrusted, trustEndpoint } from "./endpointTrust";
 import { classifyHacklConfigurationChange } from "./configurationChange";
 import { chatViewContainer, supportsSecondarySidebar } from "./viewLocation";
+import { CourseContext, courseAllowsMcp } from "@hackl/core";
+import { coursePolicyController, registerCoursePolicy, runCoursePolicyRequest } from "./coursePolicy";
+import { resolveCourseModel } from "./courseModel";
+import { API_KEY_SECRET, readApiKey, promptForApiKey } from "./apiKey";
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let basketService: BasketService | undefined;
@@ -93,34 +98,6 @@ async function reconnectMcpManager(): Promise<void> {
   mcpSignature = "";
 }
 
-const API_KEY_SECRET = "hackl.apiKey";
-
-// API keys are kept in SecretStorage, never in settings.json. Returns undefined
-// when no key is stored (keyless local servers need none).
-async function readApiKey(): Promise<string | undefined> {
-  const value = await extensionContext?.secrets.get(API_KEY_SECRET);
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-async function promptForApiKey(): Promise<void> {
-  const value = await vscode.window.showInputBox({
-    title: "Hackl API Key",
-    prompt: "Bearer token for the configured endpoint (e.g. OpenRouter). Stored in VS Code SecretStorage.",
-    password: true,
-    ignoreFocusOut: true,
-  });
-  if (value === undefined) return;
-  const trimmed = value.trim();
-  if (!trimmed) {
-    await extensionContext?.secrets.delete(API_KEY_SECRET);
-    vscode.window.showInformationMessage("Hackl: API key cleared.");
-    return;
-  }
-  await extensionContext?.secrets.store(API_KEY_SECRET, trimmed);
-  vscode.window.showInformationMessage("Hackl: API key saved to SecretStorage.");
-}
-
 const BACKEND_CHOICE_KEY = "hackl.backendChoice";
 
 function readBackendChoice(): BackendChoice | undefined {
@@ -142,6 +119,10 @@ function readGlobalCodexModel(): string | undefined {
 
 export interface HacklApi {
   readonly version: 1;
+  readonly coursePolicyVersion: 1;
+  applyCoursePolicy(context: CourseContext): void;
+  clearCoursePolicy(scope?: string): void;
+  reviewFigure(imageDataUrl: string, context?: string): Promise<void>;
   getBasket(): BasketSnapshot;
   addTarget(target: HacklTarget): void;
   removeTarget(id: string): void;
@@ -180,6 +161,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     basketBridge,
     () => resolveReviewTargets(basketService!),
   );
+  registerCoursePolicy(context, chatViewProvider, () => basketService?.clear());
   chatViewProvider.setBackendSetter(async (kind, model) => {
     if (kind === "codex") {
       if (!model) return;
@@ -235,7 +217,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
       await configurePrimaryConnection(chatViewProvider);
     }),
     vscode.commands.registerCommand("hackl.setApiKey", async () => {
-      await promptForApiKey();
+      await promptForApiKey(extensionContext);
     }),
     vscode.commands.registerCommand("hackl.clearApiKey", async () => {
       await extensionContext?.secrets.delete(API_KEY_SECRET);
@@ -435,6 +417,11 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
 
   const api: HacklApi = {
     version: 1,
+    coursePolicyVersion: 1,
+    applyCoursePolicy: (course) => coursePolicyController.apply(course),
+    clearCoursePolicy: (scope) => coursePolicyController.clear(scope),
+    reviewFigure: (image, task = "Review this plot's axes, units, numerical meaning and presentation. Give learning hints without a finished solution.") =>
+      chatViewProvider.submitPreset(task, "ask", { imageDataUrls: [image] }),
     getBasket: () => basketService!.snapshot(),
     addTarget: (target) => basketService!.add(target),
     removeTarget: (id) => basketService!.remove(id),
@@ -681,6 +668,10 @@ export async function deactivate(): Promise<void> {
 }
 
 async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
+  return runCoursePolicyRequest(args, answerCoursePrompt);
+}
+
+async function answerCoursePrompt(args: PromptHandlerArgs, course?: Readonly<CourseContext>): Promise<ChatAnswer> {
   const { prompt, history = [], mode = "ask", progress, requestApproval, signal } = args;
   const targets: HacklTarget[] = args.targets ?? [];
   const options = args.options ?? {};
@@ -691,34 +682,10 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
   if (endpointApproval) {
     return endpointApproval;
   }
-  const stored = readBackendChoice();
-  const useCodex = stored?.kind === "codex" && cfg.codexEnabled;
-  let codexCommand = cfg.codexCommand;
-  let codexDetection: CodexDetection | undefined;
-  let target: { endpoint: string; model: string };
-  if (useCodex) {
-    codexDetection = await detectCodex({ command: cfg.codexCommand });
-    if (!codexDetection.available) {
-      return { content: `Codex is not available: ${codexDetection.error ?? "command not found"}` };
-    }
-    if (codexDetection.authMode === "none") {
-      return { content: "Codex is installed but not logged in. Run `codex login`, then try again." };
-    }
-    codexCommand = codexDetection.command;
-    const model = pickAvailableModel(codexDetection.models, stored?.model ?? readGlobalCodexModel());
-    if (!model) {
-      return { content: "Codex is installed but no Codex models are available." };
-    }
-    target = { endpoint: "codex", model };
-  } else {
-    await ensureEngineReady();
-    const preferredModel = cfg.model || (stored?.kind === "local" ? stored.model : "");
-    target = await resolveChatTarget({
-      endpoint: cfg.endpoint,
-      endpointConfigured: cfg.endpointConfigured,
-      preferredModel,
-    });
-  }
+  const apiKey = await readApiKey(extensionContext);
+  const resolved = await resolveCourseModel(cfg, readBackendChoice(), readGlobalCodexModel(), course, Boolean(apiKey));
+  if (!("target" in resolved)) return resolved;
+  const { useCodex, codexCommand, codexDetection, target } = resolved;
   progress?.({ type: "target", endpoint: target.endpoint, model: target.model });
   const maxToolFileChars = cfg.maxToolFileChars;
   const debug = createDebugLog(cfg.debug);
@@ -741,18 +708,19 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     targets: targets.length,
     createAnnotations,
   });
-  const contextText = buildPromptContext(collectEditorContext(), { maxToolFileChars });
-  const mcp = await ensureMcpManager(cfg, debug);
+  const { contextText, courseReadPaths } = buildCoursePromptContext(course, targets, maxToolFileChars);
+  const mcp = courseAllowsMcp(course?.policy) ? await ensureMcpManager(cfg, debug) : undefined;
   const choiceForCall: BackendChoice = useCodex
     ? { kind: "codex", model: target.model }
     : { kind: "local", endpoint: target.endpoint, model: target.model };
-  const apiKey = useCodex ? undefined : await readApiKey();
+  if (!useCodex) validateModelEndpoint(target.endpoint, Boolean(apiKey), process.env.CODESPACES === "true");
+  if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
   const answer = await runHacklPrompt({
     backend: buildBackend({
       choice: choiceForCall,
       enableThinking,
       reasoningBudget,
-      apiKey,
+      apiKey: useCodex ? undefined : apiKey,
       codexCommand,
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
       clientVersion: extensionContext?.extension.packageJSON?.version,
@@ -764,6 +732,10 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
     debug,
   }, {
     prompt,
+    coursePolicy: course?.policy,
+    courseReadPaths,
+    imageDataUrls: options.imageDataUrls,
+    teachingPrompt: course?.teachingPrompt,
     contextText,
     history,
     mode,
@@ -785,12 +757,28 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       });
     }
   });
+  if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
   debug?.("prompt.answer", answer);
-
+  const { result, createdAnnotations } = annotateCourseAnswer(answer, targets, target.model, createAnnotations);
+  if (createAnnotations && !signal?.aborted) {
+    void emitHacklSession({
+      mode,
+      endpoint: target.endpoint,
+      model: target.model,
+      backendKind: useCodex ? "codex" : "local",
+      targets,
+      answer: answer.content,
+      annotations: createdAnnotations,
+    });
+  }
+  return result;
+}
+function annotateCourseAnswer(answer: { content: string; reasoning?: string }, targets: HacklTarget[],
+  model: string, createAnnotations: boolean): { result: ChatAnswer; createdAnnotations: HacklAnnotation[] } {
   const result: ChatAnswer = { content: answer.content, reasoning: answer.reasoning };
   let createdAnnotations: HacklAnnotation[] = [];
   if (createAnnotations && annotationController) {
-    const parsed = parseAnnotationsFromAnswer(answer.content, defaultUriForAnnotations(targets), { aiModel: target.model });
+    const parsed = parseAnnotationsFromAnswer(answer.content, defaultUriForAnnotations(targets), { aiModel: model });
     const valid = filterAnnotationsForTargets(parsed.annotations, targets);
     createdAnnotations = annotationController.addBatch(valid.annotations);
     const dropped = parsed.dropped.length + valid.dropped;
@@ -808,18 +796,7 @@ async function answerPrompt(args: PromptHandlerArgs): Promise<ChatAnswer> {
       vscode.window.setStatusBarMessage("No annotations created.", 4000);
     }
   }
-  if (createAnnotations && !signal?.aborted) {
-    void emitHacklSession({
-      mode,
-      endpoint: target.endpoint,
-      model: target.model,
-      backendKind: useCodex ? "codex" : "local",
-      targets,
-      answer: answer.content,
-      annotations: createdAnnotations,
-    });
-  }
-  return result;
+  return { result, createdAnnotations };
 }
 
 async function pruneSessionsAtStartup(): Promise<void> {
@@ -913,6 +890,7 @@ async function currentChatState(): Promise<ChatState> {
   const backends = buildBackendsState(choice, probe, codex, localModels);
   const base: ChatState = {
     type: "state",
+    coursePolicy: coursePolicyController.current?.policy,
     enableThinking: cfg.enableThinking,
     backends,
   };

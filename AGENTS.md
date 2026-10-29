@@ -11,13 +11,13 @@ Brand:
 - License: MIT.
 
 Relationship to Computor:
-- `computor-vscode` remains course-management UI: login, repositories,
-  submissions, grading, tests, course data, and manual/course setup.
-- Luna remains the Computor-specific teaching assistant: didactic prompts,
-  hints, Socratic behavior, student/course context, optional tutor analytics.
-- Hackl owns the generic editor/backend local-AI layer.
-- Luna may eventually build on Hackl instead of duplicating editor/backend
-  plumbing.
+- `computor-vscode` owns course-management UI: login, repositories, submissions,
+  grading, tests, course data and setup.
+- Computor supplies didactic guidance, assignment context and course policy.
+- Hackl owns interactive tutoring in Computor mode, its UI, model transport and
+  learner keys. The versioned course API is documented in `docs/computor-mode.md`.
+- Legacy computor-agent services remain available for existing installations and
+  separate background review. There is no separate new Luna chat layer.
 
 ## Product Rules
 
