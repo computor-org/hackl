@@ -14,7 +14,7 @@
     "compile": "tsc -b",
     "build": "tsc -b && node esbuild.mjs",
     "bundle": "node esbuild.mjs",
-    "test": "tsc -b && node --test tests/*.test.cjs"
+    "test": "npm run build && node --test tests/*.test.cjs"
   },
   "devDependencies": {
     "@hackl/core": "*",
