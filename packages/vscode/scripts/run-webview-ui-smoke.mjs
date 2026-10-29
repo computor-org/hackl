@@ -145,6 +145,31 @@ try {
   assert.match(await page.locator(".assistant pre code").innerText(), /const mass = 1/);
   assert.equal(await page.locator(".status").count(), 0);
 
+  // One message with Markdown structure and an inline formula renders through
+  // the vendored markdown-it and KaTeX, so a stale vendor copy shows up here.
+  // Vertical layout is not asserted: the webview CSP has no 'unsafe-inline' in
+  // style-src, so KaTeX's inline top offsets are dropped in any harness.
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "answer",
+        text: "## Euler\n\nThe **identity** $e^{i\\pi}+1=0$ links five constants.\n\n- e is Euler's number\n",
+      },
+    }));
+  });
+  const euler = page.locator(".assistant").last();
+  await euler.locator(".katex").first().waitFor();
+  assert.equal(await euler.locator("h2").innerText(), "Euler");
+  assert.equal(await euler.locator("strong").innerText(), "identity");
+  assert.equal(await euler.locator("li").innerText(), "e is Euler's number");
+  assert.equal(await euler.locator(".katex annotation").getAttribute("encoding"), "application/x-tex");
+  assert.equal(await euler.locator(".katex annotation").textContent(), "e^{i\\pi}+1=0");
+  assert.ok(await euler.locator(".katex").first().isVisible());
+  assert.ok(
+    await page.evaluate(() => document.fonts.check("16px codicon")),
+    "the vendored codicon font should be loaded",
+  );
+
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", {
       data: {

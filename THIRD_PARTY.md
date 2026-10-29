@@ -84,7 +84,7 @@ extension package, not a network CDN. License files ship at
 
 ### markdown-it
 
-- Version: 14.1.1
+- Version: 15.0.3
 - Source: https://github.com/markdown-it/markdown-it
 - License: MIT
 - Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin
@@ -92,7 +92,7 @@ extension package, not a network CDN. License files ship at
 
 ### KaTeX
 
-- Version: 0.16.45
+- Version: 0.19.0
 - Source: https://github.com/KaTeX/KaTeX
 - License: MIT
 - Copyright (c) 2013-2020 Khan Academy and other contributors
@@ -105,6 +105,9 @@ extension package, not a network CDN. License files ship at
 - License: icon and font assets under CC BY 4.0; package code under MIT
 - Codicons by Microsoft Corporation
 - Changes: none
+
+Regenerated from the locked packages with `npm ci && npm run sync:vendor -w hackl`;
+`packages/vscode/tests/vendorSync.test.cjs` checks the committed copies.
 
 ## Development tooling
 
