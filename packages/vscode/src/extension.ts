@@ -425,8 +425,9 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
     }),
     vscode.commands.registerCommand("hackl.reviewStagedChanges", async () => {
       await vscode.commands.executeCommand("hackl.chat");
-      chatViewProvider.setPromptText("/review");
-      chatViewProvider.notifyStatus("/review: staged changes plus attached context, else current file.");
+      // The command's intent is the review itself, so submit it the way Enter
+      // would instead of leaving a prefilled prompt behind.
+      await chatViewProvider.submitPreset("/review", "ask", { createAnnotations: true });
     }),
   );
 

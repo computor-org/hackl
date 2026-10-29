@@ -174,6 +174,38 @@ try {
     "the vendored codicon font should be loaded",
   );
 
+  // A review answer repeats its findings: once as a machine-readable fenced block,
+  // once as the annotation card. Only the card belongs in the thread, and the
+  // block has to disappear while it is still being streamed (#39).
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "assistantDelta",
+        channel: "answer",
+        text: "Two findings.\n\n```hackl-annotations\n[{\"uri\":\"file:///svc.py\",\"startLine\":7,\n",
+      },
+    }));
+  });
+  const reviewDraft = page.locator(".assistant .body").last();
+  await reviewDraft.waitFor();
+  assert.match(await reviewDraft.innerText(), /Two findings\./);
+  assert.doesNotMatch(await reviewDraft.innerText(), /hackl-annotations|startLine/);
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "answer",
+        text: "Two findings.\n\n```hackl-annotations\n[{\"uri\":\"file:///svc.py\",\"startLine\":7,\"severity\":\"warning\",\"message\":\"divides by zero\"}]\n```\n",
+        annotations: [{ uri: "file:///svc.py", startLine: 7, severity: "warning", message: "divides by zero" }],
+      },
+    }));
+  });
+  const reviewAnswer = page.locator(".assistant .body").last();
+  assert.match(await reviewAnswer.innerText(), /Two findings\./);
+  assert.doesNotMatch(await reviewAnswer.innerText(), /hackl-annotations|startLine|"uri"/);
+  assert.equal(await page.locator(".annotation-item").count(), 1);
+  assert.match(await page.locator(".annotation-item").innerText(), /divides by zero/);
+
   await page.evaluate(() => {
     window.dispatchEvent(new MessageEvent("message", {
       data: {
