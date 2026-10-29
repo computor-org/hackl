@@ -157,3 +157,52 @@ test("autocomplete omits the compatibility fallback model alias", async () => {
     remote: false,
   });
 });
+
+function keyInput(autocompleteEndpoint) {
+  return {
+    chatEndpoint: "https://gateway.example/v1",
+    chatEndpointConfigured: true,
+    apiKey: "k-123",
+    autocomplete: { endpoint: autocompleteEndpoint, endpointConfigured: Boolean(autocompleteEndpoint), model: "" },
+  };
+}
+
+test("chat key reaches the model probe and the target for the chat endpoint", async () => {
+  for (const endpoint of ["", "https://gateway.example/v1/", "https://gateway.example"]) {
+    let probeKey;
+    const result = await resolveAutocompleteTarget(keyInput(endpoint), {
+      resolveChatTargetImpl: async ({ endpoint: e, apiKey }) => {
+        probeKey = apiKey;
+        return { endpoint: e, model: "qwen-coder" };
+      },
+    });
+    assert.equal(probeKey, "k-123");
+    assert.equal(result.apiKey, "k-123");
+  }
+});
+
+test("chat key is not sent to a different autocomplete endpoint", async () => {
+  let probeKey = "unset";
+  const result = await resolveAutocompleteTarget(keyInput("https://other.example/v1"), {
+    resolveChatTargetImpl: async ({ endpoint, apiKey }) => {
+      probeKey = apiKey;
+      return { endpoint, model: "qwen-coder" };
+    },
+  });
+  assert.equal(probeKey, undefined);
+  assert.equal(result.apiKey, undefined);
+});
+
+test("401 reason for autocomplete does not ask for a chat model", async () => {
+  const reject = async ({ endpoint }) => {
+    throw new Error(`${endpoint} refused the request with HTTP 401: no API key. Set a model with hackl.model.`);
+  };
+  const same = await resolveAutocompleteTarget(keyInput(""), { resolveChatTargetImpl: reject });
+  assert.equal(same.available, false);
+  assert.match(same.reason, /HTTP 401/);
+  assert.match(same.reason, /Set API Key/);
+  assert.doesNotMatch(same.reason, /hackl\.model/);
+  const other = await resolveAutocompleteTarget(keyInput("https://other.example/v1"), { resolveChatTargetImpl: reject });
+  assert.match(other.reason, /chat API key is not sent/);
+  assert.doesNotMatch(other.reason, /hackl\.model/);
+});

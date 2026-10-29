@@ -13,6 +13,8 @@ export interface FimClientOptions {
   // Full endpoint including /v1; needed by the OpenAI /v1/completions fallback.
   endpoint?: string;
   model?: string;
+  // Bearer token; only set when the endpoint is the one the key belongs to.
+  apiKey?: string;
   support: FimSupport;
   fetchImpl?: typeof fetch;
   maxPredictMs?: number;
@@ -87,6 +89,7 @@ export async function requestFim(options: FimClientOptions, request: FimRequest)
         ...(options.model ? { model: options.model } : {}),
       },
       request.signal,
+      options.apiKey,
       "openai",
     );
     return text === undefined ? undefined : finalise(text, suffix, stops);
@@ -114,6 +117,7 @@ export async function requestFim(options: FimClientOptions, request: FimRequest)
       prompt: "",
     },
     request.signal,
+    options.apiKey,
   );
   if (infillResult !== undefined) {
     return finalise(infillResult, suffix, stops);
@@ -127,6 +131,7 @@ export async function requestFim(options: FimClientOptions, request: FimRequest)
       prompt: options.support.template(prefix, suffix),
     },
     request.signal,
+    options.apiKey,
   );
   if (completionResult !== undefined) {
     return finalise(completionResult, suffix, stops);
@@ -140,12 +145,16 @@ async function tryPost(
   url: string,
   body: unknown,
   signal: AbortSignal | undefined,
+  apiKey: string | undefined,
   shape: "llama" | "openai" = "llama",
 ): Promise<string | undefined> {
   try {
     const response = await fetchImpl(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
       body: JSON.stringify(body),
       signal,
     });

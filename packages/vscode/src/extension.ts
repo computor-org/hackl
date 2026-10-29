@@ -200,7 +200,7 @@ export function activate(context: vscode.ExtensionContext): HacklApi {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   statusBarItem.command = "hackl.openWalkthrough";
   context.subscriptions.push(statusBarItem, basketService, annotationController, sessionFinishedEmitter);
-  registerAutocomplete(context);
+  registerAutocomplete(context, readApiKey);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("hackl.chatActivitybar", chatViewProvider),

@@ -148,3 +148,23 @@ test("requestFim adds /v1 to the openai fallback url when the endpoint lacks it"
   assert.equal(calls.length, 1);
   assert.equal(calls[0], "https://gateway.example/v1/completions");
 });
+
+test("requestFim sends the bearer key on every route when given one, none otherwise", async () => {
+  for (const support of [QWEN_SUPPORT, { ...QWEN_SUPPORT, dialect: "openai-completions", stop: [] }]) {
+    for (const apiKey of ["k-123", undefined]) {
+      const headers = [];
+      const fetchImpl = async (_url, init) => {
+        headers.push(init.headers);
+        return notOk(); // forces /infill then /completion on llama routes
+      };
+      await requestFim(
+        { root: "http://localhost:8080", support, fetchImpl, apiKey },
+        { prefix: "a", suffix: "b", maxTokens: 8 },
+      );
+      assert.ok(headers.length >= 1);
+      for (const h of headers) {
+        assert.equal(h.Authorization, apiKey ? `Bearer ${apiKey}` : undefined);
+      }
+    }
+  }
+});
