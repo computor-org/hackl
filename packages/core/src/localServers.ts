@@ -26,11 +26,16 @@ interface ProbedServer {
   // /models answered 401/403: the key is missing or wrong, not the server down.
   authRejected?: boolean;
   status?: number;
+  // /models did not answer within the timeout.
+  timedOut?: boolean;
 }
 
 const DEFAULT_ENDPOINT = "http://localhost:8080/v1";
 export const DEFAULT_CHAT_MODEL = "local-model";
 const PROBE_TIMEOUT_MS = 600;
+// An endpoint the user named may be remote or cold-starting; waiting a few seconds
+// once is cheaper than chatting with a wrong model. Port scanning keeps the short timeout.
+export const CONFIGURED_PROBE_TIMEOUT_MS = 5000;
 
 export const LOCAL_SERVER_CANDIDATES: LocalServerCandidate[] = [
   { name: "llama.cpp", endpoint: "http://localhost:8080/v1" },
@@ -51,7 +56,7 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
     if (preferred) {
       return { endpoint: configuredEndpoint, model: preferred };
     }
-    const probed = await probeServer(configuredEndpoint, fetchImpl, apiKey);
+    const probed = await probeServer(configuredEndpoint, fetchImpl, apiKey, CONFIGURED_PROBE_TIMEOUT_MS);
     if (probed?.model) {
       return { endpoint: configuredEndpoint, model: probed.model };
     }
@@ -60,6 +65,12 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
         `${configuredEndpoint} refused the request with HTTP ${probed.status}: no API key or a wrong API key was sent. `
         + "Set the key with \"Hackl: Set API Key\", --api-key or HACKL_API_KEY, "
         + "or set a model with hackl.model, --model or HACKL_MODEL.",
+      );
+    }
+    if (probed?.timedOut) {
+      throw new Error(
+        `The model list from ${configuredEndpoint} did not arrive within ${CONFIGURED_PROBE_TIMEOUT_MS / 1000} s. `
+        + "Set the model with hackl.model, --model or HACKL_MODEL.",
       );
     }
     // A llama.cpp-style server may not list models but accepts DEFAULT_CHAT_MODEL,
@@ -154,10 +165,13 @@ async function probeServer(
   endpoint: string,
   fetchImpl: typeof fetch,
   apiKey?: string,
+  timeoutMs = PROBE_TIMEOUT_MS,
 ): Promise<ProbedServer | undefined> {
   const base = normalizeOpenAIEndpoint(endpoint);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  controller.signal.addEventListener("abort", () => { timedOut = true; });
 
   try {
     const response = await fetchImpl(`${base}/models`, { signal: controller.signal, ...requestInit(apiKey) });
@@ -172,6 +186,8 @@ async function probeServer(
     }
     return { endpoint: base, model: firstModelId(await response.json()) };
   } catch {
+    // A configured endpoint that is merely slow must not cost three more timeouts.
+    if (timedOut && timeoutMs !== PROBE_TIMEOUT_MS) return { endpoint: base, timedOut: true };
     return await probeHealth(base, fetchImpl);
   } finally {
     clearTimeout(timer);
