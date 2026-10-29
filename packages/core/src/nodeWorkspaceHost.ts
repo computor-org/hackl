@@ -7,6 +7,9 @@ import type { WorkspaceToolHost } from "./toolRunner";
 
 const MAX_TOOL_FILE_BYTES = 1_000_000;
 const BINARY_SAMPLE_BYTES = 8192;
+const MAX_LISTING_ENTRIES = 200;
+// Trees search_files never walks; a directory listing hides the same set.
+const IGNORED_DIRECTORY_NAMES = [".git", "node_modules", "dist", "out", "build"];
 
 export function createNodeWorkspaceHost(root: string, spawnImpl: typeof spawn = spawn): WorkspaceToolHost {
   const workspaceRoot = realpathSync(path.resolve(root)) ?? path.resolve(root);
@@ -25,6 +28,9 @@ async function nodeReadFile(root: string, request: ReadFileRequest, maxFileChars
   }
 
   try {
+    if ((await fsp.stat(filePath)).isDirectory()) {
+      return await nodeListDirectory(filePath, maxFileChars);
+    }
     const guard = await validateTextFile(filePath);
     if (!guard.ok) return guard;
     const text = await fsp.readFile(filePath, "utf8");
@@ -40,6 +46,41 @@ async function nodeReadFile(root: string, request: ReadFileRequest, maxFileChars
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, content: message };
   }
+}
+
+// read_file on a directory gives read-only modes the inventory they need to
+// name a real file instead of guessing one.
+async function nodeListDirectory(dirPath: string, maxFileChars: number): Promise<ToolResult> {
+  const entries = await fsp.readdir(dirPath, { withFileTypes: true });
+  return { ok: true, content: formatDirectoryListing(entries, maxFileChars) };
+}
+
+export function formatDirectoryListing(
+  entries: { name: string; isDirectory(): boolean }[],
+  maxFileChars: number,
+): string {
+  const names = entries
+    .filter((entry) => !entry.name.startsWith(".") && !IGNORED_DIRECTORY_NAMES.includes(entry.name))
+    .map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name))
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+    .slice(0, MAX_LISTING_ENTRIES);
+  const lines: string[] = [];
+  let chars = 0;
+  for (const name of names) {
+    chars += name.length + 1;
+    if (chars > maxFileChars) {
+      break;
+    }
+    lines.push(name);
+  }
+  if (lines.length === 0) {
+    return "No entries.";
+  }
+  const hidden = names.length - lines.length;
+  if (hidden > 0) {
+    lines.push(`[${hidden} more not listed]`);
+  }
+  return lines.join("\n");
 }
 
 async function nodeReplaceText(root: string, request: ReplaceTextRequest): Promise<ToolResult> {
@@ -125,7 +166,7 @@ async function walkFiles(root: string, dir = root): Promise<string[]> {
   const entries = await fsp.readdir(dir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
-    if ([".git", "node_modules", "dist", "out", "build"].includes(entry.name)) {
+    if (IGNORED_DIRECTORY_NAMES.includes(entry.name)) {
       continue;
     }
     const fullPath = path.join(dir, entry.name);

@@ -74,9 +74,9 @@ function permissionsForMode(mode: PromptMode): ModePermissions {
     case "work":
       return { allowSearch: true, allowEdits: true, allowCommands: false, yolo: false };
     case "edit":
-      return { allowSearch: false, allowEdits: true, allowCommands: false, yolo: false };
+      return { allowSearch: true, allowEdits: true, allowCommands: false, yolo: false };
     default:
-      return { allowSearch: false, allowEdits: false, allowCommands: false, yolo: false };
+      return { allowSearch: true, allowEdits: false, allowCommands: false, yolo: false };
   }
 }
 

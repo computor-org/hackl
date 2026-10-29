@@ -35,15 +35,22 @@ export interface ToolResult {
 
 export const ASK_TOOL_INSTRUCTIONS = [
   "Only call HACKL_TOOL if the user asks about file contents. Else answer plainly.",
-  "Files hidden. Need file? Reply ONLY:",
+  "Never guess a file name. Unknown file? List a folder or search. Reply ONLY:",
+  'HACKL_TOOL {"name":"read_file","path":"."}',
+  'HACKL_TOOL {"name":"search_files","query":"text or file name","glob":"**/*","max_results":20}',
+  "Need file text? Reply ONLY:",
   'HACKL_TOOL {"name":"read_file","path":"X","start_line":1,"end_line":120}',
-  "Small range. One call. Wait for HACKL_TOOL_RESULT, then answer.",
+  "read_file on a folder lists its entries, folders end with /. One call. Wait for HACKL_TOOL_RESULT, then answer.",
 ].join("\n");
 
 export const EDIT_TOOL_INSTRUCTIONS = [
   "Use tools to inspect and edit workspace files. Make minimal normal file edits for git diff review.",
+  "Never guess a file name. Unknown file? List a folder or search. Reply ONLY:",
+  'HACKL_TOOL {"name":"read_file","path":"."}',
+  'HACKL_TOOL {"name":"search_files","query":"text or file name","glob":"**/*","max_results":20}',
   "Need file text? Reply ONLY:",
   'HACKL_TOOL {"name":"read_file","path":"X","start_line":1,"end_line":120}',
+  "read_file on a folder lists its entries, folders end with /.",
   "To edit, reply ONLY:",
   'HACKL_TOOL {"name":"replace_text","path":"X","old_text":"exact old text","new_text":"replacement text"}',
   "replace_text must use a unique exact old_text. Wait for HACKL_TOOL_RESULT before continuing.",

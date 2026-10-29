@@ -65,7 +65,7 @@ test("search_files skips symlinks that resolve outside the workspace", async () 
   });
 });
 
-test("search_files is rejected outside work mode", async () => {
+test("search_files is refused when the caller disables it", async () => {
   const project = makeProject();
   await withVscodeStub(vscodeStub(project, []), async () => {
     const { createWorkspaceToolRunner } = freshWorkspaceTools();
@@ -73,7 +73,7 @@ test("search_files is rejected outside work mode", async () => {
 
     assert.deepEqual(
       await runTool({ name: "search_files", query: "x" }),
-      { ok: false, content: "search_files is only available in Work mode." },
+      { ok: false, content: "search_files is not allowed in this mode; Hackl enables it in Ask, Edit, Work, Agent, and Yolo mode." },
     );
   });
 });

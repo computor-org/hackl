@@ -56,7 +56,7 @@ export function createWorkspaceToolRunner(options: WorkspaceToolOptions): (reque
     }
     if (request.name === "search_files") {
       if (!options.allowSearch) {
-        return { ok: false, content: "search_files is only available in Work mode." };
+        return { ok: false, content: "search_files is not allowed in this mode; Hackl enables it in Ask, Edit, Work, Agent, and Yolo mode." };
       }
       return workspace.searchFiles(request);
     }
