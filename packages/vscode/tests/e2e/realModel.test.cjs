@@ -21,26 +21,35 @@ function stubVscodeForCli() {
   return () => { Module._load = original; };
 }
 
-test("real model: chat round-trip against a live OpenAI-compatible server", { skip: !enabled }, async () => {
-  const restore = stubVscodeForCli();
-  try {
-    const { resolveChatTarget } = require("../../dist/localServers.js");
-    const { createOpenAICompatibleBackend } = require("../../dist/chatClient.js");
-    const { completeWithTools } = require("../../dist/toolLoop.js");
-    const { buildHacklMessages } = require("../../dist/prompt.js");
-    const { createWorkspaceToolRunner } = require("../../dist/workspaceTools.js");
+// Resolve at load time, outside the skipped test, so a broken require fails
+// in a normal `npm test` run too.
+const restore = stubVscodeForCli();
+const { resolveChatTarget } = require("@hackl/core/localServers");
+const { createOpenAICompatibleBackend } = require("@hackl/core/chatClient");
+const { completeWithTools } = require("@hackl/core/toolLoop");
+const { buildHacklMessages } = require("@hackl/core/prompt");
+const { createWorkspaceToolRunner } = require("../../dist/workspaceTools.js");
+const runTool = createWorkspaceToolRunner({ maxFileChars: 12000, allowEdits: false, allowSearch: false, allowCommands: false });
+restore();
 
-    const target = await resolveChatTarget({ endpoint, endpointConfigured: true });
-    const messages = buildHacklMessages("Say the word PING and nothing else.", "[no editor context]", [], "ask", {});
-    const answer = await completeWithTools({
-      backend: createOpenAICompatibleBackend({ ...target, enableThinking: false }),
-      messages,
-      runTool: createWorkspaceToolRunner({ maxFileChars: 12000, allowEdits: false, allowSearch: false, allowCommands: false }),
-      maxToolCalls: 0,
-      maxContextTokens: 8192,
-    });
-    assert.ok(typeof answer.content === "string" && answer.content.length > 0, "model returned non-empty content");
-  } finally {
-    restore();
-  }
+test("real model: chat round-trip against a live OpenAI-compatible server", { skip: !enabled }, async () => {
+  const target = await resolveChatTarget({
+    endpoint,
+    endpointConfigured: true,
+    preferredModel: process.env.HACKL_E2E_MODEL,
+  });
+  const messages = buildHacklMessages("Say the word PING and nothing else.", "[no editor context]", [], "ask", {});
+  const answer = await completeWithTools({
+    // Same wiring as the extension host: the key rides on the backend options.
+    backend: createOpenAICompatibleBackend({
+      ...target,
+      enableThinking: false,
+      apiKey: process.env.HACKL_API_KEY,
+    }),
+    messages,
+    runTool,
+    maxToolCalls: 0,
+    maxContextTokens: 8192,
+  });
+  assert.ok(typeof answer.content === "string" && answer.content.length > 0, "model returned non-empty content");
 });
