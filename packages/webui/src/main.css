@@ -102,6 +102,15 @@ body {
 .entry { display: flex; flex-direction: column; gap: 4px; }
 .entry .role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
 .entry .body { white-space: pre-wrap; word-break: break-word; }
+/* Assistant answers are rendered markup, so the newlines of the markdown source
+   must not resurface as blank lines between the blocks it produces. */
+.entry.assistant .body { white-space: normal; }
+.entry.assistant .body > :first-child { margin-top: 0; }
+.entry.assistant .body > :last-child { margin-bottom: 0; }
+.entry.assistant .body p { margin: 6px 0; }
+.entry.assistant .body ul,
+.entry.assistant .body ol { margin: 6px 0; padding-left: 22px; }
+.entry.assistant .body a { color: var(--accent); }
 .entry.user .body {
   background: var(--surface-strong);
   border: 1px solid var(--border);

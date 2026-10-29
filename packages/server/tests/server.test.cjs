@@ -131,6 +131,9 @@ test("bootstrap sets an HttpOnly cookie and redirects the token out of the URL",
     assert.equal(res.headers.location, "/");
     assert.match(String(res.headers["set-cookie"]), /hackl_token=.*HttpOnly.*SameSite=Strict/);
     assert.match(String(res.headers["content-security-policy"] || ""), /default-src 'self'/);
+    // KaTeX lays formulas out with inline style attributes; nothing else is loosened.
+    assert.match(String(res.headers["content-security-policy"] || ""), /style-src 'self' 'unsafe-inline'/);
+    assert.doesNotMatch(String(res.headers["content-security-policy"] || ""), /font-src|unsafe-eval/);
   });
 });
 

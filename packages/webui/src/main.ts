@@ -1,5 +1,6 @@
 import { ALL_MODES, DEFAULT_MODE } from "@hackl/protocol";
 import type { ClientMessage, ServerMessage, PromptMode, ConversationMessage, EngineStatus, ModelEntry } from "@hackl/protocol";
+import { renderMarkdown } from "./markdown";
 
 const MODE_TITLES: Record<PromptMode, string> = {
   ask: "read only",
@@ -33,6 +34,7 @@ let running = false;
 let yoloAllowed = false;
 let assistantBody: HTMLElement | undefined;
 let assistantReasoning: HTMLElement | undefined;
+let assistantText = "";
 const statusLine = document.createElement("div");
 statusLine.id = "status";
 
@@ -145,7 +147,7 @@ function renderHistory(entries: ConversationMessage[]): void {
     if (entry.role === "user") appendUser(entry.content);
     else if (entry.role === "assistant") {
       const node = newEntry("assistant");
-      node.body.textContent = entry.content;
+      node.body.innerHTML = renderMarkdown(entry.content);
     }
   }
   updateEmpty();
@@ -179,6 +181,7 @@ function appendError(text: string): void {
 function startAssistant(): void {
   const wrap = document.createElement("div");
   wrap.className = "entry assistant";
+  assistantText = "";
   const label = document.createElement("div");
   label.className = "role";
   label.textContent = "hackl";
@@ -200,20 +203,23 @@ function appendDelta(channel: "answer" | "reasoning", text: string): void {
     assistantReasoning.hidden = false;
     assistantReasoning.textContent = (assistantReasoning.textContent ?? "") + text;
   } else if (assistantBody) {
-    assistantBody.textContent = (assistantBody.textContent ?? "") + text;
+    assistantText += text;
+    // Re-render the whole answer: markdown has no stable partial syntax.
+    assistantBody.innerHTML = renderMarkdown(assistantText);
   }
   scrollToEnd();
 }
 
 function finishAssistant(content: string, reasoning?: string): void {
   if (!assistantBody) startAssistant();
-  if (assistantBody) assistantBody.textContent = content;
+  if (assistantBody) assistantBody.innerHTML = renderMarkdown(content);
   if (reasoning && assistantReasoning) {
     assistantReasoning.hidden = false;
     assistantReasoning.textContent = reasoning;
   }
   assistantBody = undefined;
   assistantReasoning = undefined;
+  assistantText = "";
   statusLine.textContent = "";
   scrollToEnd();
 }
