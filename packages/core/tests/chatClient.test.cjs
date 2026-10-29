@@ -206,6 +206,69 @@ test("sendChat reports OpenAI-compatible error messages", async () => {
   );
 });
 
+test("sendChat names the endpoint and the cause when the server is unreachable", async () => {
+  const unreachable = () => {
+    const cause = new Error("connect ECONNREFUSED 127.0.0.1:9");
+    return Promise.reject(new TypeError("fetch failed", { cause }));
+  };
+
+  await assert.rejects(
+    () => sendChat(messages, { endpoint: "http://127.0.0.1:9/v1", model: "m", fetchImpl: unreachable }),
+    (error) => {
+      assert.match(error.message, /^Cannot reach http:\/\/127\.0\.0\.1:9\/v1: connect ECONNREFUSED 127\.0\.0\.1:9/);
+      assert.match(error.message, /--endpoint|HACKL_ENDPOINT/);
+      return true;
+    },
+  );
+});
+
+test("sendChat says where to set a missing key on HTTP 401 and never repeats the key", async () => {
+  await assert.rejects(
+    () => sendChat(messages, {
+      endpoint: "https://openrouter.ai/api/v1",
+      model: "m",
+      fetchImpl: async () => jsonResponse({ error: { message: "no key" } }, 401),
+    }),
+    (error) => {
+      assert.match(error.message, /^The endpoint https:\/\/openrouter\.ai\/api\/v1 rejected the request \(HTTP 401\): no API key set\./);
+      assert.match(error.message, /--api-key/);
+      assert.match(error.message, /HACKL_API_KEY/);
+      assert.match(error.message, /Hackl: Set API Key/);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () => sendChat(messages, {
+      endpoint: "https://openrouter.ai/api/v1",
+      model: "m",
+      apiKey: "sk-or-test-secret",
+      fetchImpl: async () => new Response("denied", { status: 403 }),
+    }),
+    (error) => {
+      assert.match(error.message, /rejected the request \(HTTP 403\): the API key was rejected\./);
+      assert.doesNotMatch(error.message, /sk-or-test-secret/);
+      return true;
+    },
+  );
+});
+
+test("sendChat keeps cancellation an AbortError instead of an endpoint failure", async () => {
+  const backend = createOpenAICompatibleBackend({
+    endpoint: "http://localhost:1234/v1",
+    model: "m",
+    fetchImpl: async () => { throw new DOMException("Cancelled", "AbortError"); },
+  });
+
+  await assert.rejects(
+    () => backend.complete(messages, { signal: new AbortController().signal }),
+    (error) => {
+      assert.equal(error.name, "AbortError");
+      return true;
+    },
+  );
+});
+
 test("sendChat reports HTTP status when an error response is not JSON", async () => {
   await assert.rejects(
     () => sendChat(messages, {
