@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+This is the stable release of everything in 0.5.0, plus two fixes.
+
+- Inline autocomplete now works with an endpoint that requires an API key. It reuses the key you stored with "Hackl: Set API Key" whenever it uses the same endpoint as the chat, and it no longer fails with HTTP 401. A separate autocomplete endpoint never receives the chat key.
+- A configured endpoint that lists its models slowly no longer makes the chat fall back to the placeholder model "local-model". Hackl now waits up to 5 seconds for the list. If it still does not arrive, the error names the endpoint and tells you to set the model (`hackl.model`, `--model` or `HACKL_MODEL`).
+
 ## 0.5.0 pre-release
 
 - Formulas in the chat keep their layout again (superscripts and fractions were flattened).
