@@ -23,8 +23,6 @@ export interface CliArgs {
   thinking: boolean;
   staged: boolean;
   commit?: string;
-  resume: boolean;
-  session?: string;
   mcpFilter?: string[];
   codex: boolean;
   help: boolean;
@@ -40,7 +38,6 @@ const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--api-key",
   "--cwd",
   "--commit",
-  "--session",
   "--mcp",
   "--max-tool-calls",
 ]);
@@ -59,7 +56,6 @@ export function parseArgs(argv: string[]): CliArgs {
     noColor: false,
     thinking: false,
     staged: false,
-    resume: false,
     codex: false,
     help: false,
     version: false,
@@ -98,7 +94,6 @@ export function parseArgs(argv: string[]): CliArgs {
       case "--no-color": args.noColor = true; break;
       case "--thinking": args.thinking = true; break;
       case "--staged": args.staged = true; break;
-      case "--resume": args.resume = true; break;
       case "--codex": args.codex = true; break;
       case "--allow-remote": args.allowRemote = true; break;
       case "--open": args.open = true; break;
@@ -133,7 +128,6 @@ export function parseArgs(argv: string[]): CliArgs {
       }
       case "--cwd": args.cwd = takeValue(); break;
       case "--commit": args.commit = takeValue(); break;
-      case "--session": args.session = takeValue(); break;
       case "--mcp": args.mcpFilter = [...(args.mcpFilter ?? []), takeValue()]; break;
       default:
         if (VALUE_FLAGS.has(flag)) throw new ArgError(`${flag} requires a value`);
