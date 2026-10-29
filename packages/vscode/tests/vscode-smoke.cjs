@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const http = require("node:http");
 const vscode = require("vscode");
 
 const EXTENSION_ID = "computor-org.hackl";
@@ -63,6 +64,7 @@ async function run() {
   await testBasketRoundtrip(api);
   await testClearBasket(api);
   await runOpenChat();
+  await testReviewCommandStartsReview(api);
 }
 
 async function testBasketRoundtrip(api) {
@@ -103,6 +105,65 @@ async function testClearBasket(api) {
 
 async function runOpenChat() {
   await vscode.commands.executeCommand("hackl.chat");
+}
+
+// The review command has to start the review on its own; a stub endpoint makes
+// it observable as an outgoing chat request (#39).
+async function testReviewCommandStartsReview(api) {
+  const requests = [];
+  const server = http.createServer((request, response) => {
+    let raw = "";
+    request.on("data", (chunk) => { raw += chunk; });
+    request.on("end", () => {
+      const path = request.url ?? "";
+      requests.push({ path, body: raw ? JSON.parse(raw) : undefined });
+      response.writeHead(200, { "Content-Type": "application/json" });
+      if (path.endsWith("/chat/completions")) {
+        response.end(JSON.stringify({
+          model: "stub-review-model",
+          choices: [{ index: 0, message: { role: "assistant", content: "Reviewed: no findings." } }],
+        }));
+        return;
+      }
+      if (path.endsWith("/models")) {
+        response.end(JSON.stringify({ data: [{ id: "stub-review-model" }] }));
+        return;
+      }
+      response.statusCode = 404;
+      response.end("{}");
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const configuration = vscode.workspace.getConfiguration("hackl");
+  await configuration.update("endpoint", `http://127.0.0.1:${address.port}/v1`, vscode.ConfigurationTarget.Global);
+  await configuration.update("model", "stub-review-model", vscode.ConfigurationTarget.Global);
+  api.clearBasket();
+  api.addTarget({
+    id: "src-review-1",
+    addedAt: Date.now(),
+    kind: "source-range",
+    uri: "file:///tmp/review-me.ts",
+    languageId: "typescript",
+    relativePath: "review-me.ts",
+    startLine: 1, startCharacter: 0, endLine: 2, endCharacter: 0,
+    text: "const a = 1;\nconst b = 0;\n",
+    truncated: false,
+  });
+  try {
+    await vscode.commands.executeCommand("hackl.reviewStagedChanges");
+    const chat = requests.find((entry) => entry.path.endsWith("/chat/completions"));
+    assert.ok(chat, "hackl.reviewStagedChanges sends a chat request without further input");
+    const messages = JSON.stringify(chat.body?.messages ?? "");
+    assert.match(messages, /Review the selected context for correctness/, "the review prompt is sent");
+    assert.match(messages, /review-me\.ts/, "the attached context is part of the review request");
+  } finally {
+    api.clearBasket();
+    await configuration.update("model", undefined, vscode.ConfigurationTarget.Global);
+    await configuration.update("endpoint", undefined, vscode.ConfigurationTarget.Global);
+    await new Promise((resolve) => server.close(resolve));
+  }
 }
 
 module.exports = { run };

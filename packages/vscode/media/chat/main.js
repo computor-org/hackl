@@ -40,6 +40,9 @@
   // html: false is the XSS contract for every innerHTML = md.render(...) sink below.
   // Do not enable html or switch sinks to direct string assignment.
   const md = window.markdownit({ html: false, linkify: true, breaks: false });
+  // A review answer carries its machine-readable findings in a fenced block that
+  // is shown as the annotation card, so the raw JSON never reaches the thread.
+  const ANNOTATION_FENCE_RE = /```hackl-annotations[^\n]*\n?[\s\S]*?(?:```[^\n]*\n?|$)/g;
   let statusEntry;
   let assistantDraft;
   let isBusy = false;
@@ -775,7 +778,11 @@
     entry.answer = answer || "";
     entry.reasoningText.textContent = entry.reasoning;
     entry.reasoningElement.hidden = !entry.reasoning;
-    entry.body.innerHTML = md.render(entry.answer || "");
+    entry.body.innerHTML = md.render(hideAnnotationBlocks(entry.answer));
+  }
+
+  function hideAnnotationBlocks(text) {
+    return (text || "").replace(ANNOTATION_FENCE_RE, "").trim();
   }
 
   function splitReasoning(text) {
