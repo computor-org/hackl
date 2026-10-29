@@ -7,7 +7,8 @@
 <p align="center">Hack with local AI.</p>
 
 Hackl is a local-first AI coding assistant. It talks to a local OpenAI-compatible
-server (llama.cpp, LM Studio, Ollama) by default, with no forced sign-in and no
+server by default (llama.cpp or LM Studio auto-detected; Ollama needs
+`hackl.endpoint` set to its `/v1` address), with no forced sign-in and no
 telemetry. The agent backend is shared between a VS Code extension and a terminal
 CLI, and both expose Model Context Protocol (MCP) tools.
 

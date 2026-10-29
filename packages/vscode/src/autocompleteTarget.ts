@@ -34,37 +34,58 @@ export async function resolveAutocompleteTarget(
   const resolveChatTargetImpl = deps.resolveChatTargetImpl ?? resolveChatTarget;
 
   if (input.autocomplete.endpointConfigured && input.autocomplete.endpoint) {
-    const target = await resolveChatTargetImpl({
-      endpoint: input.autocomplete.endpoint,
-      endpointConfigured: true,
-      preferredModel: input.autocomplete.model,
-    });
+    const resolved = await resolve(
+      resolveChatTargetImpl,
+      input.autocomplete.endpoint,
+      true,
+      input.autocomplete.model,
+    );
+    if (!resolved.ok) return { available: false, reason: resolved.reason };
     return gateFimCapability({
       available: true,
-      endpoint: target.endpoint,
-      root: toRootBase(target.endpoint),
-      model: resolvedModel(input.autocomplete.model, target.model),
+      endpoint: resolved.endpoint,
+      root: toRootBase(resolved.endpoint),
+      model: resolvedModel(input.autocomplete.model, resolved.model),
       source: "configured",
-      remote: requiresNonLocalEndpointApproval(target.endpoint),
+      remote: requiresNonLocalEndpointApproval(resolved.endpoint),
     });
   }
 
   // No dedicated autocomplete endpoint: always reuse the chat endpoint, local or
   // not. A configured autocomplete.model belongs to the removed endpoint, so it
   // is ignored here; FIM runs on whatever model the chat endpoint has loaded.
-  const target = await resolveChatTargetImpl({
-    endpoint: input.chatEndpoint,
-    endpointConfigured: input.chatEndpointConfigured,
-    preferredModel: input.chatModel,
-  });
+  const resolved = await resolve(
+    resolveChatTargetImpl,
+    input.chatEndpoint,
+    input.chatEndpointConfigured,
+    input.chatModel,
+  );
+  if (!resolved.ok) return { available: false, reason: resolved.reason };
   return gateFimCapability({
     available: true,
-    endpoint: target.endpoint,
-    root: toRootBase(target.endpoint),
-    model: resolvedModel("", target.model),
+    endpoint: resolved.endpoint,
+    root: toRootBase(resolved.endpoint),
+    model: resolvedModel("", resolved.model),
     source: "chat-fallback",
-    remote: requiresNonLocalEndpointApproval(target.endpoint),
+    remote: requiresNonLocalEndpointApproval(resolved.endpoint),
   });
+}
+
+// A configured endpoint that advertises no model makes resolveChatTarget raise.
+// Autocomplete sends no credentials at all, so it stays off instead of failing
+// every completion request.
+async function resolve(
+  impl: typeof resolveChatTarget,
+  endpoint: string,
+  endpointConfigured: boolean,
+  preferredModel: string | undefined,
+): Promise<{ ok: true; endpoint: string; model: string } | { ok: false; reason: string }> {
+  try {
+    const target = await impl({ endpoint, endpointConfigured, preferredModel });
+    return { ok: true, endpoint: target.endpoint, model: target.model };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 function resolvedModel(configuredModel: string, detectedModel: string | undefined): string | undefined {

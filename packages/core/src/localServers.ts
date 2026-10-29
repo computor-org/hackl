@@ -9,6 +9,8 @@ export interface ChatTargetSettings {
   endpoint?: string;
   endpointConfigured: boolean;
   preferredModel?: string;
+  // Bearer token for the configured endpoint, the same one /chat/completions uses.
+  apiKey?: string;
   fetchImpl?: typeof fetch;
   candidates?: LocalServerCandidate[];
 }
@@ -21,6 +23,9 @@ export interface ChatTarget {
 interface ProbedServer {
   endpoint: string;
   model?: string;
+  // /models answered 401/403: the key is missing or wrong, not the server down.
+  authRejected?: boolean;
+  status?: number;
 }
 
 const DEFAULT_ENDPOINT = "http://localhost:8080/v1";
@@ -37,6 +42,7 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
   const configuredEndpoint = clean(settings.endpoint);
   const fetchImpl = settings.fetchImpl ?? fetch;
   const preferred = settings.preferredModel?.trim();
+  const apiKey = settings.apiKey;
 
   if (settings.endpointConfigured && configuredEndpoint) {
     // An explicit chat model wins over auto-detection: a multi-model endpoint
@@ -45,11 +51,21 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
     if (preferred) {
       return { endpoint: configuredEndpoint, model: preferred };
     }
-    const probed = await probeServer(configuredEndpoint, fetchImpl);
-    return {
-      endpoint: configuredEndpoint,
-      model: probed?.model ?? DEFAULT_CHAT_MODEL,
-    };
+    const probed = await probeServer(configuredEndpoint, fetchImpl, apiKey);
+    if (probed?.model) {
+      return { endpoint: configuredEndpoint, model: probed.model };
+    }
+    if (probed?.authRejected) {
+      throw new Error(
+        `${configuredEndpoint} refused the request with HTTP ${probed.status}: no API key or a wrong API key was sent. `
+        + "Set the key with \"Hackl: Set API Key\", --api-key or HACKL_API_KEY, "
+        + "or set a model with hackl.model, --model or HACKL_MODEL.",
+      );
+    }
+    // A llama.cpp-style server may not list models but accepts DEFAULT_CHAT_MODEL,
+    // and an offline endpoint has to fail in the chat request with its real
+    // connection error, so keep falling back to the compatibility model.
+    return { endpoint: configuredEndpoint, model: DEFAULT_CHAT_MODEL };
   }
 
   const discovered = await discoverLocalServer(
@@ -66,12 +82,13 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
 export async function listModelIds(
   endpoint: string,
   fetchImpl: typeof fetch = fetch,
+  apiKey?: string,
 ): Promise<string[]> {
   const base = normalizeOpenAIEndpoint(endpoint);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    const response = await fetchImpl(`${base}/models`, { signal: controller.signal });
+    const response = await fetchImpl(`${base}/models`, { signal: controller.signal, ...requestInit(apiKey) });
     if (!response.ok) return [];
     return allModelIds(await response.json());
   } catch {
@@ -133,13 +150,22 @@ async function discoverLocalServer(
   return undefined;
 }
 
-async function probeServer(endpoint: string, fetchImpl: typeof fetch): Promise<ProbedServer | undefined> {
+async function probeServer(
+  endpoint: string,
+  fetchImpl: typeof fetch,
+  apiKey?: string,
+): Promise<ProbedServer | undefined> {
   const base = normalizeOpenAIEndpoint(endpoint);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
   try {
-    const response = await fetchImpl(`${base}/models`, { signal: controller.signal });
+    const response = await fetchImpl(`${base}/models`, { signal: controller.signal, ...requestInit(apiKey) });
+    if (response.status === 401 || response.status === 403) {
+      // Probing health here would hide a key problem behind a healthy-looking
+      // fallback, so report the refusal as it is.
+      return { endpoint: base, authRejected: true, status: response.status };
+    }
     if (!response.ok) {
       const model = firstAvailableModel(await response.text());
       return model ? { endpoint: base, model } : await probeHealth(base, fetchImpl);
@@ -217,6 +243,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+// Discovery has to authenticate the way chat does; without the key an
+// authenticated endpoint answers 401 and reports no models at all.
+function requestInit(apiKey: string | undefined): { headers: Record<string, string> } | undefined {
+  const key = apiKey?.trim();
+  return key ? { headers: { Authorization: `Bearer ${key}` } } : undefined;
+}
+
 export interface ProbeResult {
   candidate: string;
   endpoint: string;
@@ -230,10 +263,11 @@ export interface ProbeResult {
 export async function probeAll(
   candidates: LocalServerCandidate[],
   fetchImpl: typeof fetch = fetch,
+  apiKey?: string,
 ): Promise<ProbeResult[]> {
   return Promise.all(candidates.map(async (c) => {
     const started = Date.now();
-    const probed = await probeServer(c.endpoint, fetchImpl);
+    const probed = await probeServer(c.endpoint, fetchImpl, apiKey);
     if (!probed) {
       return { candidate: c.name, endpoint: c.endpoint, ok: false, latencyMs: Date.now() - started };
     }
