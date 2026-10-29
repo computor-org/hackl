@@ -22,8 +22,11 @@ import { createStaticAssetHandler, createStaticHandler } from "./static";
 const SECURITY_HEADERS: Record<string, string> = {
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
+  // 'unsafe-inline' in style-src only: KaTeX positions superscripts and fractions
+  // with inline top offsets. markdown-it renders with html: false, so model output
+  // cannot carry style or script markup, and scripts stay same-origin.
   "content-security-policy":
-    "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'",
+    "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'",
 };
 
 export interface HacklServerOptions {
@@ -35,7 +38,7 @@ export interface HacklServerOptions {
   token?: string;
   allowYolo?: boolean;
   staticDir?: string;
-  staticAssets?: Record<string, string>;
+  staticAssets?: Record<string, string | Uint8Array>;
   mcp?: McpManager;
   endpoint?: string;
   model?: string;

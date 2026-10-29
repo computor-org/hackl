@@ -55,7 +55,7 @@ export function createStaticHandler(
 }
 
 export function createStaticAssetHandler(
-  assets: Record<string, string>,
+  assets: Record<string, string | Uint8Array>,
   baseHeaders: Record<string, string> = {},
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {

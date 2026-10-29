@@ -1,5 +1,6 @@
 import esbuild from "esbuild";
 import { readFileSync } from "node:fs";
+import { katexCss, katexFonts } from "../webui/scripts/katex-assets.mjs";
 
 const browser = await esbuild.build({
   entryPoints: ["../webui/src/main.ts"],
@@ -11,9 +12,12 @@ const browser = await esbuild.build({
   write: false,
   logLevel: "silent",
 });
+// Fonts are binary: base64 here, Buffers in the generated module.
+const fonts = Object.fromEntries(Object.entries(katexFonts()).map(([name, data]) => [name, data.toString("base64")]));
 const assets = {
   "index.html": readFileSync("../webui/src/index.html", "utf8"),
   "main.css": readFileSync("../webui/src/main.css", "utf8"),
+  "katex.css": katexCss(),
   "main.js": browser.outputFiles[0].text,
 };
 const webuiAssets = {
@@ -21,7 +25,8 @@ const webuiAssets = {
   setup(build) {
     build.onResolve({ filter: /^hackl-webui-assets$/ }, () => ({ path: "assets", namespace: "hackl-webui" }));
     build.onLoad({ filter: /.*/, namespace: "hackl-webui" }, () => ({
-      contents: `export default ${JSON.stringify(assets)};`,
+      contents: `const fonts = ${JSON.stringify(fonts)};
+export default { ...${JSON.stringify(assets)}, ...Object.fromEntries(Object.entries(fonts).map(([name, b64]) => [name, Buffer.from(b64, "base64")])) };`,
       loader: "js",
     }));
   },
