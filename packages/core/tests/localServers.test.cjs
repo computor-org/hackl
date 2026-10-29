@@ -94,22 +94,40 @@ test("resolveChatTarget falls back when discovery finds no server", async () => 
   });
 });
 
-test("resolveChatTarget rejects when a configured endpoint lists no model", async () => {
-  await assert.rejects(
-    resolveChatTarget({
-      endpoint: "http://localhost:7777/v1",
-      endpointConfigured: true,
-      fetchImpl: async () => new Response("not found", { status: 404 }),
-    }),
-    (error) => {
-      const message = error.message;
-      assert.match(message, /No model found at http:\/\/localhost:7777\/v1/);
-      assert.match(message, /hackl\.model/);
-      assert.match(message, /--model/);
-      assert.match(message, /HACKL_MODEL/);
-      return true;
+test("resolveChatTarget accepts llama.cpp health when model listing is unavailable", async () => {
+  const calls = [];
+  const target = await resolveChatTarget({
+    endpoint: "http://localhost:8080/v1",
+    endpointConfigured: true,
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      if (String(url).endsWith("/models")) return new Response("not found", { status: 404 });
+      if (String(url) === "http://localhost:8080/health") return new Response("ok", { status: 200 });
+      throw new Error("unexpected");
     },
-  );
+  });
+
+  assert.deepEqual(target, {
+    endpoint: "http://localhost:8080/v1",
+    model: "local-model",
+  });
+  assert.deepEqual(calls, [
+    "http://localhost:8080/v1/models",
+    "http://localhost:8080/health",
+  ]);
+});
+
+test("resolveChatTarget falls back to compatibility model for explicit endpoint without models", async () => {
+  const target = await resolveChatTarget({
+    endpoint: "http://localhost:7777/v1",
+    endpointConfigured: true,
+    fetchImpl: async () => new Response("not found", { status: 404 }),
+  });
+
+  assert.deepEqual(target, {
+    endpoint: "http://localhost:7777/v1",
+    model: "local-model",
+  });
 });
 
 test("resolveChatTarget skips blank model ids from /v1/models", async () => {
@@ -158,9 +176,9 @@ test("resolveChatTarget uses first advertised model when server requires a model
   });
 });
 
-test("resolveChatTarget rejects a reachable endpoint that lists no model", async () => {
+test("resolveChatTarget rejects a configured endpoint that refuses the API key", async () => {
   // A gateway can answer /health without a key and /models only with one, so
-  // health alone must not guess a model name that the gateway rejects.
+  // a 401 on /models has to name the key instead of guessing a model name.
   await assert.rejects(
     resolveChatTarget({
       endpoint: "http://localhost:8080/v1",
@@ -171,7 +189,19 @@ test("resolveChatTarget rejects a reachable endpoint that lists no model", async
         throw new Error("unexpected");
       },
     }),
-    /No model found at http:\/\/localhost:8080\/v1/,
+    (error) => {
+      const message = error.message;
+      assert.match(message, /http:\/\/localhost:8080\/v1/);
+      assert.match(message, /HTTP 401/);
+      assert.match(message, /no API key or a wrong API key/);
+      assert.match(message, /Hackl: Set API Key/);
+      assert.match(message, /--api-key/);
+      assert.match(message, /HACKL_API_KEY/);
+      assert.match(message, /hackl\.model/);
+      assert.match(message, /--model/);
+      assert.match(message, /HACKL_MODEL/);
+      return true;
+    },
   );
 });
 
@@ -367,11 +397,17 @@ test("resolveChatTarget authenticates the model probe of a configured endpoint",
   });
 });
 
-test("resolveChatTarget reports no model instead of a guessed one when the key is missing", async () => {
+test("resolveChatTarget names the API key fix when the key is missing", async () => {
   await withAuthStub(async (endpoint) => {
     await assert.rejects(
       resolveChatTarget({ endpoint, endpointConfigured: true }),
-      new RegExp(`No model found at ${endpoint.replace(/\./g, "\\.")}`),
+      (error) => {
+        assert.match(error.message, /HTTP 401/);
+        assert.match(error.message, /no API key or a wrong API key/);
+        assert.match(error.message, /Hackl: Set API Key/);
+        assert.match(error.message, /HACKL_API_KEY/);
+        return true;
+      },
     );
   });
 });

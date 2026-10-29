@@ -49,11 +49,11 @@ test("createServerAgent discovers the model through the configured API key", asy
   });
 });
 
-test("createServerAgent asks for a model instead of guessing one it cannot use", async () => {
+test("createServerAgent names the API key fix when the endpoint refuses the key", async () => {
   await withAuthStub(async (endpoint) => {
     await assert.rejects(
       createServerAgent({ HACKL_ENDPOINT: endpoint }),
-      /No model found at .*hackl\.model/,
+      /HTTP 401: no API key or a wrong API key was sent.*HACKL_API_KEY/,
     );
   });
 });

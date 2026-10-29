@@ -23,6 +23,9 @@ export interface ChatTarget {
 interface ProbedServer {
   endpoint: string;
   model?: string;
+  // /models answered 401/403: the key is missing or wrong, not the server down.
+  authRejected?: boolean;
+  status?: number;
 }
 
 const DEFAULT_ENDPOINT = "http://localhost:8080/v1";
@@ -52,12 +55,17 @@ export async function resolveChatTarget(settings: ChatTargetSettings): Promise<C
     if (probed?.model) {
       return { endpoint: configuredEndpoint, model: probed.model };
     }
-    // Guessing a model name here only produces the gateway's bare
-    // "unknown_model" error, so name the fix instead.
-    throw new Error(
-      `No model found at ${configuredEndpoint}. `
-      + "Set a model with hackl.model, --model or HACKL_MODEL, or leave the endpoint empty to use Hackl's local session.",
-    );
+    if (probed?.authRejected) {
+      throw new Error(
+        `${configuredEndpoint} refused the request with HTTP ${probed.status}: no API key or a wrong API key was sent. `
+        + "Set the key with \"Hackl: Set API Key\", --api-key or HACKL_API_KEY, "
+        + "or set a model with hackl.model, --model or HACKL_MODEL.",
+      );
+    }
+    // A llama.cpp-style server may not list models but accepts DEFAULT_CHAT_MODEL,
+    // and an offline endpoint has to fail in the chat request with its real
+    // connection error, so keep falling back to the compatibility model.
+    return { endpoint: configuredEndpoint, model: DEFAULT_CHAT_MODEL };
   }
 
   const discovered = await discoverLocalServer(
@@ -153,6 +161,11 @@ async function probeServer(
 
   try {
     const response = await fetchImpl(`${base}/models`, { signal: controller.signal, ...requestInit(apiKey) });
+    if (response.status === 401 || response.status === 403) {
+      // Probing health here would hide a key problem behind a healthy-looking
+      // fallback, so report the refusal as it is.
+      return { endpoint: base, authRejected: true, status: response.status };
+    }
     if (!response.ok) {
       const model = firstAvailableModel(await response.text());
       return model ? { endpoint: base, model } : await probeHealth(base, fetchImpl);
