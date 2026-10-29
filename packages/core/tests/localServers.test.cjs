@@ -386,15 +386,23 @@ async function withAuthStub(handler) {
 }
 
 test("resolveChatTarget authenticates the model probe of a configured endpoint", async () => {
-  await withAuthStub(async (endpoint) => {
-    const target = await resolveChatTarget({
-      endpoint,
-      endpointConfigured: true,
-      apiKey: "stub-key",
-    });
-
-    assert.deepEqual(target, { endpoint, model: "gateway-model" });
+  // A stubbed fetch rather than a socket: the probe times out after 600 ms, which
+  // a loaded CI runner can exceed and turn into a spurious fallback model.
+  const endpoint = "http://gateway.invalid/v1";
+  const calls = [];
+  const target = await resolveChatTarget({
+    endpoint,
+    endpointConfigured: true,
+    apiKey: "stub-key",
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), authorization: init?.headers?.Authorization });
+      if (init?.headers?.Authorization !== "Bearer stub-key") return new Response("unauthorized", { status: 401 });
+      return new Response(JSON.stringify({ data: [{ id: "gateway-model" }] }), { status: 200 });
+    },
   });
+
+  assert.deepEqual(target, { endpoint, model: "gateway-model" });
+  assert.deepEqual(calls, [{ url: `${endpoint}/models`, authorization: "Bearer stub-key" }]);
 });
 
 test("resolveChatTarget names the API key fix when the key is missing", async () => {

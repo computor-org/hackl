@@ -98,7 +98,7 @@ test("a failed tool call is shown in text output and in NDJSON", async () => {
   try {
     const text = await runCli(endpoint, "read main.py");
     assert.equal(text.code, 0);
-    assert.match(text.stderr, /· read_file main\.py failed: Path is outside the current workspace or cannot be resolved\./);
+    assert.match(text.stderr, /· read_file main\.py failed: File does not exist: main\.py/);
     assert.equal(text.stdout, "That file is not there.\n");
 
     calls = 0;
@@ -106,7 +106,7 @@ test("a failed tool call is shown in text output and in NDJSON", async () => {
     const events = json.stdout.trim().split("\n").map((line) => JSON.parse(line));
     assert.deepEqual(
       events.filter((event) => event.type === "tool_result"),
-      [{ type: "tool_result", name: "read_file", args: "main.py", ok: false, reason: "Path is outside the current workspace or cannot be resolved." }],
+      [{ type: "tool_result", name: "read_file", args: "main.py", ok: false, reason: "File does not exist: main.py" }],
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));
