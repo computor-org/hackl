@@ -3,6 +3,7 @@ import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 import * as fs from "node:fs";
 import { classifyCommand, commandLine } from "./commandPolicy";
 import type {
+  CreateFileRequest,
   ReadFileRequest,
   ReplaceTextRequest,
   RunCommandRequest,
@@ -40,6 +41,7 @@ export interface WorkspaceToolHost {
   readFile(request: ReadFileRequest, maxFileChars: number): Promise<ToolResult>;
   searchFiles(request: SearchFilesRequest): Promise<ToolResult>;
   replaceText(request: ReplaceTextRequest): Promise<ToolResult>;
+  createFile(request: CreateFileRequest): Promise<ToolResult>;
 }
 
 const approvedNoGitRoots = new Set<string>();
@@ -68,6 +70,15 @@ export function createWorkspaceToolRunner(options: WorkspaceToolOptions): (reque
       if (!approval.ok) return { ok: false, content: approval.content };
       noGitApproved = approval.approved;
       return workspace.replaceText(request);
+    }
+    if (request.name === "create_file") {
+      if (!options.allowEdits) {
+        return { ok: false, content: "create_file is only available in Edit, Work, Agent, and Yolo mode." };
+      }
+      const approval = await requireGitApproval(workspace, options, noGitApproved);
+      if (!approval.ok) return { ok: false, content: approval.content };
+      noGitApproved = approval.approved;
+      return workspace.createFile(request);
     }
     if (request.name === "run_command") {
       if (!options.allowCommands) {

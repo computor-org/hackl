@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import type * as vscodeTypes from "vscode";
 import { getVscode } from "./vscodeShim";
@@ -11,6 +12,7 @@ import type {
   WorkspaceToolHost,
   WorkspaceToolOptions,
   ApprovalPrompt,
+  CreateFileRequest,
   ReadFileRequest,
   ReplaceTextRequest,
   SearchFilesRequest,
@@ -23,6 +25,7 @@ export type { WorkspaceToolHost, WorkspaceToolOptions, ApprovalPrompt };
 
 const MAX_TOOL_FILE_BYTES = 1_000_000;
 const BINARY_SAMPLE_BYTES = 8192;
+const OUTSIDE_WORKSPACE = "Path is outside the current workspace or cannot be resolved.";
 
 // The tool runner lives in @hackl/core and requires an injected host. This
 // VS Code wrapper defaults the host to the live VS Code workspace so existing
@@ -65,6 +68,7 @@ export function createVsCodeWorkspaceHost(): WorkspaceToolHost {
     readFile: (request, maxFileChars) => vscodeReadFile(vscode, request, maxFileChars),
     searchFiles: (request) => vscodeSearchFiles(vscode, request),
     replaceText: (request) => vscodeReplaceText(vscode, request),
+    createFile: (request) => vscodeCreateFile(vscode, request),
   };
 }
 
@@ -73,10 +77,14 @@ async function vscodeReadFile(
   request: ReadFileRequest,
   maxFileChars: number,
 ): Promise<ToolResult> {
-  const uri = await resolveVsCodeUri(vscode, request.path);
-  if (!uri) {
-    return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
+  const resolved = await resolveVsCodeUri(vscode, request.path);
+  if (!resolved) {
+    return { ok: false, content: OUTSIDE_WORKSPACE };
   }
+  if (!resolved.exists) {
+    return { ok: false, content: `File does not exist: ${request.path}` };
+  }
+  const uri = resolved.uri;
 
   try {
     if ((await fsp.stat(uri.fsPath)).isDirectory()) {
@@ -117,13 +125,13 @@ async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFile
       if (!safeUri) {
         continue;
       }
-      const relative = vscode.workspace.asRelativePath(safeUri, false);
+      const relative = vscode.workspace.asRelativePath(safeUri.uri, false);
       if (matcher(relative)) {
         results.push(`${relative}: file name match`);
       }
       if (results.length >= limit) break;
       if (listOnly) continue;
-      await addVsCodeTextMatches(vscode, safeUri, matcher, results, limit);
+      await addVsCodeTextMatches(vscode, safeUri.uri, matcher, results, limit);
       if (results.length >= limit) break;
     }
     return { ok: true, content: results.length === 0 ? "No matches." : results.join("\n") };
@@ -134,10 +142,14 @@ async function vscodeSearchFiles(vscode: typeof vscodeTypes, request: SearchFile
 }
 
 async function vscodeReplaceText(vscode: typeof vscodeTypes, request: ReplaceTextRequest): Promise<ToolResult> {
-  const uri = await resolveVsCodeUri(vscode, request.path);
-  if (!uri) {
-    return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
+  const resolved = await resolveVsCodeUri(vscode, request.path);
+  if (!resolved) {
+    return { ok: false, content: OUTSIDE_WORKSPACE };
   }
+  if (!resolved.exists) {
+    return { ok: false, content: `File does not exist: ${request.path}` };
+  }
+  const uri = resolved.uri;
 
   try {
     const guard = await validateVsCodeTextFile(uri.fsPath);
@@ -161,7 +173,10 @@ async function vscodeReplaceText(vscode: typeof vscodeTypes, request: ReplaceTex
   }
 }
 
-async function resolveVsCodeUri(vscode: typeof vscodeTypes, requestPath: string): Promise<vscodeTypes.Uri | undefined> {
+async function resolveVsCodeUri(
+  vscode: typeof vscodeTypes,
+  requestPath: string,
+): Promise<{ uri: vscodeTypes.Uri; exists: boolean } | undefined> {
   const openDocument = findVsCodeOpenDocument(vscode, requestPath);
   if (openDocument) {
     return safeVsCodeFileUri(vscode, openDocument.uri);
@@ -179,23 +194,89 @@ async function resolveVsCodeUri(vscode: typeof vscodeTypes, requestPath: string)
   return undefined;
 }
 
-async function safeVsCodeFileUri(vscode: typeof vscodeTypes, uri: vscodeTypes.Uri): Promise<vscodeTypes.Uri | undefined> {
+async function safeVsCodeFileUri(
+  vscode: typeof vscodeTypes,
+  uri: vscodeTypes.Uri,
+): Promise<{ uri: vscodeTypes.Uri; exists: boolean } | undefined> {
   if (uri.scheme !== "file") {
     return undefined;
   }
   const realCandidate = await realpath(uri.fsPath);
-  if (!realCandidate) {
+  if (realCandidate !== undefined) {
+    return (await insideWorkspace(vscode, realCandidate)) ? { uri, exists: true } : undefined;
+  }
+  if (await exists(uri.fsPath)) {
+    // Present but unresolvable: keep treating it as a workspace violation.
     return undefined;
   }
+  // A new file has no realpath of its own, so anchor the check on its nearest
+  // existing ancestor, which also catches a symlinked folder leaving the workspace.
+  const anchor = nearestExistingAncestor(uri.fsPath);
+  const realAnchor = await realpath(anchor);
+  return realAnchor && (await insideWorkspace(vscode, realAnchor)) ? { uri, exists: false } : undefined;
+}
+
+// The original URI is kept for the caller so VS Code renders a workspace-
+// relative path correctly on macOS, where /var is commonly a symlink to
+// /private/var.
+async function insideWorkspace(vscode: typeof vscodeTypes, candidate: string): Promise<boolean> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     const realRoot = await realpath(folder.uri.fsPath);
-    if (realRoot && isWithin(realRoot, realCandidate)) {
-      // Keep the original URI so VS Code renders a workspace-relative path
-      // correctly on macOS, where /var is commonly a symlink to /private/var.
-      return uri;
+    if (realRoot && isWithin(realRoot, candidate)) {
+      return true;
     }
   }
-  return undefined;
+  return false;
+}
+
+function nearestExistingAncestor(fsPath: string): string {
+  let current = path.dirname(fsPath);
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return current;
+    }
+    current = parent;
+  }
+  return current;
+}
+
+async function exists(fsPath: string): Promise<boolean> {
+  try {
+    await fsp.stat(fsPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function vscodeCreateFile(vscode: typeof vscodeTypes, request: CreateFileRequest): Promise<ToolResult> {
+  const resolved = await resolveVsCodeUri(vscode, request.path);
+  if (!resolved) {
+    return { ok: false, content: OUTSIDE_WORKSPACE };
+  }
+  if (resolved.exists) {
+    return { ok: false, content: `File already exists: ${request.path}` };
+  }
+  const bytes = Buffer.byteLength(request.content, "utf8");
+  if (bytes > MAX_TOOL_FILE_BYTES) {
+    return { ok: false, content: `File is too large for Hackl tools (${bytes} bytes, max ${MAX_TOOL_FILE_BYTES}).` };
+  }
+
+  try {
+    // Same workspace-edit route as replace_text so the new file lands in VS
+    // Code's own undo and review stack; createFile makes the parent folders.
+    const edit = new vscode.WorkspaceEdit();
+    edit.createFile(resolved.uri, { contents: Buffer.from(request.content, "utf8"), overwrite: false });
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (!applied) {
+      return { ok: false, content: "VS Code rejected the workspace edit." };
+    }
+    return { ok: true, content: `Created ${request.path}.` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, content: message };
+  }
 }
 
 function findVsCodeOpenDocument(

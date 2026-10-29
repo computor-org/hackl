@@ -1,4 +1,9 @@
-export type ToolRequest = ReadFileRequest | ReplaceTextRequest | SearchFilesRequest | RunCommandRequest;
+export type ToolRequest =
+  | ReadFileRequest
+  | ReplaceTextRequest
+  | CreateFileRequest
+  | SearchFilesRequest
+  | RunCommandRequest;
 
 export interface ReadFileRequest {
   name: "read_file";
@@ -12,6 +17,12 @@ export interface ReplaceTextRequest {
   path: string;
   old_text: string;
   new_text: string;
+}
+
+export interface CreateFileRequest {
+  name: "create_file";
+  path: string;
+  content: string;
 }
 
 export interface SearchFilesRequest {
@@ -53,7 +64,9 @@ export const EDIT_TOOL_INSTRUCTIONS = [
   "read_file on a folder lists its entries, folders end with /.",
   "To edit, reply ONLY:",
   'HACKL_TOOL {"name":"replace_text","path":"X","old_text":"exact old text","new_text":"replacement text"}',
-  "replace_text must use a unique exact old_text. Wait for HACKL_TOOL_RESULT before continuing.",
+  "replace_text must use a unique exact old_text. New file? create_file writes it whole:",
+  'HACKL_TOOL {"name":"create_file","path":"new.py","content":"full text of the new file"}',
+  "create_file fails if the file exists and makes missing parent folders. Wait for HACKL_TOOL_RESULT before continuing.",
 ].join("\n");
 
 export const WORK_TOOL_INSTRUCTIONS = [
@@ -64,6 +77,8 @@ export const WORK_TOOL_INSTRUCTIONS = [
   'HACKL_TOOL {"name":"read_file","path":"X","start_line":1,"end_line":120}',
   "To edit, reply ONLY:",
   'HACKL_TOOL {"name":"replace_text","path":"X","old_text":"exact old text","new_text":"replacement text"}',
+  "New file? create_file writes it whole, parent folders included, never overwriting:",
+  'HACKL_TOOL {"name":"create_file","path":"new.py","content":"full text of the new file"}',
   "replace_text must use a unique exact old_text. No shell commands. Stop when done and summarize changed files plus verification still needed.",
 ].join("\n");
 
@@ -75,6 +90,8 @@ export const AGENT_TOOL_INSTRUCTIONS = [
   'HACKL_TOOL {"name":"read_file","path":"X","start_line":1,"end_line":120}',
   "To edit, reply ONLY:",
   'HACKL_TOOL {"name":"replace_text","path":"X","old_text":"exact old text","new_text":"replacement text"}',
+  "New file? create_file writes it whole, parent folders included, never overwriting:",
+  'HACKL_TOOL {"name":"create_file","path":"new.py","content":"full text of the new file"}',
   "To run a check, reply ONLY:",
   'HACKL_TOOL {"name":"run_command","cmd":"npm","args":["test"],"timeout_ms":120000}',
   "Commands are structured: no shell operators, no redirects, no destructive commands, no absolute outside-workspace paths.",
@@ -89,6 +106,8 @@ export const YOLO_TOOL_INSTRUCTIONS = [
   'HACKL_TOOL {"name":"read_file","path":"X","start_line":1,"end_line":120}',
   "To edit, reply ONLY:",
   'HACKL_TOOL {"name":"replace_text","path":"X","old_text":"exact old text","new_text":"replacement text"}',
+  "New file? create_file writes it whole, parent folders included, never overwriting:",
+  'HACKL_TOOL {"name":"create_file","path":"new.py","content":"full text of the new file"}',
   "To run any command, reply ONLY:",
   'HACKL_TOOL {"name":"run_command","cmd":"npm","args":["test"],"timeout_ms":120000}',
   "Yolo mode runs commands through a shell with no policy and no approval prompt. Shell operators and pipes are allowed: put the full command line in cmd, e.g. {\"name\":\"run_command\",\"cmd\":\"grep -r foo . | head\"}.",
@@ -113,6 +132,9 @@ export function parseToolRequest(content: string): ToolRequest | undefined {
     }
     if (name === "run_command") {
       return parseRunCommandRequest(payload);
+    }
+    if (name === "create_file") {
+      return parseCreateFileRequest(payload);
     }
     if (name !== "read_file" && name !== "replace_text") {
       return undefined;
@@ -142,6 +164,7 @@ export type AnyToolRequest = ToolRequest | McpToolRequest;
 export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
   "read_file",
   "replace_text",
+  "create_file",
   "search_files",
   "run_command",
 ]);
@@ -245,6 +268,21 @@ function parseReadFileRequest(payload: Record<string, unknown>, path: string): R
     start_line: positiveInteger(payload.start_line ?? payload.start ?? payload.line),
     end_line: positiveInteger(payload.end_line ?? payload.end),
   };
+}
+
+// content is taken untrimmed: it is the whole text of a new file.
+function parseCreateFileRequest(payload: Record<string, unknown>): CreateFileRequest | undefined {
+  const path = stringValue(payload.path, payload.file, payload.filepath);
+  if (!path) {
+    return undefined;
+  }
+  const content = [payload.content, payload.text, payload.body].find(
+    (value): value is string => typeof value === "string",
+  );
+  if (content === undefined) {
+    return undefined;
+  }
+  return { name: "create_file", path, content };
 }
 
 function parseReplaceTextRequest(payload: Record<string, unknown>, path: string): ReplaceTextRequest | undefined {
@@ -357,6 +395,10 @@ function toolName(value: unknown): string | undefined {
     grep: "search_files",
     replace: "replace_text",
     edit: "replace_text",
+    write: "create_file",
+    write_file: "create_file",
+    new_file: "create_file",
+    create: "create_file",
     run: "run_command",
     command: "run_command",
   };

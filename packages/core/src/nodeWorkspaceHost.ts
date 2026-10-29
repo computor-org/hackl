@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
-import type { ReadFileRequest, ReplaceTextRequest, SearchFilesRequest, ToolResult } from "./tools";
+import type { CreateFileRequest, ReadFileRequest, ReplaceTextRequest, SearchFilesRequest, ToolResult } from "./tools";
 import type { WorkspaceToolHost } from "./toolRunner";
 
 const MAX_TOOL_FILE_BYTES = 1_000_000;
@@ -10,6 +10,13 @@ const BINARY_SAMPLE_BYTES = 8192;
 const MAX_LISTING_ENTRIES = 200;
 // Trees search_files never walks; a directory listing hides the same set.
 const IGNORED_DIRECTORY_NAMES = [".git", "node_modules", "dist", "out", "build"];
+const OUTSIDE_WORKSPACE = "Path is outside the current workspace or cannot be resolved.";
+
+// "exists" separates a file that is simply not there yet from a path that
+// leaves the workspace, so callers can report the right one.
+type ResolvedNodePath =
+  | { ok: true; path: string; exists: boolean }
+  | { ok: false };
 
 export function createNodeWorkspaceHost(root: string, spawnImpl: typeof spawn = spawn): WorkspaceToolHost {
   const workspaceRoot = realpathSync(path.resolve(root)) ?? path.resolve(root);
@@ -18,14 +25,19 @@ export function createNodeWorkspaceHost(root: string, spawnImpl: typeof spawn = 
     readFile: (request, maxFileChars) => nodeReadFile(workspaceRoot, request, maxFileChars),
     searchFiles: (request) => nodeSearchFiles(workspaceRoot, request, spawnImpl),
     replaceText: (request) => nodeReplaceText(workspaceRoot, request),
+    createFile: (request) => nodeCreateFile(workspaceRoot, request),
   };
 }
 
 async function nodeReadFile(root: string, request: ReadFileRequest, maxFileChars: number): Promise<ToolResult> {
-  const filePath = resolveNodePath(root, request.path);
-  if (!filePath) {
-    return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
+  const resolved = resolveNodePath(root, request.path);
+  if (!resolved.ok) {
+    return { ok: false, content: OUTSIDE_WORKSPACE };
   }
+  if (!resolved.exists) {
+    return { ok: false, content: `File does not exist: ${request.path}` };
+  }
+  const filePath = resolved.path;
 
   try {
     if ((await fsp.stat(filePath)).isDirectory()) {
@@ -84,10 +96,14 @@ export function formatDirectoryListing(
 }
 
 async function nodeReplaceText(root: string, request: ReplaceTextRequest): Promise<ToolResult> {
-  const filePath = resolveNodePath(root, request.path);
-  if (!filePath) {
-    return { ok: false, content: "Path is outside the current workspace or cannot be resolved." };
+  const resolved = resolveNodePath(root, request.path);
+  if (!resolved.ok) {
+    return { ok: false, content: OUTSIDE_WORKSPACE };
   }
+  if (!resolved.exists) {
+    return { ok: false, content: `File does not exist: ${request.path}` };
+  }
+  const filePath = resolved.path;
 
   try {
     const guard = await validateTextFile(filePath);
@@ -189,13 +205,13 @@ async function addNodeTextMatches(
   results: string[],
   limit: number,
 ): Promise<void> {
-  const filePath = resolveNodePath(root, relative);
-  if (!filePath) return;
+  const resolved = resolveNodePath(root, relative);
+  if (!resolved.ok || !resolved.exists) return;
   let text: string;
   try {
-    const guard = await validateTextFile(filePath);
+    const guard = await validateTextFile(resolved.path);
     if (!guard.ok) return;
-    text = await fsp.readFile(filePath, "utf8");
+    text = await fsp.readFile(resolved.path, "utf8");
   } catch {
     return;
   }
@@ -229,15 +245,41 @@ function readLineRange(linesSource: { lineCount: number; lineAt(line: number): {
   return lines.join("\n");
 }
 
-function resolveNodePath(root: string, requestPath: string): string | undefined {
+function resolveNodePath(root: string, requestPath: string): ResolvedNodePath {
   const candidate = path.isAbsolute(requestPath)
     ? path.normalize(requestPath)
     : path.normalize(path.join(root, requestPath));
   if (!isWithin(root, candidate)) {
-    return undefined;
+    return { ok: false };
   }
   const realCandidate = realpathSync(candidate);
-  return realCandidate && isWithin(root, realCandidate) ? realCandidate : undefined;
+  if (realCandidate !== undefined) {
+    return isWithin(root, realCandidate) ? { ok: true, path: realCandidate, exists: true } : { ok: false };
+  }
+  if (fs.existsSync(candidate)) {
+    // Present but unresolvable: keep treating it as a workspace violation.
+    return { ok: false };
+  }
+  // A new file has no realpath of its own. Anchoring on its nearest existing
+  // ancestor keeps the outside-workspace check, and a symlinked ancestor with it.
+  const anchor = nearestExistingAncestor(candidate);
+  const realAnchor = realpathSync(anchor);
+  if (!realAnchor || !isWithin(root, realAnchor)) {
+    return { ok: false };
+  }
+  return { ok: true, path: path.join(realAnchor, path.relative(anchor, candidate)), exists: false };
+}
+
+function nearestExistingAncestor(candidate: string): string {
+  let current = path.dirname(candidate);
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return current;
+    }
+    current = parent;
+  }
+  return current;
 }
 
 function isWithin(root: string, candidate: string): boolean {
@@ -250,6 +292,35 @@ function realpathSync(filePath: string): string | undefined {
     return fs.realpathSync.native(filePath);
   } catch {
     return undefined;
+  }
+}
+
+async function nodeCreateFile(root: string, request: CreateFileRequest): Promise<ToolResult> {
+  const resolved = resolveNodePath(root, request.path);
+  if (!resolved.ok) {
+    return { ok: false, content: OUTSIDE_WORKSPACE };
+  }
+  if (resolved.exists) {
+    return { ok: false, content: `File already exists: ${request.path}` };
+  }
+  const bytes = Buffer.byteLength(request.content, "utf8");
+  if (bytes > MAX_TOOL_FILE_BYTES) {
+    return { ok: false, content: `File is too large for Hackl tools (${bytes} bytes, max ${MAX_TOOL_FILE_BYTES}).` };
+  }
+
+  try {
+    await fsp.mkdir(path.dirname(resolved.path), { recursive: true });
+    // "wx" so a file that appeared after the check is never overwritten.
+    const handle = await fsp.open(resolved.path, "wx");
+    try {
+      await handle.writeFile(request.content, "utf8");
+    } finally {
+      await handle.close();
+    }
+    return { ok: true, content: `Created ${request.path}.` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, content: message };
   }
 }
 
