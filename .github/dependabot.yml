@@ -16,6 +16,13 @@ updates:
       semver-major-days: 30
       semver-minor-days: 14
       semver-patch-days: 7
+    ignore:
+      # vsce refuses to package when @types/vscode exceeds engines.vscode; raise both together.
+      - dependency-name: "@types/vscode"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # Node types track the oldest supported runtime (engines.node >=20), so newer APIs fail to type-check.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-dev-tooling:
         dependency-type: development
