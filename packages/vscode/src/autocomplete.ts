@@ -320,7 +320,8 @@ async function fetchCompletion(
     },
   );
   if (signal.aborted) return { failed: false };
-  if (!completion || !completion.trim()) return { failed: true };
+  if (completion === undefined) return { failed: true };
+  if (!completion.trim()) return { failed: false };
   return { text: completion, failed: false };
 }
 

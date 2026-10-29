@@ -91,6 +91,16 @@ test("requestFim returns undefined when both endpoints fail", async () => {
   assert.equal(result, undefined);
 });
 
+test("requestFim returns an empty string when the endpoint answers with nothing to insert", async () => {
+  // The model answered, but the stop at the first newline leaves nothing. That
+  // is an empty suggestion, not an unreachable endpoint.
+  const result = await requestFim(
+    { root: "http://localhost:8080", support: QWEN_SUPPORT, fetchImpl: async () => ({ ok: true, json: async () => ({ content: "\nfoo" }) }) },
+    { prefix: "p", suffix: "s", maxTokens: 16 },
+  );
+  assert.equal(result, "");
+});
+
 const OPENAI_SUPPORT = {
   supported: true,
   dialect: "openai-completions",

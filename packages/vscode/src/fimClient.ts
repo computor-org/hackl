@@ -63,6 +63,7 @@ export function dedupeAgainstSuffix(completion: string, suffix: string): string 
   return completion;
 }
 
+// undefined: no route answered. "": the endpoint answered with nothing to insert.
 export async function requestFim(options: FimClientOptions, request: FimRequest): Promise<string | undefined> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const root = options.root.replace(/\/+$/, "");
@@ -165,7 +166,6 @@ function openAiCompletionsUrl(endpoint: string): string {
   return `${base.endsWith("/v1") ? base : `${base}/v1`}/completions`;
 }
 
-function finalise(content: string, suffix: string, stops: string[]): string | undefined {
-  const text = dedupeAgainstSuffix(trimAtStops(content, stops), suffix);
-  return text.length > 0 ? text : undefined;
+function finalise(content: string, suffix: string, stops: string[]): string {
+  return dedupeAgainstSuffix(trimAtStops(content, stops), suffix);
 }
