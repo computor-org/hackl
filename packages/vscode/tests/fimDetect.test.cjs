@@ -117,3 +117,18 @@ test("detectFim reports unsupported when no markers are single tokens", async ()
   assert.equal(result.supported, false);
   assert.match(result.reason, /FIM/);
 });
+
+test("detectFim falls back to openai-completions when /tokenize is unreachable", async () => {
+  const calls = [];
+  const result = await detectFim({
+    root: "https://gateway.example",
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return jsonResponse({}, false); // OpenAI-only gateway: 404 on /tokenize
+    },
+  });
+  assert.equal(result.supported, true);
+  assert.equal(result.dialect, "openai-completions");
+  assert.deepEqual(result.stop, []);
+  assert.ok(calls[0].endsWith("/tokenize"));
+});

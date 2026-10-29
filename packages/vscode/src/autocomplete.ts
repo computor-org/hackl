@@ -43,6 +43,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
 class AutocompleteController {
   private resolved: AutocompleteRuntime | undefined;
   private resolving: Promise<AutocompleteRuntime | undefined> | undefined;
+  private endpointDead = false;
   private pendingTimer: ReturnType<typeof setTimeout> | undefined;
   private inflight: AbortController | undefined;
 
@@ -144,10 +145,17 @@ class AutocompleteController {
     });
     if (controller.signal.aborted) return undefined;
 
-    const completion = await fetchCompletion(document, request.position, cfg, runtime, controller.signal);
-    if (!completion || isStaleRequest(document, request)) return undefined;
+    const outcome = await fetchCompletion(document, request.position, cfg, runtime, controller.signal);
+    if (outcome.failed && !controller.signal.aborted) {
+      this.endpointDead = true;
+      this.showEndpointFailure();
+    } else if (this.endpointDead) {
+      this.endpointDead = false;
+      this.updateStatus(runtime);
+    }
+    if (!outcome.text || isStaleRequest(document, request)) return undefined;
 
-    return [new vscode.InlineCompletionItem(completion, new vscode.Range(request.position, request.position))];
+    return [new vscode.InlineCompletionItem(outcome.text, new vscode.Range(request.position, request.position))];
   }
 
   private async resolveRuntime(): Promise<AutocompleteRuntime | undefined> {
@@ -200,6 +208,14 @@ class AutocompleteController {
     this.status.backgroundColor = state.warning
       ? new vscode.ThemeColor("statusBarItem.warningBackground")
       : undefined;
+  }
+
+  private showEndpointFailure(): void {
+    this.status.text = "$(circle-slash) Hackl AC";
+    this.status.tooltip =
+      "The autocomplete endpoint offers neither llama.cpp /infill nor /v1/completions. " +
+      "Check hackl.autocomplete.endpoint. Click to retry.";
+    this.status.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }
 
   private invalidate(): void {
@@ -272,19 +288,25 @@ function requestSnapshot(document: vscode.TextDocument, position: vscode.Positio
   };
 }
 
+interface CompletionOutcome {
+  text?: string;
+  failed: boolean;
+}
+
 async function fetchCompletion(
   document: vscode.TextDocument,
   position: vscode.Position,
   cfg: AutocompleteConfig,
   runtime: SupportedRuntime,
   signal: AbortSignal,
-): Promise<string | undefined> {
+): Promise<CompletionOutcome> {
   const { prefix, suffix } = sliceAroundCursor(document, position);
-  if (!prefix.trim() && !suffix.trim()) return undefined;
+  if (!prefix.trim() && !suffix.trim()) return { failed: false };
 
   const completion = await requestFim(
     {
       root: runtime.root,
+      endpoint: runtime.endpoint,
       model: runtime.model,
       support: runtime.detection,
       maxPredictMs: cfg.maxPredictMs,
@@ -297,8 +319,9 @@ async function fetchCompletion(
       signal,
     },
   );
-  if (!completion || !completion.trim() || signal.aborted) return undefined;
-  return completion;
+  if (signal.aborted) return { failed: false };
+  if (!completion || !completion.trim()) return { failed: true };
+  return { text: completion, failed: false };
 }
 
 function sliceAroundCursor(document: vscode.TextDocument, position: vscode.Position): { prefix: string; suffix: string } {
